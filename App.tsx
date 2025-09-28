@@ -173,8 +173,6 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <BibleDatabaseProvider>
-        {" "}
-        {/* Wrap with the provider */}
         <NavigationContainer>
           <StatusBar style="auto" />
           <AppTabs />

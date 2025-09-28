@@ -92,7 +92,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const chapterContent = (
     <View
-      className="bg-white p-6 rounded-lg shadow-sm min-h-[400px]"
+      className="bg-white p-6 rounded-lg shadow-sm min-h-[400px] mb-40"
       style={
         verses[0]?.book_color
           ? { borderLeftWidth: 4, borderLeftColor: verses[0].book_color }
