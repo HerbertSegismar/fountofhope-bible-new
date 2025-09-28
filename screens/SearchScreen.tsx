@@ -1,0 +1,145 @@
+import React, { useState } from "react";
+import {
+  Text,
+  TextInput,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StackNavigationProp } from "@react-navigation/stack";
+import { RootStackParamList } from "../types";
+import { bibleDB } from "../lib/database";
+import { VerseCard } from "../components/VerseCard";
+import { Verse } from "../lib/database";
+
+type SearchScreenNavigationProp = StackNavigationProp<
+  RootStackParamList,
+  "Search"
+>;
+
+interface Props {
+  navigation: SearchScreenNavigationProp;
+}
+
+export default function SearchScreen({ navigation }: Props) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Verse[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const handleSearch = async () => {
+    if (!query.trim()) {
+      setResults([]);
+      return;
+    }
+
+    try {
+      setSearching(true);
+      const searchResults = await bibleDB.searchVerses(query);
+      setResults(searchResults);
+    } catch (error) {
+      console.error("Search error:", error);
+      Alert.alert("Error", "Search failed. Please try again.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleVersePress = (verse: Verse) => {
+    navigation.navigate("Reader", {
+      bookId: verse.book_number,
+      chapter: verse.chapter,
+      bookName: verse.book_name || "Unknown",
+    });
+  };
+
+  const clearSearch = () => {
+    setQuery("");
+    setResults([]);
+  };
+
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView className="p-4">
+        {/* Search Header */}
+        <SafeAreaView className="flex-row items-center mb-4">
+          <TextInput
+            className="flex-1 bg-white p-4 rounded-lg shadow-sm"
+            placeholder="Search Bible verses..."
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <TouchableOpacity onPress={clearSearch} className="ml-2">
+              <Text className="text-blue-500 p-4">Clear</Text>
+            </TouchableOpacity>
+          )}
+        </SafeAreaView>
+
+        {/* Search Button */}
+        <TouchableOpacity
+          className="bg-primary p-4 rounded-lg mb-4"
+          onPress={handleSearch}
+          disabled={searching}
+        >
+          <Text className="text-white font-semibold text-center">
+            {searching ? "Searching..." : "Search"}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Results */}
+        {searching ? (
+          <SafeAreaView className="flex-1 justify-center items-center py-8">
+            <Text className="text-gray-600">Searching...</Text>
+          </SafeAreaView>
+        ) : (
+          <ScrollView showsVerticalScrollIndicator={false}>
+            <SafeAreaView className="space-y-3">
+              {results.map((verse, index) => (
+                <TouchableOpacity
+                  key={`${verse.book_number}-${verse.chapter}-${verse.verse}-${index}`}
+                  onPress={() => handleVersePress(verse)}
+                >
+                  <VerseCard verse={verse} />
+                </TouchableOpacity>
+              ))}
+            </SafeAreaView>
+
+            {results.length === 0 && query && !searching && (
+              <SafeAreaView className="py-8">
+                <Text className="text-center text-gray-600">
+                  No results found for "{query}"
+                </Text>
+                <Text className="text-center text-gray-500 text-sm mt-2">
+                  Try different keywords or check spelling
+                </Text>
+              </SafeAreaView>
+            )}
+
+            {!query && (
+              <SafeAreaView className="py-8">
+                <Text className="text-center text-gray-600">
+                  Enter a search term to find Bible verses
+                </Text>
+                <Text className="text-center text-gray-500 text-sm mt-2">
+                  Try searching for words like "love", "faith", or "peace"
+                </Text>
+              </SafeAreaView>
+            )}
+          </ScrollView>
+        )}
+
+        {/* Search Tips */}
+        {results.length > 0 && (
+          <SafeAreaView className="mt-4 bg-blue-50 p-3 rounded-lg">
+            <Text className="text-blue-800 text-sm">
+              Found {results.length} result{results.length !== 1 ? "s" : ""}
+            </Text>
+          </SafeAreaView>
+        )}
+      </SafeAreaView>
+    </SafeAreaView>
+  );
+}

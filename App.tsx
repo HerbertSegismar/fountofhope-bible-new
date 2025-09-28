@@ -1,3 +1,4 @@
+// App.tsx
 import React from "react";
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
@@ -7,31 +8,85 @@ import { Ionicons } from "@expo/vector-icons";
 import "./global.css";
 
 // Import screens
-import HomeScreen from "./screens/Home";
-import BookListScreen from "./screens/BookList";
-import ChapterListScreen from "./screens/ChapterList";
-import VerseListScreen from "./screens/VerseList";
-import SearchScreen from "./screens/Search";
+import HomeScreen from "./screens/HomeScreen";
+import BookListScreen from "./screens/BookListScreen";
+import ChapterListScreen from "./screens/ChapterListScreen";
+import VerseListScreen from "./screens/VerseListScreen";
+import SearchScreen from "./screens/SearchScreen";
+import BookmarksScreen from "./screens/BookmarksScreen";
+import ReaderScreen from "./screens/ReaderScreen";
 import { Book } from "./types";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export type RootStackParamList = {
   Home: undefined;
   BookList: undefined;
   ChapterList: { book: Book };
   VerseList: { book: Book; chapter: number };
+  Reader: { bookId: number; chapter: number; bookName: string };
   Search: undefined;
+  Bookmarks: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
-function HomeStack() {
+function BibleStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: "#1e40af",
+        },
+        headerTintColor: "#fff",
+      }}
+    >
+      <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ title: "Bible App" }}
+      />
+      <Stack.Screen
+        name="BookList"
+        component={BookListScreen}
+        options={{ title: "Books of the Bible" }}
+      />
+      <Stack.Screen
+        name="ChapterList"
+        component={ChapterListScreen}
+        options={({ route }) => ({ title: route.params.book.long_name })}
+      />
+      <Stack.Screen
+        name="VerseList"
+        component={VerseListScreen}
+        options={({ route }) => ({
+          title: `${route.params.book.short_name} ${route.params.chapter}`,
+        })}
+      />
+      <Stack.Screen
+        name="Reader"
+        component={ReaderScreen}
+        options={({ route }) => ({
+          title: `${route.params.bookName} ${route.params.chapter}`,
+        })}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function SearchStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="BookList" component={BookListScreen} />
-      <Stack.Screen name="ChapterList" component={ChapterListScreen} />
-      <Stack.Screen name="VerseList" component={VerseListScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+    </Stack.Navigator>
+  );
+}
+
+function BookmarksStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
     </Stack.Navigator>
   );
 }
@@ -45,25 +100,35 @@ function AppTabs() {
         },
         tabBarActiveTintColor: "#f59e0b",
         tabBarInactiveTintColor: "#93c5fd",
+        headerShown: false,
       }}
     >
       <Tab.Screen
-        name="HomeTab"
-        component={HomeStack}
+        name="Bible"
+        component={BibleStack}
         options={{
-          title: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home" size={size} color={color} />
+            <Ionicons name="book" size={size} color={color} />
           ),
-          headerShown: false,
         }}
       />
       <Tab.Screen
-        name="Search"
-        component={SearchScreen}
+        name="SearchTab"
+        component={SearchStack}
         options={{
+          title: "Search",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="search" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="BookmarksTab"
+        component={BookmarksStack}
+        options={{
+          title: "Bookmarks",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bookmark" size={size} color={color} />
           ),
         }}
       />
@@ -73,9 +138,11 @@ function AppTabs() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="auto" />
-      <AppTabs />
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <StatusBar style="auto" />
+        <AppTabs />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

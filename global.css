@@ -1,3 +1,26 @@
+/* global.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Reset default margins and paddings */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Ensure proper font sizing */
+html, body {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* Fix for blown out containers */
+.min-h-0 {
+  min-height: 0;
+}
+
+.flex-1 {
+  flex: 1 1 0%;
+}
