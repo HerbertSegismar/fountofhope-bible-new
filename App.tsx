@@ -15,8 +15,10 @@ import VerseListScreen from "./screens/VerseListScreen";
 import SearchScreen from "./screens/SearchScreen";
 import BookmarksScreen from "./screens/BookmarksScreen";
 import ReaderScreen from "./screens/ReaderScreen";
+import SettingsScreen from "./screens/SettingsScreen";
 import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -26,6 +28,7 @@ export type RootStackParamList = {
   Reader: { bookId: number; chapter: number; bookName: string };
   Search: undefined;
   Bookmarks: undefined;
+  Settings: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -45,7 +48,7 @@ function BibleStack() {
       <Stack.Screen
         name="Home"
         component={HomeScreen}
-        options={{ title: "Bible App" }}
+        options={{ title: "Fount of Hope" }}
       />
       <Stack.Screen
         name="BookList"
@@ -91,6 +94,26 @@ function BookmarksStack() {
   );
 }
 
+function SettingsStack() {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: "#1e40af",
+        },
+        headerTintColor: "#fff",
+      }}
+    >
+      <Stack.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: "Settings" }}
+      />
+    </Stack.Navigator>
+  );
+}
+
 function AppTabs() {
   return (
     <Tab.Navigator
@@ -132,6 +155,16 @@ function AppTabs() {
           ),
         }}
       />
+      <Tab.Screen
+        name="SettingsTab"
+        component={SettingsStack}
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="settings" size={size} color={color} />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -139,10 +172,14 @@ function AppTabs() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar style="auto" />
-        <AppTabs />
-      </NavigationContainer>
+      <BibleDatabaseProvider>
+        {" "}
+        {/* Wrap with the provider */}
+        <NavigationContainer>
+          <StatusBar style="auto" />
+          <AppTabs />
+        </NavigationContainer>
+      </BibleDatabaseProvider>
     </SafeAreaProvider>
   );
 }

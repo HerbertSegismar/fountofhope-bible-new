@@ -1,11 +1,19 @@
+// screens/VerseListScreen.tsx - Updated to display long book names
 import React, { useEffect, useState } from "react";
-import { Text, ScrollView, Alert, TouchableOpacity } from "react-native";
+import {
+  Text,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../types";
-import { bibleDB, Book, Verse } from "../lib/database";
-import { VerseCard } from "../components/VerseCard";
+import { bibleDB, Verse } from "../lib/database";
+import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 
 type VerseListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -45,18 +53,19 @@ export default function VerseListScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleVersePress = (verse: Verse) => {
+  const handleChapterPress = () => {
     navigation.navigate("Reader", {
-      bookId: verse.book_number,
-      chapter: verse.chapter,
-      bookName: verse.book_name || book.short_name,
+      bookId: book.book_number,
+      chapter: chapter,
+      bookName: book.long_name, // Use long name for Reader screen
     });
   };
 
   if (loading) {
     return (
       <SafeAreaView className="flex-1 justify-center items-center bg-gray-50">
-        <Text className="text-lg">Loading verses...</Text>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text className="text-lg text-gray-600 mt-4">Loading chapter...</Text>
       </SafeAreaView>
     );
   }
@@ -65,73 +74,72 @@ export default function VerseListScreen({ navigation, route }: Props) {
     <ScrollView
       className="flex-1 bg-gray-50"
       showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ flexGrow: 1 }}
     >
-      <SafeAreaView className="p-4">
-        {/* Header */}
-        <SafeAreaView className="bg-white rounded-lg p-6 mb-4 shadow-sm">
+      <SafeAreaView className="flex-1">
+        {/* Chapter Header with Long Book Name */}
+        <View className="bg-white rounded-lg p-6 mx-4 mt-4 shadow-sm">
           <Text className="text-2xl font-bold text-primary text-center">
-            {book.short_name} {chapter}
-          </Text>
-          <Text className="text-gray-600 text-center mt-1">
             {book.long_name}
           </Text>
-          <Text className="text-gray-500 text-sm text-center mt-2">
-            {verseCount} verse{verseCount !== 1 ? "s" : ""}
-          </Text>
-        </SafeAreaView>
+        </View>
 
-        {/* Verses */}
-        <SafeAreaView className="space-y-3">
-          {verses.map((verse) => (
-            <TouchableOpacity
-              key={`${verse.book_number}-${verse.chapter}-${verse.verse}`}
-              onPress={() => handleVersePress(verse)}
-            >
-              <VerseCard verse={verse} showReference={false} />
-            </TouchableOpacity>
-          ))}
-        </SafeAreaView>
+        {/* Continuous Chapter Display */}
+        <View className="flex-1 mx-4 my-4">
+          {verses.length > 0 ? (
+            <ChapterViewEnhanced
+              verses={verses}
+              bookName={''}
+              chapterNumber={chapter}
+              onPress={handleChapterPress}
+              showVerseNumbers={true}
+            />
+          ) : (
+            <View className="bg-yellow-50 p-4 rounded-lg">
+              <Text className="text-yellow-800 text-center">
+                No verses found for {book.long_name} {chapter}
+              </Text>
+            </View>
+          )}
+        </View>
 
-        {verses.length === 0 && (
-          <SafeAreaView className="bg-yellow-50 p-4 rounded-lg mt-4">
-            <Text className="text-yellow-800 text-center">
-              No verses found for {book.short_name} {chapter}
-            </Text>
-          </SafeAreaView>
-        )}
-
-        {/* Navigation */}
-        <SafeAreaView className="flex-row justify-between mt-6">
+        {/* Chapter Navigation */}
+        <View className="flex-row justify-between mx-4 mb-6">
           <TouchableOpacity
-            className="bg-primary px-4 py-2 rounded-lg"
+            className={`px-4 py-3 rounded-lg ${
+              chapter <= 1 ? "bg-gray-300" : "bg-primary"
+            }`}
             onPress={() => {
               if (chapter > 1) {
                 navigation.navigate("VerseList", {
                   book,
                   chapter: chapter - 1,
-                  bookName: book.short_name,
                 });
               }
             }}
             disabled={chapter <= 1}
           >
-            <Text className="text-white font-semibold">Previous Chapter</Text>
+            <Text
+              className={`font-semibold ${
+                chapter <= 1 ? "text-gray-500" : "text-white"
+              }`}
+            >
+              Previous Chapter
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            className="bg-primary px-4 py-2 rounded-lg"
+            className="bg-primary px-4 py-3 rounded-lg"
             onPress={() => {
-              // You might want to get the total chapter count here
               navigation.navigate("VerseList", {
                 book,
                 chapter: chapter + 1,
-                bookName: book.short_name,
               });
             }}
           >
             <Text className="text-white font-semibold">Next Chapter</Text>
           </TouchableOpacity>
-        </SafeAreaView>
+        </View>
       </SafeAreaView>
     </ScrollView>
   );

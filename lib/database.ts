@@ -19,8 +19,6 @@ import {
   DatabaseStats,
 } from "../types";
 
-const databaseAssetPath = "../bibles/niv11.sqlite3";
-
 class BibleDatabaseError extends Error {
   constructor(
     message: string,
@@ -38,10 +36,15 @@ class BibleDatabase {
   private initializationPromise: Promise<void> | null = null;
   private isClosing = false;
 
-  // Configuration - use consistent naming
-  private readonly dbName = "csb17.sqlite3";
+  // Configuration - make dbName configurable
+  private readonly dbName: string;
   private readonly sqliteDirectory = `${documentDirectory}SQLite`;
-  private readonly dbPath = `${this.sqliteDirectory}/${this.dbName}`;
+  private readonly dbPath: string;
+
+  constructor(dbName: string = "niv11.sqlite3") {
+    this.dbName = dbName;
+    this.dbPath = `${this.sqliteDirectory}/${this.dbName}`;
+  }
 
   // Performance and reliability settings
   private readonly maxRetries = 3;
@@ -49,7 +52,6 @@ class BibleDatabase {
   private readonly slowQueryThreshold = 1000; // ms
 
   // Migration support
-  private readonly currentSchemaVersion = 1;
   private readonly migrations: DatabaseMigration[] = [
     {
       version: 1,
@@ -62,6 +64,16 @@ class BibleDatabase {
       `,
     },
   ];
+
+  // Add a method to get current database name
+  getDatabaseName(): string {
+    return this.dbName;
+  }
+
+  // Add a method to check if database is the same
+  isSameDatabase(dbName: string): boolean {
+    return this.dbName === dbName;
+  }
 
   async init(): Promise<void> {
     if (this.isInitialized) return;
@@ -113,16 +125,19 @@ class BibleDatabase {
 
   private async copyDatabaseFromAssets(): Promise<void> {
     try {
-      // Use Asset.fromModule with the asset path string
-      const asset = Asset.fromModule(require(databaseAssetPath));
-      await asset.downloadAsync();
+      // Create a mock asset using the database name
+      const asset = {
+        name: this.dbName,
+        type: "sqlite3",
+        hash: null,
+        uri: `asset:///${this.dbName}`,
+        localUri: null,
+      };
 
-      if (!asset.localUri) {
-        throw new Error("Could not load database asset");
-      }
-
+      // For Expo, we need to use a different approach since we can't directly require the database
+      // We'll copy from the app bundle using the known database name
       await this.ensureDirectoryExists();
-      await this.copyDatabaseFile(asset.localUri);
+      await this.copyDatabaseFileFromBundle();
 
       console.log("Database copied successfully from assets");
     } catch (error) {
@@ -131,6 +146,45 @@ class BibleDatabase {
         error,
         "copyDatabaseFromAssets"
       );
+    }
+  }
+
+  private async copyDatabaseFileFromBundle(): Promise<void> {
+    try {
+      // This approach assumes the database file is included in the app bundle
+      // For React Native, you might need to use a different method to access bundled files
+      // One common approach is to use react-native-fs or similar libraries
+
+      // For Expo, you can use Asset.loadAsync if the database is in assets
+      // First, let's try to create the asset and download it
+      const asset = Asset.fromModule(this.getDatabaseAsset());
+      await asset.downloadAsync();
+
+      if (asset.localUri) {
+        await copyAsync({
+          from: asset.localUri,
+          to: this.dbPath,
+        });
+      } else {
+        throw new Error("Could not load database asset");
+      }
+    } catch (error) {
+      throw new BibleDatabaseError(
+        "Failed to copy database file from bundle",
+        error,
+        "copyDatabaseFileFromBundle"
+      );
+    }
+  }
+
+  private getDatabaseAsset(): number {
+    switch (this.dbName) {
+      case "niv11.sqlite3":
+        return require("../assets/niv11.sqlite3");
+      case "csb17.sqlite3":
+        return require("../assets/csb17.sqlite3");
+      default:
+        throw new Error(`Database ${this.dbName} not found in assets`);
     }
   }
 
@@ -148,21 +202,6 @@ class BibleDatabase {
         "Failed to create directory",
         error,
         "ensureDirectoryExists"
-      );
-    }
-  }
-
-  private async copyDatabaseFile(fromUri: string): Promise<void> {
-    try {
-      await copyAsync({
-        from: fromUri,
-        to: this.dbPath,
-      });
-    } catch (error) {
-      throw new BibleDatabaseError(
-        "Failed to copy database file",
-        error,
-        "copyDatabaseFile"
       );
     }
   }
@@ -875,4 +914,4 @@ export const bibleDB = BibleDatabaseManager.getInstance();
 export const initializeBibleDB = () => BibleDatabaseManager.initialize();
 export const closeBibleDB = () => BibleDatabaseManager.close();
 export const isBibleDBReady = () => BibleDatabaseManager.isReady();
-export { BibleDatabaseError, Verse, Book };
+export { BibleDatabaseError, Verse, Book, BibleDatabase };

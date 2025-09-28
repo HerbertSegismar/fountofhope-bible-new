@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
 import {
   Text,
-  ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
   Dimensions,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList, Verse } from "../types";
 import { bibleDB } from "../lib/database";
-import { VerseCard } from "../components/VerseCard";
+import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -42,12 +42,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const loadChapter = async () => {
     try {
       setLoading(true);
-
-      // Load book details
       const bookDetails = await bibleDB.getBook(bookId);
       setBook(bookDetails);
-
-      // Load verses for the chapter
       const chapterVerses = await bibleDB.getVerses(bookId, currentChapter);
       setVerses(chapterVerses);
     } catch (error) {
@@ -66,7 +62,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   const goToNextChapter = async () => {
     try {
-      // Check if next chapter exists
       const nextChapterVerses = await bibleDB.getVerses(
         bookId,
         currentChapter + 1
@@ -82,11 +77,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
   };
 
   const increaseFontSize = () => {
-    setFontSize((prev) => Math.min(prev + 2, 24));
+    setFontSize((prev) => Math.min(prev + 1, 24));
   };
 
   const decreaseFontSize = () => {
-    setFontSize((prev) => Math.max(prev - 2, 12));
+    setFontSize((prev) => Math.max(prev - 1, 12));
   };
 
   const handleVersePress = (verse: Verse) => {
@@ -103,7 +98,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   const addBookmark = (verse: Verse) => {
     Alert.alert("Bookmark Added", "Verse has been bookmarked!");
-    // In a real app, you'd save to persistent storage
   };
 
   const shareVerse = (verse: Verse) => {
@@ -123,131 +117,75 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Header */}
-      <SafeAreaView className="bg-primary p-4 shadow-sm">
-        <SafeAreaView className="flex-row justify-between items-center mb-2">
-          <TouchableOpacity onPress={goToPreviousChapter}>
-            <Text className="text-white font-semibold">
-              {currentChapter > 1 ? "← Previous" : ""}
+      {/* Compact Header */}
+      <View className="bg-primary px-4 py-2">
+        <View className="flex-row justify-between items-center">
+          <TouchableOpacity
+            onPress={goToPreviousChapter}
+            disabled={currentChapter <= 1}
+            className={`p-2 ${currentChapter <= 1 ? "opacity-30" : ""}`}
+          >
+            <Text className="text-white font-semibold text-sm">← Prev</Text>
+          </TouchableOpacity>
+
+          <View className="flex-1 items-center">
+            <Text className="text-white font-bold text-center text-sm">
+              {bookName} {currentChapter}
             </Text>
+          </View>
+
+          <TouchableOpacity onPress={goToNextChapter} className="p-2">
+            <Text className="text-white font-semibold text-sm">Next →</Text>
           </TouchableOpacity>
+        </View>
 
-          <Text className="text-white text-lg font-bold text-center">
-            {bookName} {currentChapter}
-          </Text>
-
-          <TouchableOpacity onPress={goToNextChapter}>
-            <Text className="text-white font-semibold">Next →</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-
-        {/* Progress Bar */}
-        <SafeAreaView className="w-full bg-blue-200 rounded-full h-1">
-          <SafeAreaView
-            className="bg-yellow-400 h-1 rounded-full"
+        {/* Compact Progress Bar */}
+        <View className="mt-2 w-full h-1 bg-blue-300 rounded-full">
+          <View
+            className="h-1 bg-yellow-400 rounded-full"
             style={{
               width: `${(currentChapter / (book?.chapters || 1)) * 100}%`,
             }}
           />
-        </SafeAreaView>
-      </SafeAreaView>
+        </View>
+      </View>
 
-      {/* Font Size Controls */}
-      <SafeAreaView className="flex-row justify-between items-center p-3 bg-gray-50 border-b border-gray-200">
-        <Text className="text-gray-600">Font Size:</Text>
-        <SafeAreaView className="flex-row items-center">
-          <TouchableOpacity onPress={decreaseFontSize} className="p-2">
-            <Text className="text-xl">A-</Text>
-          </TouchableOpacity>
-          <Text className="mx-3 text-gray-700">{fontSize}px</Text>
-          <TouchableOpacity onPress={increaseFontSize} className="p-2">
-            <Text className="text-xl">A+</Text>
-          </TouchableOpacity>
-        </SafeAreaView>
-      </SafeAreaView>
-
-      {/* Chapter Content */}
-      <ScrollView className="flex-1 p-4" showsVerticalScrollIndicator={false}>
-        <SafeAreaView className="space-y-4">
-          {verses.map((verse) => (
-            <TouchableOpacity
-              key={`${verse.book_number}-${verse.chapter}-${verse.verse}`}
-              onPress={() => handleVersePress(verse)}
-              onLongPress={() => handleVersePress(verse)}
-              delayLongPress={500}
-            >
-              <SafeAreaView className="flex-row">
-                <Text
-                  className="text-primary font-bold mr-3 text-sm"
-                  style={{ fontSize: fontSize - 2 }}
-                >
-                  {verse.verse}
-                </Text>
-                <Text
-                  className="flex-1 text-gray-800 leading-7"
-                  style={{ fontSize }}
-                >
-                  {verse.text}
-                </Text>
-              </SafeAreaView>
-            </TouchableOpacity>
-          ))}
-        </SafeAreaView>
-
-        {verses.length === 0 && (
-          <SafeAreaView className="flex-1 justify-center items-center py-16">
-            <Text className="text-lg text-gray-600 text-center">
-              No verses found in {bookName} {currentChapter}
-            </Text>
-          </SafeAreaView>
-        )}
-
-        {/* Chapter Navigation at Bottom */}
-        <SafeAreaView className="flex-row justify-between items-center mt-8 mb-4">
+      {/* Compact Font Size Controls */}
+      <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
+        <Text className="text-gray-600 text-sm">Font Size</Text>
+        <View className="flex-row items-center space-x-3">
           <TouchableOpacity
-            className="bg-gray-100 px-4 py-2 rounded-lg"
-            onPress={goToPreviousChapter}
-            disabled={currentChapter <= 1}
+            onPress={decreaseFontSize}
+            className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
           >
-            <Text
-              className={currentChapter > 1 ? "text-gray-800" : "text-gray-400"}
-            >
-              ← Chapter {currentChapter - 1}
-            </Text>
+            <Text className="text-gray-700 font-bold">A-</Text>
           </TouchableOpacity>
-
-          <Text className="text-gray-600">
-            {currentChapter} of {book?.chapters || "?"}
+          <Text className="text-gray-700 w-10 text-center text-sm">
+            {fontSize}px
           </Text>
-
           <TouchableOpacity
-            className="bg-gray-100 px-4 py-2 rounded-lg"
-            onPress={goToNextChapter}
+            onPress={increaseFontSize}
+            className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
           >
-            <Text className="text-gray-800">
-              Chapter {currentChapter + 1} →
-            </Text>
+            <Text className="text-gray-700 font-bold">A+</Text>
           </TouchableOpacity>
-        </SafeAreaView>
-      </ScrollView>
+        </View>
+      </View>
 
-      {/* Quick Actions Bar */}
-      <SafeAreaView className="flex-row justify-around items-center p-3 bg-gray-50 border-t border-gray-200">
-        <TouchableOpacity className="items-center">
-          <Text className="text-2xl">🔖</Text>
-          <Text className="text-xs text-gray-600 mt-1">Bookmark</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity className="items-center">
-          <Text className="text-2xl">📖</Text>
-          <Text className="text-xs text-gray-600 mt-1">Table of Contents</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity className="items-center">
-          <Text className="text-2xl">⚙️</Text>
-          <Text className="text-xs text-gray-600 mt-1">Settings</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
+      {/* Chapter Content using ChapterViewEnhanced with font size */}
+      <View className="flex-1">
+        <ChapterViewEnhanced
+          verses={verses.map((verse) => ({
+            ...verse,
+            // Apply font size to each verse
+            text: verse.text, // The text will be styled by the component
+          }))}
+          bookName={''}
+          chapterNumber={currentChapter}
+          showVerseNumbers={true}
+          fontSize={fontSize} // Pass fontSize as a prop
+        />
+      </View>
     </SafeAreaView>
   );
 }

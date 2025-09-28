@@ -75,7 +75,7 @@ export default function BookListScreen({ navigation }: Props) {
         {/* Old Testament Section */}
         <View className="mb-6">
           <Text className="text-xl font-bold text-primary mb-3">
-            Old Testament ({oldTestament.length} books)
+            Old Testament
           </Text>
           <View className="flex-row flex-wrap justify-between">
             {oldTestament.map((book) => (
@@ -85,10 +85,7 @@ export default function BookListScreen({ navigation }: Props) {
                 style={{ width: BOOK_CARD_WIDTH }}
                 onPress={() => navigation.navigate("ChapterList", { book })}
               >
-                <Text className="text-primary font-semibold text-center text-sm">
-                  {book.short_name}
-                </Text>
-                <Text className="text-gray-500 text-xs text-center mt-1">
+                <Text className="text-red-500 font-semibold text-center text-sm">
                   {book.long_name}
                 </Text>
               </TouchableOpacity>
@@ -99,7 +96,7 @@ export default function BookListScreen({ navigation }: Props) {
         {/* New Testament Section */}
         <View className="mb-6">
           <Text className="text-xl font-bold text-primary mb-3">
-            New Testament ({newTestament.length} books)
+            New Testament
           </Text>
           <View className="flex-row flex-wrap justify-between">
             {newTestament.map((book) => (
@@ -109,10 +106,7 @@ export default function BookListScreen({ navigation }: Props) {
                 style={{ width: BOOK_CARD_WIDTH }}
                 onPress={() => navigation.navigate("ChapterList", { book })}
               >
-                <Text className="text-primary font-semibold text-center text-sm">
-                  {book.short_name}
-                </Text>
-                <Text className="text-gray-500 text-xs text-center mt-1">
+                <Text className="text-green-500 font-semibold text-center text-sm">
                   {book.long_name}
                 </Text>
               </TouchableOpacity>

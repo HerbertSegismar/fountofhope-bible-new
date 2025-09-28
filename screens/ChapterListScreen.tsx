@@ -11,7 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../types";
-import { bibleDB, Book } from "../lib/database";
+import { bibleDB } from "../lib/database";
 
 type ChapterListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -139,13 +139,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
         {/* Header */}
         <SafeAreaView className="bg-white rounded-lg p-6 mb-6 shadow-sm">
           <Text className="text-2xl font-bold text-primary mb-2 text-center">
-            {book.short_name}
-          </Text>
-          <Text className="text-gray-600 text-center mb-3">
             {book.long_name}
-          </Text>
-          <Text className="text-gray-500 text-center mb-3">
-            {book.testament} • {chapterCount} chapters
           </Text>
           <Text className="text-gray-500 text-sm text-center">
             Select a chapter to read
@@ -170,11 +164,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
                 <Text className={`font-bold text-lg ${getTextColor()}`}>
                   {chapter}
                 </Text>
-                {verseCounts[chapter] > 0 && (
-                  <Text className={`text-xs mt-1 ${getTextColor()} opacity-70`}>
-                    {verseCounts[chapter]} v
-                  </Text>
-                )}
               </TouchableOpacity>
             ))}
           </SafeAreaView>
@@ -186,58 +175,11 @@ export default function ChapterListScreen({ navigation, route }: Props) {
           </SafeAreaView>
         )}
 
-        {/* Quick Navigation for books with many chapters */}
-        {chapterCount > 20 && (
-          <SafeAreaView className="mt-6 bg-white rounded-lg p-4">
-            <Text className="text-lg font-semibold mb-3 text-center">
-              Quick Jump
-            </Text>
-            <SafeAreaView className="flex-row flex-wrap gap-2 justify-center">
-              {[
-                1,
-                Math.floor(chapterCount / 4),
-                Math.floor(chapterCount / 2),
-                Math.floor((chapterCount * 3) / 4),
-                chapterCount,
-              ]
-                .filter((chap, index, array) => array.indexOf(chap) === index)
-                .map((chapter) => (
-                  <TouchableOpacity
-                    key={`jump-${chapter}`}
-                    className="bg-primary px-3 py-2 rounded-full"
-                    onPress={() => {
-                      Alert.alert("Quick Jump", `Jump to chapter ${chapter}`, [
-                        { text: "Cancel" },
-                        {
-                          text: "Go",
-                          onPress: () => handleChapterPress(chapter),
-                        },
-                      ]);
-                    }}
-                  >
-                    <Text className="text-white font-medium text-sm">
-                      {chapter}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-            </SafeAreaView>
-          </SafeAreaView>
-        )}
-
         {/* Book Information */}
         <SafeAreaView className="mt-6 bg-gray-100 rounded-lg p-4">
           <Text className="text-sm text-gray-600 text-center">
             {book.testament === "OT" ? "Old Testament" : "New Testament"} Book
           </Text>
-          <Text className="text-xs text-gray-500 text-center mt-1">
-            Book Number: {String(book.book_number)}
-          </Text>
-          {book.book_color && (
-            <SafeAreaView
-              className="w-6 h-6 rounded-full mx-auto mt-2"
-              style={{ backgroundColor: book.book_color }}
-            />
-          )}
         </SafeAreaView>
       </SafeAreaView>
     </ScrollView>
