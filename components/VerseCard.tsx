@@ -1,3 +1,4 @@
+// components/VerseCard.tsx - Updated with XML tag filtering
 import React from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { Verse } from "../lib/database";
@@ -8,11 +9,38 @@ interface VerseCardProps {
   onPress?: () => void;
 }
 
+// Function to remove XML tags from verse text
+const removeXmlTags = (text: string): string => {
+  if (!text) return "";
+
+  // Remove XML tags while preserving the text content
+  return text
+    .replace(/<[^>]*>/g, "") // Remove all XML tags
+    .replace(/\s+/g, " ") // Normalize whitespace
+    .trim(); // Remove leading/trailing whitespace
+};
+
+// Function to clean and format verse text
+const cleanVerseText = (text: string): string => {
+  const cleaned = removeXmlTags(text);
+
+  // Additional cleanup for common XML artifacts
+  return cleaned
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+};
+
 export const VerseCard: React.FC<VerseCardProps> = ({
   verse,
   showReference = true,
   onPress,
 }) => {
+  const cleanText = cleanVerseText(verse.text);
+
   const cardContent = (
     <View
       className="bg-white p-4 rounded-lg shadow-sm mb-3"
@@ -27,21 +55,7 @@ export const VerseCard: React.FC<VerseCardProps> = ({
           {verse.book_name || "Unknown Book"} {verse.chapter}:{verse.verse}
         </Text>
       )}
-      <Text className="text-gray-800 text-base leading-6">{verse.text}</Text>
-
-      {/* Optional: Show book color indicator */}
-      {verse.book_color && (
-        <View className="flex-row items-center mt-2">
-          <View
-            className="w-3 h-3 rounded-full mr-2"
-            style={{ backgroundColor: verse.book_color }}
-          />
-          <Text className="text-gray-500 text-xs">
-            {verse.book_name} •{" "}
-            {verse.testament || (verse.book_number <= 39 ? "OT" : "NT")}
-          </Text>
-        </View>
-      )}
+      <Text className="text-gray-800 text-base leading-6">{cleanText}</Text>
     </View>
   );
 

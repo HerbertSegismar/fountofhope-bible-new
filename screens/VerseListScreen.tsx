@@ -31,7 +31,10 @@ export default function VerseListScreen({ navigation, route }: Props) {
   const loadVerses = async () => {
     try {
       setLoading(true);
-      const versesList = await bibleDB.getVerses(Number(book.book_number), Number(chapter));
+      const versesList = await bibleDB.getVerses(
+        Number(book.book_number),
+        Number(chapter)
+      );
       setVerses(versesList);
       setVerseCount(versesList.length);
     } catch (error) {

@@ -68,7 +68,10 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
       for (const chapter of chaptersToLoad) {
         try {
-          const count = await bibleDB.getVerseCount(Number(book.book_number), chapter);
+          const count = await bibleDB.getVerseCount(
+            Number(book.book_number),
+            chapter
+          );
           counts[chapter] = count;
         } catch (error) {
           console.error(
