@@ -41,7 +41,7 @@ class BibleDatabase {
   private readonly sqliteDirectory = `${documentDirectory}SQLite`;
   private readonly dbPath: string;
 
-  constructor(dbName: string = "niv11.sqlite3") {
+  constructor(dbName: string = "csb17.sqlite3") {
     this.dbName = dbName;
     this.dbPath = `${this.sqliteDirectory}/${this.dbName}`;
   }

@@ -37,7 +37,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   children,
 }) => {
   const [bibleDB, setBibleDB] = useState<BibleDatabase | null>(null);
-  const [currentVersion, setCurrentVersion] = useState("niv11.sqlite3");
+  const [currentVersion, setCurrentVersion] = useState("csb17.sqlite3");
   const [isInitializing, setIsInitializing] = useState(true);
 
   const availableVersions = ["niv11.sqlite3", "csb17.sqlite3"];

@@ -4,10 +4,10 @@ import { BibleDatabase } from "../lib/database";
 
 export const useBibleDatabase = () => {
   const [bibleDB, setBibleDB] = useState<BibleDatabase | null>(null);
-  const [currentVersion, setCurrentVersion] = useState("niv11.sqlite3");
+  const [currentVersion, setCurrentVersion] = useState("csb17.sqlite3");
   const [isInitializing, setIsInitializing] = useState(false);
 
-  const availableVersions = ["niv11.sqlite3", "csb17.sqlite3"];
+  const availableVersions = ["csb17.sqlite3", "niv11.sqlite3"];
 
   // Initialize database on app start
   useEffect(() => {
