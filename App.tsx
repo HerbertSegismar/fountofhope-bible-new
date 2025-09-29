@@ -7,7 +7,6 @@ import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import "./global.css";
 
-// Import screens
 import HomeScreen from "./screens/HomeScreen";
 import BookListScreen from "./screens/BookListScreen";
 import ChapterListScreen from "./screens/ChapterListScreen";
@@ -16,111 +15,123 @@ import SearchScreen from "./screens/SearchScreen";
 import BookmarksScreen from "./screens/BookmarksScreen";
 import ReaderScreen from "./screens/ReaderScreen";
 import SettingsScreen from "./screens/SettingsScreen";
+
 import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 
+// Param list types for each stack
 export type RootStackParamList = {
+  AppTabs: undefined;
+  Reader: { bookId: number; chapter: number; bookName: string };
+};
+
+export type BibleStackParamList = {
   Home: undefined;
   BookList: undefined;
   ChapterList: { book: Book };
   VerseList: { book: Book; chapter: number };
-  Reader: { bookId: number; chapter: number; bookName: string };
+};
+
+export type SearchStackParamList = {
   Search: undefined;
+};
+
+export type BookmarksStackParamList = {
   Bookmarks: undefined;
+};
+
+export type SettingsStackParamList = {
   Settings: undefined;
 };
 
-const Stack = createStackNavigator<RootStackParamList>();
+// Create stack navigators
+const RootStack = createStackNavigator<RootStackParamList>();
+const BibleStackNav = createStackNavigator<BibleStackParamList>();
+const SearchStackNav = createStackNavigator<SearchStackParamList>();
+const BookmarksStackNav = createStackNavigator<BookmarksStackParamList>();
+const SettingsStackNav = createStackNavigator<SettingsStackParamList>();
 const Tab = createBottomTabNavigator();
 
+// Bible Stack Navigator
 function BibleStack() {
   return (
-    <Stack.Navigator
+    <BibleStackNav.Navigator
       screenOptions={{
         headerShown: true,
-        headerStyle: {
-          backgroundColor: "#1e40af",
-        },
+        headerStyle: { backgroundColor: "#1e40af" },
         headerTintColor: "#fff",
       }}
     >
-      <Stack.Screen
+      <BibleStackNav.Screen
         name="Home"
         component={HomeScreen}
         options={{ title: "Fount of Hope" }}
       />
-      <Stack.Screen
+      <BibleStackNav.Screen
         name="BookList"
         component={BookListScreen}
         options={{ title: "Books of the Bible" }}
       />
-      <Stack.Screen
+      <BibleStackNav.Screen
         name="ChapterList"
         component={ChapterListScreen}
         options={({ route }) => ({ title: route.params.book.long_name })}
       />
-      <Stack.Screen
+      <BibleStackNav.Screen
         name="VerseList"
         component={VerseListScreen}
         options={({ route }) => ({
           title: `${route.params.book.short_name} ${route.params.chapter}`,
         })}
       />
-      <Stack.Screen
-        name="Reader"
-        component={ReaderScreen}
-        options={({ route }) => ({
-          title: `${route.params.bookName} ${route.params.chapter}`,
-        })}
-      />
-    </Stack.Navigator>
+    </BibleStackNav.Navigator>
   );
 }
 
+// Search Stack Navigator
 function SearchStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Search" component={SearchScreen} />
-    </Stack.Navigator>
+    <SearchStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <SearchStackNav.Screen name="Search" component={SearchScreen} />
+    </SearchStackNav.Navigator>
   );
 }
 
+// Bookmarks Stack Navigator
 function BookmarksStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Bookmarks" component={BookmarksScreen} />
-    </Stack.Navigator>
+    <BookmarksStackNav.Navigator screenOptions={{ headerShown: false }}>
+      <BookmarksStackNav.Screen name="Bookmarks" component={BookmarksScreen} />
+    </BookmarksStackNav.Navigator>
   );
 }
 
+// Settings Stack Navigator
 function SettingsStack() {
   return (
-    <Stack.Navigator
+    <SettingsStackNav.Navigator
       screenOptions={{
         headerShown: true,
-        headerStyle: {
-          backgroundColor: "#1e40af",
-        },
+        headerStyle: { backgroundColor: "#1e40af" },
         headerTintColor: "#fff",
       }}
     >
-      <Stack.Screen
+      <SettingsStackNav.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ title: "Settings" }}
       />
-    </Stack.Navigator>
+    </SettingsStackNav.Navigator>
   );
 }
 
+// Bottom Tab Navigator combining all stacks
 function AppTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarStyle: {
-          backgroundColor: "#1e40af",
-        },
+        tabBarStyle: { backgroundColor: "#1e40af" },
         tabBarActiveTintColor: "#f59e0b",
         tabBarInactiveTintColor: "#93c5fd",
         headerShown: false,
@@ -169,13 +180,32 @@ function AppTabs() {
   );
 }
 
+// Root navigator with AppTabs and Reader screen
+function RootNavigator() {
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="AppTabs" component={AppTabs} />
+      <RootStack.Screen
+        name="Reader"
+        component={ReaderScreen}
+        options={({ route }) => ({
+          headerShown: true,
+          title: `${route.params.bookName} ${route.params.chapter}`,
+          headerStyle: { backgroundColor: "#1e40af" },
+          headerTintColor: "#fff",
+        })}
+      />
+    </RootStack.Navigator>
+  );
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <BibleDatabaseProvider>
         <NavigationContainer>
           <StatusBar style="auto" />
-          <AppTabs />
+          <RootNavigator />
         </NavigationContainer>
       </BibleDatabaseProvider>
     </SafeAreaProvider>

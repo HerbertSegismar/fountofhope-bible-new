@@ -1,4 +1,3 @@
-// screens/HomeScreen.tsx - Updated to display long book names in verse reference
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -10,7 +9,8 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
 import { Button } from "../components/Button";
-import { bibleDB, BibleDatabaseError, Verse, Book } from "../lib/database";
+import { BibleDatabaseError, Verse, Book } from "../services/BibleDatabase";
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -19,49 +19,50 @@ interface Props {
 }
 
 export default function HomeScreen({ navigation }: Props) {
+  const { bibleDB, currentVersion, isInitializing } = useBibleDatabase();
+
   const [verseOfTheDay, setVerseOfTheDay] = useState<Verse | null>(null);
   const [bookLongName, setBookLongName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadRandomVerse();
-  }, []);
+    if (bibleDB && !isInitializing) {
+      loadRandomVerse();
+    } else {
+      // While DB is loading, show loading spinner
+      setLoading(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bibleDB, currentVersion, isInitializing]);
 
   const getRandomBookChapter = async (): Promise<{
     bookId: number;
     chapter: number;
   }> => {
+    if (!bibleDB) {
+      throw new Error("Database not available");
+    }
+
     try {
-      // Get all books from the database
       const books = await bibleDB.getBooks();
+      if (books.length === 0) throw new Error("No books found");
 
-      if (books.length === 0) {
-        throw new Error("No books found in database");
-      }
-
-      // Pick a random book
       const randomBook = books[Math.floor(Math.random() * books.length)];
-
-      // Get chapter count for this book
       const chapterCount = await bibleDB.getChapterCount(
         randomBook.book_number
       );
 
-      if (chapterCount === 0) {
-        // Fallback to a random chapter between 1-50 if chapter count is 0
-        return {
-          bookId: randomBook.book_number,
-          chapter: Math.floor(Math.random() * 50) + 1,
-        };
-      }
+      const chapter =
+        chapterCount > 0
+          ? Math.floor(Math.random() * chapterCount) + 1
+          : Math.floor(Math.random() * 50) + 1;
 
-      const randomChapter = Math.floor(Math.random() * chapterCount) + 1;
+      return { bookId: randomBook.book_number, chapter };
+    } catch (err) {
+      console.warn("Error getting random book/chapter:", err);
 
-      return { bookId: randomBook.book_number, chapter: randomChapter };
-    } catch (error) {
-      console.error("Error getting random book/chapter:", error);
-      // Fallback to popular books if there's an error
+      // Fallback popular books
       const popularBooks = [
         { id: 19, chapters: 150 }, // Psalms
         { id: 20, chapters: 31 }, // Proverbs
@@ -70,52 +71,49 @@ export default function HomeScreen({ navigation }: Props) {
         { id: 1, chapters: 50 }, // Genesis
       ];
 
-      const randomBook =
+      const book =
         popularBooks[Math.floor(Math.random() * popularBooks.length)];
-      const randomChapter = Math.floor(Math.random() * randomBook.chapters) + 1;
+      const chapter = Math.floor(Math.random() * book.chapters) + 1;
 
-      return { bookId: randomBook.id, chapter: randomChapter };
+      return { bookId: book.id, chapter };
     }
   };
 
   const loadRandomVerse = async () => {
+    if (!bibleDB) {
+      setError("Database not available");
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      // Ensure database is initialized
-      await bibleDB.init();
-
       const { bookId, chapter } = await getRandomBookChapter();
       const verses = await bibleDB.getVerses(bookId, chapter);
 
-      if (verses.length > 0) {
-        // Pick a random verse from the chapter
-        const randomIndex = Math.floor(Math.random() * verses.length);
-        const randomVerse = verses[randomIndex];
-        setVerseOfTheDay(randomVerse);
-
-        // Get the book's long name for the reference
-        try {
-          const bookInfo = await bibleDB.getBook(bookId);
-          if (bookInfo && bookInfo.long_name) {
-            setBookLongName(bookInfo.long_name);
-          } else {
-            // Fallback to the book_name from the verse if available
-            setBookLongName(randomVerse.book_name || "Unknown Book");
-          }
-        } catch (bookError) {
-          console.error("Failed to get book info:", bookError);
-          setBookLongName(randomVerse.book_name || "Unknown Book");
-        }
-      } else {
+      if (verses.length === 0) {
         setError("Could not load a verse. Please try again.");
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error("Failed to load random verse:", error);
 
-      if (error instanceof BibleDatabaseError) {
-        setError(`Database error: ${error.message}`);
+      const randomVerse = verses[Math.floor(Math.random() * verses.length)];
+      setVerseOfTheDay(randomVerse);
+
+      try {
+        const bookInfo = await bibleDB.getBook(bookId);
+        setBookLongName(
+          bookInfo?.long_name ?? randomVerse.book_name ?? "Unknown Book"
+        );
+      } catch {
+        setBookLongName(randomVerse.book_name ?? "Unknown Book");
+      }
+    } catch (err) {
+      console.error("Failed to load random verse:", err);
+      if (err instanceof BibleDatabaseError) {
+        setError(`Database error: ${err.message}`);
       } else {
         setError("Failed to load content. Please try again.");
       }
@@ -125,50 +123,34 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   const handleVersePress = async () => {
-    if (verseOfTheDay) {
-      try {
-        // Get the full book information to ensure we have all required properties
-        const bookInfo = await bibleDB.getBook(verseOfTheDay.book_number);
+    if (!verseOfTheDay || !bibleDB) return;
 
-        if (bookInfo) {
-          navigation.navigate("VerseList", {
-            book: bookInfo,
-            chapter: verseOfTheDay.chapter,
-          });
-        } else {
-          // Fallback: create a Book object with required properties
-          const fallbackBook: Book = {
-            book_number: verseOfTheDay.book_number,
-            short_name: verseOfTheDay.book_name || "Unknown",
-            long_name:
-              bookLongName || verseOfTheDay.book_name || "Unknown Book",
-            book_color: verseOfTheDay.book_color || "#3B82F6",
-          };
+    try {
+      const bookInfo = await bibleDB.getBook(verseOfTheDay.book_number);
 
-          navigation.navigate("VerseList", {
-            book: fallbackBook,
-            chapter: verseOfTheDay.chapter,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to get book info:", error);
-        // Ultimate fallback
-        const fallbackBook: Book = {
+      navigation.navigate("VerseList", {
+        book: bookInfo ?? {
           book_number: verseOfTheDay.book_number,
-          short_name: verseOfTheDay.book_name || "Unknown",
+          short_name: verseOfTheDay.book_name ?? "Unknown",
           long_name: bookLongName || verseOfTheDay.book_name || "Unknown Book",
           book_color: verseOfTheDay.book_color || "#3B82F6",
-        };
-
-        navigation.navigate("VerseList", {
-          book: fallbackBook,
-          chapter: verseOfTheDay.chapter,
-        });
-      }
+        },
+        chapter: verseOfTheDay.chapter,
+      });
+    } catch {
+      navigation.navigate("VerseList", {
+        book: {
+          book_number: verseOfTheDay.book_number,
+          short_name: verseOfTheDay.book_name ?? "Unknown",
+          long_name: bookLongName || verseOfTheDay.book_name || "Unknown Book",
+          book_color: verseOfTheDay.book_color || "#3B82F6",
+        },
+        chapter: verseOfTheDay.chapter,
+      });
     }
   };
 
-  const removeXmlTags = (text: string): string => {
+  const cleanVerseText = (text: string) => {
     if (!text) return "";
     return text
       .replace(/<[^>]*>/g, "")
@@ -182,12 +164,12 @@ export default function HomeScreen({ navigation }: Props) {
       .trim();
   };
 
-  const getFormattedReference = (): string => {
-    if (!verseOfTheDay) return "";
-    return `${bookLongName} ${verseOfTheDay.chapter}:${verseOfTheDay.verse}`;
-  };
+  const formattedReference = verseOfTheDay
+    ? `${bookLongName} ${verseOfTheDay.chapter}:${verseOfTheDay.verse}`
+    : "";
 
-  if (loading) {
+  // Show loading if DB or verses are loading
+  if (loading || isInitializing || !bibleDB) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
         <ActivityIndicator size="large" color="#3B82F6" />
@@ -228,6 +210,9 @@ export default function HomeScreen({ navigation }: Props) {
             <Text className="text-lg font-semibold text-gray-800">
               Fresh Revelation
             </Text>
+            <Text className="text-sm text-gray-500">
+              Version: {currentVersion.replace(".sqlite3", "").toUpperCase()}
+            </Text>
           </View>
           <TouchableOpacity
             onPress={loadRandomVerse}
@@ -243,9 +228,7 @@ export default function HomeScreen({ navigation }: Props) {
               className="bg-white rounded-lg shadow-sm border-l-4 min-h-[140px]"
               style={{ borderLeftColor: verseOfTheDay.book_color || "#3B82F6" }}
             >
-              {/* Main content with proper flex layout */}
               <View className="flex-1 p-5 justify-between">
-                {/* Verse Text Container */}
                 <View className="flex-1 mb-4">
                   <Text
                     className="text-gray-800 text-lg leading-7 text-justify"
@@ -254,15 +237,14 @@ export default function HomeScreen({ navigation }: Props) {
                     adjustsFontSizeToFit={false}
                     minimumFontScale={0.85}
                   >
-                    "{removeXmlTags(verseOfTheDay.text)}"
+                    "{cleanVerseText(verseOfTheDay.text)}"
                   </Text>
                 </View>
 
-                {/* Reference Section */}
                 <View>
                   <View className="border-t border-gray-100 pt-3">
                     <Text className="text-blue-600 font-semibold text-sm text-right">
-                      {getFormattedReference()}
+                      {formattedReference}
                     </Text>
                   </View>
                   <Text className="text-gray-500 text-xs text-center mt-2">
@@ -301,7 +283,7 @@ export default function HomeScreen({ navigation }: Props) {
         />
       </View>
 
-      {/* Quick Stats */}
+      {/* Quick Tips */}
       {verseOfTheDay && (
         <View className="bg-white p-4 rounded-lg border border-gray-200">
           <Text className="text-gray-600 text-center text-sm">

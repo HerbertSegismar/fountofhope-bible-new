@@ -11,8 +11,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList, Verse } from "../types";
-import { bibleDB } from "../lib/database";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
+import { useBibleDatabase } from "../context/BibleDatabaseContext"; // ✅ Import context
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -35,11 +35,17 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
 
+  // ✅ Use context
+  const { bibleDB, currentVersion } = useBibleDatabase();
+
   useEffect(() => {
-    loadChapter();
-  }, [bookId, currentChapter]);
+    if (bibleDB) {
+      loadChapter();
+    }
+  }, [bibleDB, bookId, currentChapter]);
 
   const loadChapter = async () => {
+    if (!bibleDB) return;
     try {
       setLoading(true);
       const bookDetails = await bibleDB.getBook(bookId);
@@ -56,18 +62,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   const goToPreviousChapter = () => {
     if (currentChapter > 1) {
-      setCurrentChapter(currentChapter - 1);
+      setCurrentChapter((prev) => prev - 1);
     }
   };
 
   const goToNextChapter = async () => {
+    if (!bibleDB) return;
+
     try {
       const nextChapterVerses = await bibleDB.getVerses(
         bookId,
         currentChapter + 1
       );
       if (nextChapterVerses.length > 0) {
-        setCurrentChapter(currentChapter + 1);
+        setCurrentChapter((prev) => prev + 1);
       } else {
         Alert.alert("End of Book", "This is the last chapter of the book.");
       }
@@ -75,6 +83,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
       Alert.alert("Error", "Cannot load next chapter");
     }
   };
+
 
   const increaseFontSize = () => {
     setFontSize((prev) => Math.min(prev + 1, 24));
@@ -104,13 +113,18 @@ export default function ReaderScreen({ navigation, route }: Props) {
     Alert.alert("Share", "Sharing feature coming soon!");
   };
 
-  if (loading) {
+  if (!bibleDB || loading) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
         <ActivityIndicator size="large" color="#3B82F6" />
         <Text className="text-lg text-gray-600 mt-4">
           Loading {bookName} {currentChapter}...
         </Text>
+        {currentVersion && (
+          <Text className="text-sm text-gray-500 mt-2">
+            {currentVersion.replace(".sqlite3", "").toUpperCase()}
+          </Text>
+        )}
       </SafeAreaView>
     );
   }
@@ -172,18 +186,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      {/* Chapter Content using ChapterViewEnhanced with font size */}
+      {/* Chapter Content */}
       <View className="flex-1">
         <ChapterViewEnhanced
-          verses={verses.map((verse) => ({
-            ...verse,
-            // Apply font size to each verse
-            text: verse.text, // The text will be styled by the component
-          }))}
-          bookName={''}
+          verses={verses}
+          bookName={bookName}
           chapterNumber={currentChapter}
           showVerseNumbers={true}
-          fontSize={fontSize} // Pass fontSize as a prop
+          fontSize={fontSize}
+          onVersePress={handleVersePress}
         />
       </View>
     </SafeAreaView>

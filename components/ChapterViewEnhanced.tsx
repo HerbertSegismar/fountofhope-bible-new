@@ -1,7 +1,7 @@
-// components/ChapterViewEnhanced.tsx - Updated to support fontSize
 import React from "react";
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
-import { Verse } from "../lib/database";
+import { Verse } from "../types";
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 interface ChapterViewProps {
   verses: Verse[];
@@ -10,11 +10,11 @@ interface ChapterViewProps {
   onPress?: () => void;
   showVerseNumbers?: boolean;
   fontSize?: number;
+  onVersePress?: (verse: Verse) => void;
 }
 
 const removeXmlTags = (text: string): string => {
   if (!text) return "";
-
   return text
     .replace(/<[^>]*>/g, "")
     .replace(/\s+/g, " ")
@@ -34,35 +34,44 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   onPress,
   showVerseNumbers = true,
   fontSize = 16,
+  onVersePress,
 }) => {
+  const { currentVersion } = useBibleDatabase();
+
   const sortedVerses = [...verses].sort((a, b) => a.verse - b.verse);
 
-  const renderFormattedChapter = () => {
+  const renderVerses = () => {
     if (sortedVerses.length === 0) {
-      return <Text className="text-gray-600">No verses available</Text>;
+      return (
+        <Text className="text-gray-600 text-center">No verses available</Text>
+      );
     }
 
     return (
-      <View>
-        {/* Chapter Header with Long Book Name */}
-        <Text className="text-xl font-bold text-center mb-6 text-primary">
-          {bookName} Chapter {chapterNumber}
-        </Text>
-
-        {/* Continuous Text with Separate Lines and Increased Line Height */}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 20 }}
-        >
-          <View className="space-y-4">
-            {sortedVerses.map((verse) => (
-              <View key={verse.verse} className="flex-row mb-2">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
+        <View className="space-y-4">
+          {sortedVerses.map((verse) => (
+            <TouchableOpacity
+              key={verse.verse}
+              activeOpacity={onVersePress ? 0.7 : 1}
+              onPress={() => onVersePress?.(verse)}
+            >
+              <View className="flex-row mb-2">
                 <Text
                   className="text-gray-800 flex-1 text-justify"
                   style={{
-                    fontSize: fontSize,
+                    fontSize,
                     lineHeight: fontSize * 1.6,
+                    flexShrink: 1,
+                    flexWrap: "wrap",
                   }}
+                  textBreakStrategy="highQuality"
+                  allowFontScaling
+                  adjustsFontSizeToFit={false}
+                  minimumFontScale={0.85}
                 >
                   {showVerseNumbers && (
                     <Text
@@ -78,15 +87,10 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   {removeXmlTags(verse.text)}
                 </Text>
               </View>
-            ))}
-          </View>
-        </ScrollView>
-
-        {/* Chapter Footer */}
-        <Text className="text-center text-gray-500 mt-6 text-sm">
-          End of Chapter {chapterNumber}
-        </Text>
-      </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
     );
   };
 
@@ -99,7 +103,18 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           : {}
       }
     >
-      {renderFormattedChapter()}
+      <Text className="text-xl font-bold text-center mb-6 text-primary">
+        {bookName} Chapter {chapterNumber}
+      </Text>
+
+      {renderVerses()}
+
+      <Text className="text-center text-gray-500 mt-6 text-sm">
+        End of Chapter {chapterNumber}
+        {currentVersion && (
+          <> • {currentVersion.replace(".sqlite3", "").toUpperCase()}</>
+        )}
+      </Text>
     </View>
   );
 

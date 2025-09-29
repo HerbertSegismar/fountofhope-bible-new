@@ -5,13 +5,13 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList } from "../types";
-import { bibleDB } from "../lib/database";
+import { RootStackParamList, Verse } from "../types";
 import { VerseCard } from "../components/VerseCard";
-import { Verse } from "../lib/database";
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 type SearchScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -27,6 +27,8 @@ export default function SearchScreen({ navigation }: Props) {
   const [results, setResults] = useState<Verse[]>([]);
   const [searching, setSearching] = useState(false);
 
+  const { currentVersion, searchVerses } = useBibleDatabase();
+
   const handleSearch = async () => {
     if (!query.trim()) {
       setResults([]);
@@ -35,7 +37,8 @@ export default function SearchScreen({ navigation }: Props) {
 
     try {
       setSearching(true);
-      const searchResults = await bibleDB.searchVerses(query);
+      // Remove limit to show all results
+      const searchResults = await searchVerses(query);
       setResults(searchResults);
     } catch (error) {
       console.error("Search error:", error);
@@ -60,9 +63,9 @@ export default function SearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
-      <SafeAreaView className="p-4">
-        {/* Search Header */}
-        <SafeAreaView className="flex-row items-center mb-4">
+      <View className="p-4">
+        {/* Search Input */}
+        <View className="flex-row items-center mb-4">
           <TextInput
             className="flex-1 bg-white p-4 rounded-lg shadow-sm"
             placeholder="Search Bible verses..."
@@ -76,7 +79,7 @@ export default function SearchScreen({ navigation }: Props) {
               <Text className="text-blue-500 p-4">Clear</Text>
             </TouchableOpacity>
           )}
-        </SafeAreaView>
+        </View>
 
         {/* Search Button */}
         <TouchableOpacity
@@ -89,57 +92,61 @@ export default function SearchScreen({ navigation }: Props) {
           </Text>
         </TouchableOpacity>
 
-        {/* Results */}
+        {/* Search Results */}
         {searching ? (
-          <SafeAreaView className="flex-1 justify-center items-center py-8">
+          <View className="flex-1 justify-center items-center py-8">
             <Text className="text-gray-600">Searching...</Text>
-          </SafeAreaView>
+          </View>
         ) : (
           <ScrollView showsVerticalScrollIndicator={false}>
-            <SafeAreaView className="space-y-3">
-              {results.map((verse, index) => (
+            <View className="space-y-3">
+              {results.map((verse, idx) => (
                 <TouchableOpacity
-                  key={`${verse.book_number}-${verse.chapter}-${verse.verse}-${index}`}
+                  key={`${verse.book_number}-${verse.chapter}-${verse.verse}-${idx}`}
                   onPress={() => handleVersePress(verse)}
                 >
-                  <VerseCard verse={verse} />
+                  <VerseCard verse={verse} highlight={query} />
                 </TouchableOpacity>
               ))}
-            </SafeAreaView>
+            </View>
 
+            {/* No results */}
             {results.length === 0 && query && !searching && (
-              <SafeAreaView className="py-8">
+              <View className="py-8">
                 <Text className="text-center text-gray-600">
                   No results found for "{query}"
                 </Text>
                 <Text className="text-center text-gray-500 text-sm mt-2">
                   Try different keywords or check spelling
                 </Text>
-              </SafeAreaView>
+              </View>
             )}
 
+            {/* Empty state */}
             {!query && (
-              <SafeAreaView className="py-8">
+              <View className="py-8">
                 <Text className="text-center text-gray-600">
                   Enter a search term to find Bible verses
                 </Text>
                 <Text className="text-center text-gray-500 text-sm mt-2">
                   Try searching for words like "love", "faith", or "peace"
                 </Text>
-              </SafeAreaView>
+              </View>
             )}
           </ScrollView>
         )}
 
-        {/* Search Tips */}
+        {/* Results count */}
         {results.length > 0 && (
-          <SafeAreaView className="mt-4 bg-blue-50 p-3 rounded-lg">
+          <View className="mt-4 bg-blue-50 p-3 rounded-lg">
             <Text className="text-blue-800 text-sm">
               Found {results.length} result{results.length !== 1 ? "s" : ""}
+              {currentVersion &&
+                ` • ${currentVersion.replace(".sqlite3", "").toUpperCase()}`}
             </Text>
-          </SafeAreaView>
+          </View>
         )}
-      </SafeAreaView>
+      </View>
     </SafeAreaView>
   );
 }

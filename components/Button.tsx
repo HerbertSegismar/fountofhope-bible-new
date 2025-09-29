@@ -1,9 +1,14 @@
 import React from "react";
-import { TouchableOpacity, Text, ActivityIndicator } from "react-native";
+import {
+  TouchableOpacity,
+  Text,
+  ActivityIndicator,
+  GestureResponderEvent,
+} from "react-native";
 
 interface ButtonProps {
   title: string;
-  onPress: () => void;
+  onPress: (event: GestureResponderEvent) => void;
   variant?: "primary" | "secondary" | "outline";
   loading?: boolean;
   disabled?: boolean;
@@ -16,34 +21,47 @@ export const Button: React.FC<ButtonProps> = ({
   loading = false,
   disabled = false,
 }) => {
-  const getButtonStyle = () => {
-    const base = "py-3 px-6 rounded-lg flex-row justify-center items-center";
+  // Base styles for the button container
+  const baseButtonStyle =
+    "py-3 px-6 rounded-lg flex-row justify-center items-center";
 
+  // Determine background and border styles based on variant
+  const getButtonStyle = () => {
     switch (variant) {
       case "secondary":
-        return `${base} bg-secondary`;
+        return `${baseButtonStyle} bg-secondary`;
       case "outline":
-        return `${base} border-2 border-primary`;
+        return `${baseButtonStyle} border-2 border-primary bg-transparent`;
       default:
-        return `${base} bg-primary`;
+        return `${baseButtonStyle} bg-primary`;
     }
   };
 
+  // Determine text color based on variant
   const getTextStyle = () => {
-    const base = "text-lg font-semibold";
+    const baseTextStyle = "text-lg font-semibold";
     return variant === "outline"
-      ? `${base} text-primary`
-      : `${base} text-white`;
+      ? `${baseTextStyle} text-primary`
+      : `${baseTextStyle} text-white`;
   };
+
+  // Set activity indicator color depending on variant
+  const activityIndicatorColor =
+    variant === "outline" ? "#3B82F6" /* primary blue */ : "white";
 
   return (
     <TouchableOpacity
       className={getButtonStyle()}
       onPress={onPress}
       disabled={disabled || loading}
+      activeOpacity={disabled || loading ? 1 : 0.7}
     >
       {loading && (
-        <ActivityIndicator size="small" color="white" className="mr-2" />
+        <ActivityIndicator
+          size="small"
+          color={activityIndicatorColor}
+          className="mr-2"
+        />
       )}
       <Text className={getTextStyle()}>{title}</Text>
     </TouchableOpacity>

@@ -2,12 +2,18 @@
 import React, {
   createContext,
   useContext,
-  ReactNode,
   useState,
   useEffect,
   useCallback,
+  ReactNode,
 } from "react";
-import { BibleDatabase } from "../services/BibleDatabase";
+import { BibleDatabase, Verse } from "../services/BibleDatabase";
+
+interface SearchOptions {
+  limit?: number;
+  bookNumber?: number;
+  chapter?: number;
+}
 
 interface BibleDatabaseContextType {
   bibleDB: BibleDatabase | null;
@@ -15,19 +21,13 @@ interface BibleDatabaseContextType {
   availableVersions: string[];
   switchVersion: (newVersion: string) => Promise<void>;
   isInitializing: boolean;
+  refreshDatabase: () => Promise<void>;
+  searchVerses: (query: string, options?: SearchOptions) => Promise<Verse[]>;
 }
 
-const BibleDatabaseContext = createContext<BibleDatabaseContextType | null>(
-  null
-);
-
-export const useBibleDB = () => {
-  const context = useContext(BibleDatabaseContext);
-  if (!context) {
-    throw new Error("useBibleDB must be used within a BibleDatabaseProvider");
-  }
-  return context;
-};
+const BibleDatabaseContext = createContext<
+  BibleDatabaseContextType | undefined
+>(undefined);
 
 interface BibleDatabaseProviderProps {
   children: ReactNode;
@@ -37,75 +37,77 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   children,
 }) => {
   const [bibleDB, setBibleDB] = useState<BibleDatabase | null>(null);
-  const [currentVersion, setCurrentVersion] = useState("csb17.sqlite3");
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [currentVersion, setCurrentVersion] = useState("esv.sqlite3");
+  const [isInitializing, setIsInitializing] = useState(false);
 
-  const availableVersions = ["niv11.sqlite3", "csb17.sqlite3"];
+  const availableVersions = [
+    "niv11.sqlite3",
+    "csb17.sqlite3",
+    "ylt.sqlite3",
+    "nlt15.sqlite3",
+    "nkjv.sqlite3",
+    "nasb.sqlite3",
+    "logos.sqlite3",
+    "kj2.sqlite3",
+    "esv.sqlite3",
+    "esvgsb.sqlite3",
+  ];
 
-  // Initialize database on app start
-  useEffect(() => {
-    const initDatabase = async () => {
-      setIsInitializing(true);
-      try {
-        console.log(`Initializing database: ${currentVersion}`);
-        const db = new BibleDatabase(currentVersion);
-        await db.init();
-        setBibleDB(db);
-        console.log(`Database ${currentVersion} initialized successfully`);
-      } catch (error) {
-        console.error("Failed to initialize database:", error);
-        // Fallback to default version if initialization fails
-        if (currentVersion !== "niv11.sqlite3") {
-          console.log("Falling back to NIV version");
-          const fallbackDB = new BibleDatabase("niv11.sqlite3");
-          await fallbackDB.init();
-          setBibleDB(fallbackDB);
-          setCurrentVersion("niv11.sqlite3");
-        }
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    initDatabase();
+  // Initialize DB
+  const initializeDatabase = useCallback(async (version: string) => {
+    setIsInitializing(true);
+    try {
+      const db = new BibleDatabase(version);
+      await db.init();
+      setBibleDB(db);
+      setCurrentVersion(version);
+      console.log(`Database initialized with version: ${version}`);
+    } catch (error) {
+      console.error("Failed to initialize database:", error);
+      setBibleDB(null);
+      throw error;
+    } finally {
+      setIsInitializing(false);
+    }
   }, []);
 
+  // Auto-initialize on mount or when version changes
+  useEffect(() => {
+    initializeDatabase(currentVersion);
+  }, [currentVersion, initializeDatabase]);
+
+  // Switch DB version
   const switchVersion = useCallback(
     async (newVersion: string) => {
       if (newVersion === currentVersion) return;
 
       setIsInitializing(true);
       try {
-        console.log(`Switching from ${currentVersion} to ${newVersion}`);
-
-        // Close current database if it exists
-        if (bibleDB) {
-          await bibleDB.close();
-        }
-
-        // Initialize new database
-        const newDB = new BibleDatabase(newVersion);
-        await newDB.init();
-
-        setBibleDB(newDB);
-        setCurrentVersion(newVersion);
-        console.log(`Successfully switched to ${newVersion}`);
+        if (bibleDB) await bibleDB.close();
+        await initializeDatabase(newVersion);
       } catch (error) {
         console.error("Failed to switch version:", error);
-
-        // Try to reinitialize the current version if switch fails
-        if (bibleDB) {
-          const currentDB = new BibleDatabase(currentVersion);
-          await currentDB.init();
-          setBibleDB(currentDB);
-        }
-
+        await initializeDatabase(currentVersion); // revert on error
         throw error;
       } finally {
         setIsInitializing(false);
       }
     },
-    [bibleDB, currentVersion]
+    [bibleDB, currentVersion, initializeDatabase]
+  );
+
+  // Refresh DB
+  const refreshDatabase = useCallback(async () => {
+    await initializeDatabase(currentVersion);
+  }, [currentVersion, initializeDatabase]);
+
+  // Search helper
+  const searchVerses = useCallback(
+    async (query: string, options?: SearchOptions) => {
+      if (!bibleDB) return [];
+      return bibleDB.searchVerses(query, options);
+    },
+    [bibleDB]
   );
 
   const value: BibleDatabaseContextType = {
@@ -114,6 +116,8 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     availableVersions,
     switchVersion,
     isInitializing,
+    refreshDatabase,
+    searchVerses,
   };
 
   return (
@@ -121,4 +125,15 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       {children}
     </BibleDatabaseContext.Provider>
   );
+};
+
+// Custom hook
+export const useBibleDatabase = (): BibleDatabaseContextType => {
+  const context = useContext(BibleDatabaseContext);
+  if (!context) {
+    throw new Error(
+      "useBibleDatabase must be used within a BibleDatabaseProvider"
+    );
+  }
+  return context;
 };

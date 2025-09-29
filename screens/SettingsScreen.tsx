@@ -1,19 +1,12 @@
-// screens/SettingsScreen.tsx
 import React, { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useBibleDatabase } from "../lib/useBibleDatabase";
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 const SettingsScreen = () => {
   const { currentVersion, availableVersions, switchVersion, isInitializing } =
     useBibleDatabase();
+
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
 
   useEffect(() => {
@@ -27,10 +20,13 @@ const SettingsScreen = () => {
 
     try {
       await switchVersion(version);
-      Alert.alert("Success", `Bible version switched to ${version}`);
+      Alert.alert(
+        "Success",
+        `Bible version switched to ${getVersionDisplayName(version)}`
+      );
     } catch (error) {
       Alert.alert("Error", "Failed to switch Bible version");
-      setSelectedVersion(currentVersion); // Revert on error
+      setSelectedVersion(currentVersion);
     }
   };
 
@@ -38,161 +34,113 @@ const SettingsScreen = () => {
     const versionMap: { [key: string]: string } = {
       "niv11.sqlite3": "NIV (2011)",
       "csb17.sqlite3": "CSB (2017)",
+      "ylt.sqlite3": "Young's Literal Translation",
+      "nlt15.sqlite3": "NLT (2015)",
+      "nkjv.sqlite3": "NKJV",
+      "nasb.sqlite3": "NASB",
+      "logos.sqlite3": "Logos Edition",
+      "kj2.sqlite3": "King James II",
+      "esv.sqlite3": "ESV",
+      "esvgsb.sqlite3": "ESV Gospel Study Bible",
     };
     return versionMap[version] || version;
   };
 
+  const getVersionDescription = (version: string) => {
+    const descriptionMap: { [key: string]: string } = {
+      "niv11.sqlite3": "New International Version",
+      "csb17.sqlite3": "Christian Standard Bible",
+      "ylt.sqlite3": "Young's Literal Translation",
+      "nlt15.sqlite3": "New Living Translation",
+      "nkjv.sqlite3": "New King James Version",
+      "nasb.sqlite3": "New American Standard Bible",
+      "logos.sqlite3": "Logos Bible",
+      "kj2.sqlite3": "King James 2",
+      "esv.sqlite3": "English Standard Version",
+      "esvgsb.sqlite3": "ESV Global Study Bible",
+    };
+    return descriptionMap[version] || "Bible translation";
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Bible Version</Text>
-        <Text style={styles.sectionDescription}>
+    <ScrollView className="flex-1 bg-slate-50">
+      <View className="bg-white m-4 p-4 rounded-xl shadow-md">
+        <Text className="text-lg font-bold text-slate-800 mb-1">
+          Bible Version
+        </Text>
+        <Text className="text-sm text-slate-500 mb-4">
           Choose your preferred Bible translation
         </Text>
 
-        <View style={styles.optionsContainer}>
-          {availableVersions.map((version) => (
-            <TouchableOpacity
-              key={version}
-              style={[
-                styles.option,
-                selectedVersion === version && styles.optionSelected,
-              ]}
-              onPress={() => handleVersionSelect(version)}
-              disabled={isInitializing}
-            >
-              <View style={styles.optionContent}>
-                <View style={styles.optionTextContainer}>
-                  <Text style={styles.optionTitle}>
-                    {getVersionDisplayName(version)}
-                  </Text>
-                  <Text style={styles.optionDescription}>
-                    {version === "niv11.sqlite3"
-                      ? "New International Version"
-                      : "Christian Standard Bible"}
-                  </Text>
-                </View>
+        <View className="rounded-md overflow-hidden">
+          {availableVersions.map((version) => {
+            const isSelected = selectedVersion === version;
+            return (
+              <TouchableOpacity
+                key={version}
+                className={`p-4 border-b border-slate-200 ${
+                  isSelected
+                    ? "bg-blue-50 border-l-4 border-blue-800"
+                    : "bg-slate-50"
+                }`}
+                onPress={() => handleVersionSelect(version)}
+                disabled={isInitializing}
+              >
+                <View className="flex-row justify-between items-center">
+                  <View className="flex-1">
+                    <Text className="text-base font-semibold text-slate-800">
+                      {getVersionDisplayName(version)}
+                    </Text>
+                    <Text className="text-sm text-slate-500">
+                      {getVersionDescription(version)}
+                    </Text>
+                  </View>
 
-                <View style={styles.optionRight}>
-                  {isInitializing && selectedVersion === version ? (
-                    <Text style={styles.loadingText}>Loading...</Text>
-                  ) : (
-                    selectedVersion === version && (
-                      <Ionicons
-                        name="checkmark-circle"
-                        size={24}
-                        color="#1e40af"
-                      />
-                    )
-                  )}
+                  <View className="ml-3">
+                    {isInitializing && isSelected ? (
+                      <Text className="text-sm italic text-slate-500">
+                        Loading...
+                      </Text>
+                    ) : (
+                      isSelected && (
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={24}
+                          color="#1e40af"
+                        />
+                      )
+                    )}
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        {isInitializing && (
+          <View className="mt-2 items-center">
+            <Text className="text-sm italic text-slate-500">
+              Switching version...
+            </Text>
+          </View>
+        )}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.aboutItem}>
-          <Text style={styles.aboutLabel}>Current Version</Text>
-          <Text style={styles.aboutValue}>
+      <View className="bg-white m-4 p-4 rounded-xl shadow-md">
+        <Text className="text-lg font-bold text-slate-800 mb-2">About</Text>
+        <View className="flex-row justify-between py-2">
+          <Text className="text-base text-slate-500">Current Version</Text>
+          <Text className="text-base font-medium text-slate-800">
             {getVersionDisplayName(currentVersion)}
           </Text>
         </View>
-        <View style={styles.aboutItem}>
-          <Text style={styles.aboutLabel}>App Version</Text>
-          <Text style={styles.aboutValue}>1.0.0</Text>
+        <View className="flex-row justify-between py-2">
+          <Text className="text-base text-slate-500">App Version</Text>
+          <Text className="text-base font-medium text-slate-800">1.0.0</Text>
         </View>
       </View>
     </ScrollView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8fafc",
-  },
-  section: {
-    backgroundColor: "#ffffff",
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#1e293b",
-    marginBottom: 4,
-  },
-  sectionDescription: {
-    fontSize: 14,
-    color: "#64748b",
-    marginBottom: 16,
-  },
-  optionsContainer: {
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  option: {
-    backgroundColor: "#f8fafc",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-  },
-  optionSelected: {
-    backgroundColor: "#eff6ff",
-    borderLeftWidth: 3,
-    borderLeftColor: "#1e40af",
-  },
-  optionContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  optionTextContainer: {
-    flex: 1,
-  },
-  optionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1e293b",
-    marginBottom: 2,
-  },
-  optionDescription: {
-    fontSize: 14,
-    color: "#64748b",
-  },
-  optionRight: {
-    marginLeft: 12,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: "#64748b",
-    fontStyle: "italic",
-  },
-  aboutItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  aboutLabel: {
-    fontSize: 16,
-    color: "#64748b",
-  },
-  aboutValue: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#1e293b",
-  },
-});
 
 export default SettingsScreen;

@@ -5,12 +5,13 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList, Verse } from "../types";
-import { bibleDB } from "../lib/database";
 import { VerseCard } from "../components/VerseCard";
+import { useBibleDatabase } from "../context/BibleDatabaseContext"; // Import the context
 
 type BookmarksScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -39,12 +40,20 @@ export default function BookmarksScreen({ navigation }: Props) {
   );
   const [loading, setLoading] = useState(true);
 
+  // Use the context
+  const { bibleDB, currentVersion } = useBibleDatabase();
+
   useEffect(() => {
     loadBookmarks();
-  }, []);
+  }, [bibleDB, currentVersion]); // Reload when database or version changes
 
   // Mock function - replace with actual bookmark storage
   const loadBookmarks = async () => {
+    if (!bibleDB) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -93,6 +102,8 @@ export default function BookmarksScreen({ navigation }: Props) {
   };
 
   const loadVerseDetails = async (bookmarks: Bookmark[]) => {
+    if (!bibleDB) return;
+
     try {
       const details: { [key: string]: Verse } = {};
 
@@ -121,10 +132,11 @@ export default function BookmarksScreen({ navigation }: Props) {
   };
 
   const handleBookmarkPress = (bookmark: Bookmark) => {
+    const verse = verseDetails[bookmark.id];
     navigation.navigate("Reader", {
       bookId: bookmark.bookNumber,
       chapter: bookmark.chapter,
-      bookName: verseDetails[bookmark.id]?.book_name || "Unknown Book",
+      bookName: verse?.book_name || "Unknown Book",
     });
   };
 
@@ -144,6 +156,12 @@ export default function BookmarksScreen({ navigation }: Props) {
           onPress: () => {
             // Remove from local state
             setBookmarks((prev) => prev.filter((b) => b.id !== bookmarkId));
+            // Remove from verse details
+            setVerseDetails((prev) => {
+              const newDetails = { ...prev };
+              delete newDetails[bookmarkId];
+              return newDetails;
+            });
             // In a real app, you'd also remove from storage
           },
         },
@@ -151,11 +169,34 @@ export default function BookmarksScreen({ navigation }: Props) {
     );
   };
 
+  const refreshBookmarks = () => {
+    loadBookmarks();
+  };
+
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
         <ActivityIndicator size="large" color="#3B82F6" />
         <Text className="text-lg text-gray-600 mt-4">Loading bookmarks...</Text>
+        <Text className="text-sm text-gray-500 mt-2">
+          {currentVersion.replace(".sqlite3", "").toUpperCase()}
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!bibleDB) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center p-6">
+        <Text className="text-lg text-red-600 text-center mb-4">
+          Database not available
+        </Text>
+        <TouchableOpacity
+          onPress={refreshBookmarks}
+          className="bg-blue-500 px-4 py-3 rounded-lg"
+        >
+          <Text className="text-white font-semibold">Try Again</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
@@ -163,19 +204,22 @@ export default function BookmarksScreen({ navigation }: Props) {
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       {/* Header */}
-      <SafeAreaView className="bg-white p-6 shadow-sm">
+      <View className="bg-white p-6 shadow-sm border-b border-gray-200">
         <Text className="text-2xl font-bold text-primary text-center">
           My Bookmarks
         </Text>
         <Text className="text-gray-600 text-center mt-1">
           {bookmarks.length} saved verse{bookmarks.length !== 1 ? "s" : ""}
         </Text>
-      </SafeAreaView>
+        <Text className="text-sm text-gray-500 text-center mt-1">
+          {currentVersion.replace(".sqlite3", "").toUpperCase()} Version
+        </Text>
+      </View>
 
       {/* Bookmarks List */}
-      <ScrollView className="flex-1 p-4">
+      <ScrollView className="flex-1 p-4" showsVerticalScrollIndicator={false}>
         {bookmarks.length === 0 ? (
-          <SafeAreaView className="flex-1 justify-center items-center py-16">
+          <View className="flex-1 justify-center items-center py-16">
             <Text className="text-lg text-gray-600 text-center mb-4">
               No bookmarks yet
             </Text>
@@ -188,64 +232,62 @@ export default function BookmarksScreen({ navigation }: Props) {
             >
               <Text className="text-white font-semibold">Add Bookmark</Text>
             </TouchableOpacity>
-          </SafeAreaView>
+          </View>
         ) : (
-          <SafeAreaView className="space-y-4">
+          <View className="space-y-4">
             {bookmarks.map((bookmark) => {
               const verse = verseDetails[bookmark.id];
               return (
-                <SafeAreaView
+                <View
                   key={bookmark.id}
-                  className="bg-white rounded-lg shadow-sm overflow-hidden"
+                  className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-100"
                 >
                   {/* Bookmark Header */}
-                  <SafeAreaView
+                  <View
                     className="p-3 border-b border-gray-100"
                     style={{ backgroundColor: bookmark.color + "20" }} // 20% opacity
                   >
-                    <SafeAreaView className="flex-row justify-between items-center">
+                    <View className="flex-row justify-between items-center">
                       <Text
-                        className="font-semibold"
+                        className="font-semibold text-base"
                         style={{ color: bookmark.color }}
+                        numberOfLines={1}
                       >
                         {bookmark.title}
                       </Text>
                       <TouchableOpacity
                         onPress={() => handleDeleteBookmark(bookmark.id)}
-                        className="p-1"
+                        className="p-2"
                       >
-                        <Text className="text-red-500 text-xs">Delete</Text>
+                        <Text className="text-red-500 text-sm font-medium">
+                          Delete
+                        </Text>
                       </TouchableOpacity>
-                    </SafeAreaView>
+                    </View>
                     {bookmark.note && (
-                      <Text className="text-gray-600 text-sm mt-1">
+                      <Text
+                        className="text-gray-600 text-sm mt-1"
+                        numberOfLines={2}
+                      >
                         {bookmark.note}
                       </Text>
                     )}
-                    <Text className="text-gray-500 text-xs mt-1">
+                    <Text className="text-gray-500 text-xs mt-2">
                       Saved on {bookmark.createdAt.toLocaleDateString()}
                     </Text>
-                  </SafeAreaView>
+                  </View>
 
                   {/* Verse Content */}
                   <TouchableOpacity
                     onPress={() => handleBookmarkPress(bookmark)}
+                    activeOpacity={0.7}
                   >
-                    {verse ? (
-                      <VerseCard verse={verse} showReference={true} />
-                    ) : (
-                      <SafeAreaView className="p-4">
-                        <Text className="text-gray-600">
-                          Loading verse {bookmark.bookNumber}:{bookmark.chapter}
-                          :{bookmark.verse}...
-                        </Text>
-                      </SafeAreaView>
-                    )}
+                    {verse && <VerseCard verse={verse} showReference={true} />}
                   </TouchableOpacity>
-                </SafeAreaView>
+                </View>
               );
             })}
-          </SafeAreaView>
+          </View>
         )}
       </ScrollView>
 
@@ -254,10 +296,20 @@ export default function BookmarksScreen({ navigation }: Props) {
         <TouchableOpacity
           className="absolute bottom-6 right-6 bg-primary w-14 h-14 rounded-full justify-center items-center shadow-lg"
           onPress={handleAddBookmark}
+          activeOpacity={0.8}
         >
           <Text className="text-white text-2xl font-bold">+</Text>
         </TouchableOpacity>
       )}
+
+      {/* Refresh Button */}
+      <TouchableOpacity
+        className="absolute bottom-6 left-6 bg-gray-600 w-14 h-14 rounded-full justify-center items-center shadow-lg"
+        onPress={refreshBookmarks}
+        activeOpacity={0.8}
+      >
+        <Text className="text-white text-lg font-bold">↻</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
