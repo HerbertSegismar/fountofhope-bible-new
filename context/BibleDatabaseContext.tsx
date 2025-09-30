@@ -60,7 +60,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       const db = new BibleDatabase(version);
       await db.init();
       setBibleDB(db);
-      setCurrentVersion(version);
       console.log(`Database initialized with version: ${version}`);
     } catch (error) {
       console.error("Failed to initialize database:", error);
@@ -71,10 +70,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     }
   }, []);
 
+
   // Auto-initialize on mount or when version changes
   useEffect(() => {
     initializeDatabase(currentVersion);
-  }, [currentVersion, initializeDatabase]);
+  }, []);
 
   // Switch DB version
   const switchVersion = useCallback(
@@ -85,9 +85,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       try {
         if (bibleDB) await bibleDB.close();
         await initializeDatabase(newVersion);
+        setCurrentVersion(newVersion); // ✅ move here
       } catch (error) {
         console.error("Failed to switch version:", error);
-        await initializeDatabase(currentVersion); // revert on error
+        // re-init old version if needed
+        await initializeDatabase(currentVersion);
         throw error;
       } finally {
         setIsInitializing(false);
@@ -95,6 +97,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     },
     [bibleDB, currentVersion, initializeDatabase]
   );
+
 
   // Refresh DB
   const refreshDatabase = useCallback(async () => {
