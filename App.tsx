@@ -19,6 +19,7 @@ import SettingsScreen from "./screens/SettingsScreen";
 import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
+import { BookmarksProvider } from "./context/BookmarksContext";
 
 // Param list types for each stack
 export type RootStackParamList = {
@@ -203,10 +204,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <BibleDatabaseProvider>
-        <NavigationContainer>
-          <StatusBar style="auto" />
-          <RootNavigator />
-        </NavigationContainer>
+        <BookmarksProvider>
+          <NavigationContainer>
+            <StatusBar style="auto" />
+            <RootNavigator />
+          </NavigationContainer>
+        </BookmarksProvider>
       </BibleDatabaseProvider>
     </SafeAreaProvider>
   );

@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useContext } from "react";
 import {
   Text,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Dimensions,
   View,
+  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList, Verse } from "../types";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
-import { useBibleDatabase } from "../context/BibleDatabaseContext"; // ✅ Import context
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { BookmarksContext } from "../context/BookmarksContext";
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -35,13 +36,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
 
-  // ✅ Use context
   const { bibleDB, currentVersion } = useBibleDatabase();
+  const { addBookmark } = useContext(BookmarksContext); // ✅ Properly use context
 
   useEffect(() => {
-    if (bibleDB) {
-      loadChapter();
-    }
+    if (bibleDB) loadChapter();
   }, [bibleDB, bookId, currentChapter]);
 
   const loadChapter = async () => {
@@ -61,37 +60,25 @@ export default function ReaderScreen({ navigation, route }: Props) {
   };
 
   const goToPreviousChapter = () => {
-    if (currentChapter > 1) {
-      setCurrentChapter((prev) => prev - 1);
-    }
+    if (currentChapter > 1) setCurrentChapter((prev) => prev - 1);
   };
 
   const goToNextChapter = async () => {
     if (!bibleDB) return;
-
     try {
       const nextChapterVerses = await bibleDB.getVerses(
         bookId,
         currentChapter + 1
       );
-      if (nextChapterVerses.length > 0) {
-        setCurrentChapter((prev) => prev + 1);
-      } else {
-        Alert.alert("End of Book", "This is the last chapter of the book.");
-      }
-    } catch (error) {
+      if (nextChapterVerses.length > 0) setCurrentChapter((prev) => prev + 1);
+      else Alert.alert("End of Book", "This is the last chapter.");
+    } catch {
       Alert.alert("Error", "Cannot load next chapter");
     }
   };
 
-
-  const increaseFontSize = () => {
-    setFontSize((prev) => Math.min(prev + 1, 24));
-  };
-
-  const decreaseFontSize = () => {
-    setFontSize((prev) => Math.max(prev - 1, 12));
-  };
+  const increaseFontSize = () => setFontSize((prev) => Math.min(prev + 1, 24));
+  const decreaseFontSize = () => setFontSize((prev) => Math.max(prev - 1, 12));
 
   const handleVersePress = (verse: Verse) => {
     Alert.alert(
@@ -99,18 +86,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
       "Options:",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Bookmark", onPress: () => addBookmark(verse) },
-        { text: "Share", onPress: () => shareVerse(verse) },
+        {
+          text: "Bookmark",
+          onPress: () => {
+            addBookmark(verse); // ✅ Adds bookmark to context
+            Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+          },
+        },
+        { text: "Share", onPress: () => Alert.alert("Share", "Coming soon!") },
       ]
     );
-  };
-
-  const addBookmark = (verse: Verse) => {
-    Alert.alert("Bookmark Added", "Verse has been bookmarked!");
-  };
-
-  const shareVerse = (verse: Verse) => {
-    Alert.alert("Share", "Sharing feature coming soon!");
   };
 
   if (!bibleDB || loading) {
@@ -131,7 +116,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-white">
-      {/* Compact Header */}
+      {/* Header */}
       <View className="bg-primary px-4 py-2">
         <View className="flex-row justify-between items-center">
           <TouchableOpacity
@@ -153,7 +138,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
 
-        {/* Compact Progress Bar */}
+        {/* Progress Bar */}
         <View className="mt-2 w-full h-1 bg-blue-300 rounded-full">
           <View
             className="h-1 bg-yellow-400 rounded-full"
@@ -164,7 +149,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      {/* Compact Font Size Controls */}
+      {/* Font Size Controls */}
       <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
         <Text className="text-gray-600 text-sm">Font Size</Text>
         <View className="flex-row items-center space-x-3">
@@ -192,7 +177,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           verses={verses}
           bookName={bookName}
           chapterNumber={currentChapter}
-          showVerseNumbers={true}
+          showVerseNumbers
           fontSize={fontSize}
           onVersePress={handleVersePress}
         />

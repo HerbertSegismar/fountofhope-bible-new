@@ -13,18 +13,59 @@ interface ChapterViewProps {
   onVersePress?: (verse: Verse) => void;
 }
 
-const removeXmlTags = (text: string): string => {
-  if (!text) return "";
-  return text
-    .replace(/<[^>]*>/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .trim();
+// Function to render verse text with XML tags removed
+// Numbers inside tags get half font size
+const renderVerseTextWithXmlHighlight = (
+  text: string,
+  baseFontSize: number
+) => {
+  if (!text) return [];
+
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  const regex = /<[^/>]+>([^<]*)<\/[^>]+>|<[^>]+\/>|<\/[^>]+>/g;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Plain text before this tag
+    if (match.index > lastIndex) {
+      elements.push(text.slice(lastIndex, match.index));
+    }
+
+    // Inner text inside <tag>content</tag>
+    if (match[1] && match[1].trim()) {
+      const isNumber = /^\d+$/.test(match[1].trim());
+      elements.push(
+        <Text
+          key={match.index}
+          className="italic"
+          style={{
+            fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.85,
+            color: "#ff5722",
+            flexWrap: "wrap",
+          }}
+        >
+          {match[1]}
+        </Text>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  // Remaining plain text after last tag
+  if (lastIndex < text.length) {
+    elements.push(text.slice(lastIndex));
+  }
+
+  // Remove leftover empty tags
+  return elements
+    .map((el) => {
+      if (typeof el === "string") return el.replace(/<[^>]+>/g, "");
+      return el;
+    })
+    .filter(Boolean);
 };
 
 export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
@@ -37,7 +78,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   onVersePress,
 }) => {
   const { currentVersion } = useBibleDatabase();
-
   const sortedVerses = [...verses].sort((a, b) => a.verse - b.verse);
 
   const renderVerses = () => {
@@ -68,23 +108,35 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     flexShrink: 1,
                     flexWrap: "wrap",
                   }}
-                  textBreakStrategy="highQuality"
+                  textBreakStrategy="simple"
                   allowFontScaling
                   adjustsFontSizeToFit={false}
                   minimumFontScale={0.85}
                 >
                   {showVerseNumbers && (
                     <Text
-                      className="text-blue-600 font-semibold italic"
-                      style={{
-                        fontSize: fontSize - 2,
-                        lineHeight: fontSize * 1.6,
-                      }}
+                      className="italic font-semibold text-blue-800"
+                      style={{ fontSize: fontSize - 2, flexWrap: "wrap" }}
                     >
                       {verse.verse}{" "}
                     </Text>
                   )}
-                  {removeXmlTags(verse.text)}
+
+                  {renderVerseTextWithXmlHighlight(verse.text, fontSize).map(
+                    (el, idx) => {
+                      const key = `${verse.verse}-${idx}`; // unique per verse
+                      if (typeof el === "string") {
+                        return (
+                          <Text key={key} className="flex-wrap">
+                            {el}
+                          </Text>
+                        );
+                      }
+                      return React.cloneElement(el as React.ReactElement, {
+                        key,
+                      });
+                    }
+                  )}
                 </Text>
               </View>
             </TouchableOpacity>

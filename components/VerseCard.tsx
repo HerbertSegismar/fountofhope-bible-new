@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
@@ -7,43 +7,95 @@ interface VerseCardProps {
   verse: Verse;
   showReference?: boolean;
   compact?: boolean;
-  highlight?: string; // optional search highlight
+  highlight?: string;
   onPress?: () => void;
   onCopy?: (verse: Verse) => void;
   onBookmark?: (verse: Verse) => void;
 }
 
-// Utility to clean HTML/XML tags from verse text
-const cleanText = (text?: string) => {
-  if (!text) return "";
-  return text
-    .replace(/<[^>]*>/g, "")
-    .replace(/\s+/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .trim();
+// --- Handle XML tags like ChapterViewEnhanced ---
+const renderVerseTextWithXmlHighlight = (
+  text?: string,
+  baseFontSize = 16,
+  verseNumber?: number
+) => {
+  if (!text) return [];
+
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = /<[^/>]+>([^<]*)<\/[^>]+>|<[^>]+\/>|<\/[^>]+>/g;
+  let match;
+  let elIndex = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    // Plain text before this tag
+    if (match.index > lastIndex) {
+      elements.push(
+        <Text key={`plain-${verseNumber}-${elIndex++}`}>
+          {text.slice(lastIndex, match.index)}
+        </Text>
+      );
+    }
+
+    // Inner text inside <tag>content</tag>
+    if (match[1] && match[1].trim()) {
+      const isNumber = /^\d+$/.test(match[1].trim());
+      elements.push(
+        <Text
+          key={`xml-${verseNumber}-${elIndex++}`}
+          className={`${isNumber ? "text-[0.5rem]" : "text-[0.85rem]"} italic text-orange-500`}
+        >
+          {match[1]}
+        </Text>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  // Remaining text after last tag
+  if (lastIndex < text.length) {
+    elements.push(
+      <Text key={`plain-${verseNumber}-${elIndex++}`}>
+        {text.slice(lastIndex)}
+      </Text>
+    );
+  }
+
+  return elements;
 };
 
-// Highlight search terms in verse text
-const getHighlightedText = (text: string, highlight?: string) => {
-  if (!highlight) return <Text>{text}</Text>;
-  const parts = text.split(new RegExp(`(${highlight})`, "gi"));
+// Highlight search terms
+const getHighlightedText = (
+  elements: React.ReactNode[],
+  highlight?: string,
+  verseNumber?: number
+) => {
+  if (!highlight) return <>{elements}</>;
+
   return (
-    <Text>
-      {parts.map((part, idx) =>
-        part.toLowerCase() === highlight.toLowerCase() ? (
-          <Text key={idx} style={{ backgroundColor: "yellow" }}>
-            {part}
-          </Text>
-        ) : (
-          <Text key={idx}>{part}</Text>
-        )
-      )}
-    </Text>
+    <>
+      {React.Children.map(elements, (child, idx) => {
+        if (typeof child === "string") {
+          const parts = child.split(new RegExp(`(${highlight})`, "gi"));
+          return parts.map((part, i) =>
+            part.toLowerCase() === highlight.toLowerCase() ? (
+              <Text
+                key={`hl-${verseNumber}-${idx}-${i}`}
+                className="bg-yellow-300"
+              >
+                {part}
+              </Text>
+            ) : (
+              <Text key={`txt-${verseNumber}-${idx}-${i}`}>{part}</Text>
+            )
+          );
+        }
+        return React.cloneElement(child as React.ReactElement, {
+          key: `child-${verseNumber}-${idx}`,
+        });
+      })}
+    </>
   );
 };
 
@@ -57,54 +109,59 @@ export const VerseCard: React.FC<VerseCardProps> = ({
   onBookmark,
 }) => {
   const { currentVersion } = useBibleDatabase();
-  const text = cleanText(verse.text);
+  const textElements =
+    renderVerseTextWithXmlHighlight(
+      verse.text,
+      compact ? 14 : 16,
+      verse.verse
+    ) || [];
 
   const CardContent = () => (
     <View
-      style={[
-        styles.card,
-        compact ? styles.compactCard : styles.fullCard,
+      className={`bg-white rounded-lg border border-gray-200 mb-3 ${compact ? "p-3" : "p-5"} ${verse.book_color && !compact ? "border-l-4" : ""}`}
+      style={
         verse.book_color && !compact
-          ? { borderLeftWidth: 4, borderLeftColor: verse.book_color }
-          : {},
-      ]}
+          ? { borderLeftColor: verse.book_color }
+          : {}
+      }
     >
       {showReference && (
-        <View style={compact ? styles.compactHeader : styles.header}>
-          <Text style={styles.reference}>
+        <View
+          className={`${compact ? "mb-1" : "mb-3 pb-1 border-b border-gray-100"}`}
+        >
+          <Text className="text-blue-600 font-semibold text-sm">
             {verse.book_name} {verse.chapter}:{verse.verse}
           </Text>
           {currentVersion && !compact && (
-            <Text style={styles.version}>
+            <Text className="text-gray-400 text-xs mt-0.5">
               {currentVersion.replace(".sqlite3", "").toUpperCase()}
             </Text>
           )}
         </View>
       )}
 
-      <View style={{ flex: 1 }}>
+      <View className="flex-1">
         <Text
-          style={[styles.text, compact ? styles.compactText : styles.fullText]}
+          className={`text-gray-800 flex-shrink flex-wrap leading-6 ${compact ? "text-sm leading-5" : "text-base leading-6"}`}
           textBreakStrategy="highQuality"
           allowFontScaling
           adjustsFontSizeToFit={false}
           minimumFontScale={0.8}
         >
-          {getHighlightedText(text, highlight)}
+          {getHighlightedText(textElements, highlight, verse.verse)}
         </Text>
       </View>
 
-      {/* Optional action buttons */}
       {(onCopy || onBookmark) && !compact && (
-        <View style={styles.actions}>
+        <View className="flex-row justify-end mt-2 space-x-3">
           {onCopy && (
             <TouchableOpacity onPress={() => onCopy(verse)}>
-              <Text style={styles.actionText}>Copy</Text>
+              <Text className="text-blue-600 font-semibold">Copy</Text>
             </TouchableOpacity>
           )}
           {onBookmark && (
             <TouchableOpacity onPress={() => onBookmark(verse)}>
-              <Text style={styles.actionText}>Bookmark</Text>
+              <Text className="text-blue-600 font-semibold">Bookmark</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -122,60 +179,3 @@ export const VerseCard: React.FC<VerseCardProps> = ({
 
   return <CardContent />;
 };
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 8,
-    borderColor: "#E5E7EB",
-    marginBottom: 12,
-  },
-  fullCard: {
-    padding: 20,
-  },
-  compactCard: {
-    padding: 12,
-  },
-  header: {
-    marginBottom: 12,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F3F4F6",
-  },
-  compactHeader: {
-    marginBottom: 6,
-  },
-  reference: {
-    color: "#2563EB",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  version: {
-    color: "#9CA3AF",
-    fontSize: 12,
-    marginTop: 2,
-  },
-  text: {
-    color: "#1F2937",
-    flexShrink: 1,
-    flexWrap: "wrap",
-  },
-  fullText: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  compactText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  actions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 10,
-    gap: 12,
-  },
-  actionText: {
-    color: "#2563EB",
-    fontWeight: "600",
-  },
-});

@@ -98,7 +98,10 @@ export default function SearchScreen({ navigation }: Props) {
             <Text className="text-gray-600">Searching...</Text>
           </View>
         ) : (
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            className="mb-20"
+          >
             <View className="space-y-3">
               {results.map((verse, idx) => (
                 <TouchableOpacity

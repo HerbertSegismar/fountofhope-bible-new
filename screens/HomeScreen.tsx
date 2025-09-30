@@ -9,7 +9,7 @@ import {
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
 import { Button } from "../components/Button";
-import { BibleDatabaseError, Verse, Book } from "../services/BibleDatabase";
+import { BibleDatabaseError, Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
@@ -17,6 +17,55 @@ type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 interface Props {
   navigation: HomeScreenNavigationProp;
 }
+
+// --- XML highlight renderer with unique keys ---
+const renderVerseTextWithXmlHighlight = (
+  text?: string,
+  baseFontSize = 16,
+  verseNumber?: number
+) => {
+  if (!text) return null;
+
+  const elements: React.ReactNode[] = [];
+  let lastIndex = 0;
+  const regex = /<[^/>]+>([^<]*)<\/[^>]+>|<[^>]+\/>|<\/[^>]+>/g;
+  let match;
+  let elIndex = 0;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      elements.push(
+        <Text key={`plain-${verseNumber}-${elIndex++}`}>
+          {text.slice(lastIndex, match.index)}
+        </Text>
+      );
+    }
+
+    if (match[1] && match[1].trim()) {
+      const isNumber = /^\d+$/.test(match[1].trim());
+      elements.push(
+        <Text
+          key={`xml-${verseNumber}-${elIndex++}`}
+          className={`${isNumber ? "text-[0.5rem]" : "text-[0.85rem]"} italic text-orange-500`}
+        >
+          {match[1]}
+        </Text>
+      );
+    }
+
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    elements.push(
+      <Text key={`plain-${verseNumber}-${elIndex++}`}>
+        {text.slice(lastIndex)}
+      </Text>
+    );
+  }
+
+  return elements;
+};
 
 export default function HomeScreen({ navigation }: Props) {
   const { bibleDB, currentVersion, isInitializing } = useBibleDatabase();
@@ -27,64 +76,45 @@ export default function HomeScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (bibleDB && !isInitializing) {
-      loadRandomVerse();
-    } else {
-      // While DB is loading, show loading spinner
-      setLoading(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (bibleDB && !isInitializing) loadRandomVerse();
+    else setLoading(true);
   }, [bibleDB, currentVersion, isInitializing]);
 
   const getRandomBookChapter = async (): Promise<{
     bookId: number;
     chapter: number;
   }> => {
-    if (!bibleDB) {
-      throw new Error("Database not available");
-    }
-
+    if (!bibleDB) throw new Error("Database not available");
     try {
       const books = await bibleDB.getBooks();
-      if (books.length === 0) throw new Error("No books found");
-
       const randomBook = books[Math.floor(Math.random() * books.length)];
       const chapterCount = await bibleDB.getChapterCount(
         randomBook.book_number
       );
-
       const chapter =
         chapterCount > 0
           ? Math.floor(Math.random() * chapterCount) + 1
           : Math.floor(Math.random() * 50) + 1;
-
       return { bookId: randomBook.book_number, chapter };
-    } catch (err) {
-      console.warn("Error getting random book/chapter:", err);
-
-      // Fallback popular books
+    } catch {
       const popularBooks = [
-        { id: 19, chapters: 150 }, // Psalms
-        { id: 20, chapters: 31 }, // Proverbs
-        { id: 40, chapters: 28 }, // Matthew
-        { id: 43, chapters: 21 }, // John
-        { id: 1, chapters: 50 }, // Genesis
+        { id: 19, chapters: 150 },
+        { id: 20, chapters: 31 },
+        { id: 40, chapters: 28 },
+        { id: 43, chapters: 21 },
+        { id: 1, chapters: 50 },
       ];
-
       const book =
         popularBooks[Math.floor(Math.random() * popularBooks.length)];
-      const chapter = Math.floor(Math.random() * book.chapters) + 1;
-
-      return { bookId: book.id, chapter };
+      return {
+        bookId: book.id,
+        chapter: Math.floor(Math.random() * book.chapters) + 1,
+      };
     }
   };
 
   const loadRandomVerse = async () => {
-    if (!bibleDB) {
-      setError("Database not available");
-      setLoading(false);
-      return;
-    }
+    if (!bibleDB) return setError("Database not available");
 
     try {
       setLoading(true);
@@ -95,7 +125,6 @@ export default function HomeScreen({ navigation }: Props) {
 
       if (verses.length === 0) {
         setError("Could not load a verse. Please try again.");
-        setLoading(false);
         return;
       }
 
@@ -112,11 +141,9 @@ export default function HomeScreen({ navigation }: Props) {
       }
     } catch (err) {
       console.error("Failed to load random verse:", err);
-      if (err instanceof BibleDatabaseError) {
+      if (err instanceof BibleDatabaseError)
         setError(`Database error: ${err.message}`);
-      } else {
-        setError("Failed to load content. Please try again.");
-      }
+      else setError("Failed to load content. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -127,7 +154,6 @@ export default function HomeScreen({ navigation }: Props) {
 
     try {
       const bookInfo = await bibleDB.getBook(verseOfTheDay.book_number);
-
       navigation.navigate("VerseList", {
         book: bookInfo ?? {
           book_number: verseOfTheDay.book_number,
@@ -150,25 +176,10 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-  const cleanVerseText = (text: string) => {
-    if (!text) return "";
-    return text
-      .replace(/<[^>]*>/g, "")
-      .replace(/\s+/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&nbsp;/g, " ")
-      .trim();
-  };
-
   const formattedReference = verseOfTheDay
     ? `${bookLongName} ${verseOfTheDay.chapter}:${verseOfTheDay.verse}`
     : "";
 
-  // Show loading if DB or verses are loading
   if (loading || isInitializing || !bibleDB) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
@@ -233,11 +244,17 @@ export default function HomeScreen({ navigation }: Props) {
                   <Text
                     className="text-gray-800 text-lg leading-7 text-justify"
                     textBreakStrategy="highQuality"
-                    allowFontScaling={true}
+                    allowFontScaling
                     adjustsFontSizeToFit={false}
                     minimumFontScale={0.85}
                   >
-                    "{cleanVerseText(verseOfTheDay.text)}"
+                    "
+                    {renderVerseTextWithXmlHighlight(
+                      verseOfTheDay.text,
+                      16,
+                      verseOfTheDay.verse
+                    )}
+                    "
                   </Text>
                 </View>
 
