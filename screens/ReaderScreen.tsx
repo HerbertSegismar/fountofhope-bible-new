@@ -1,11 +1,13 @@
-import React, { useEffect, useState, useContext } from "react";
+import React, { useEffect, useState, useContext, useRef } from "react";
 import {
+  View,
   Text,
   TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-  View,
   Dimensions,
+  Animated,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -35,9 +37,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [currentChapter, setCurrentChapter] = useState(chapter);
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
+  const [showEnd, setShowEnd] = useState(false);
 
   const { bibleDB, currentVersion } = useBibleDatabase();
-  const { addBookmark } = useContext(BookmarksContext); // ✅ Properly use context
+  const { addBookmark } = useContext(BookmarksContext);
+
+  // Animated scroll
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [contentHeight, setContentHeight] = useState(1);
+  const [scrollViewHeight, setScrollViewHeight] = useState(0);
+
+  const progress = Animated.divide(
+    scrollY,
+    Math.max(contentHeight - scrollViewHeight, 1)
+  );
 
   useEffect(() => {
     if (bibleDB) loadChapter();
@@ -56,6 +69,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
       Alert.alert("Error", "Failed to load chapter content");
     } finally {
       setLoading(false);
+      setShowEnd(false);
     }
   };
 
@@ -89,7 +103,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         {
           text: "Bookmark",
           onPress: () => {
-            addBookmark(verse); // ✅ Adds bookmark to context
+            addBookmark(verse);
             Alert.alert("Bookmarked!", "Verse added to bookmarks.");
           },
         },
@@ -101,7 +115,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
   if (!bibleDB || loading) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
         <Text className="text-lg text-gray-600 mt-4">
           Loading {bookName} {currentChapter}...
         </Text>
@@ -128,7 +141,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
           </TouchableOpacity>
 
           <View className="flex-1 items-center">
-            <Text className="text-white font-bold text-center text-sm">
+            <Text
+              className="text-white font-bold text-center text-sm"
+              numberOfLines={2}
+              adjustsFontSizeToFit
+            >
               {bookName} {currentChapter}
             </Text>
           </View>
@@ -140,10 +157,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
         {/* Progress Bar */}
         <View className="mt-2 w-full h-1 bg-blue-300 rounded-full">
-          <View
+          <Animated.View
             className="h-1 bg-yellow-400 rounded-full"
             style={{
-              width: `${(currentChapter / (book?.chapters || 1)) * 100}%`,
+              width: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0%", "100%"],
+                extrapolate: "clamp",
+              }),
             }}
           />
         </View>
@@ -171,8 +192,21 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </View>
       </View>
 
-      {/* Chapter Content */}
-      <View className="flex-1">
+      {/* Chapter Content with Scroll-based progress */}
+      <Animated.ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+          { useNativeDriver: false }
+        )}
+        onContentSizeChange={(_, height) => setContentHeight(height)}
+        onLayout={(e) => setScrollViewHeight(e.nativeEvent.layout.height)}
+        onScrollEndDrag={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
+          const offset = e.nativeEvent.contentOffset.y;
+          if (offset + scrollViewHeight >= contentHeight - 20) setShowEnd(true);
+        }}
+      >
         <ChapterViewEnhanced
           verses={verses}
           bookName={bookName}
@@ -181,7 +215,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           fontSize={fontSize}
           onVersePress={handleVersePress}
         />
-      </View>
+      </Animated.ScrollView>
     </SafeAreaView>
   );
 }

@@ -54,16 +54,17 @@ const BookmarksStackNav = createStackNavigator<BookmarksStackParamList>();
 const SettingsStackNav = createStackNavigator<SettingsStackParamList>();
 const Tab = createBottomTabNavigator();
 
+// Shared header theme
+const headerTheme = {
+  headerShown: true,
+  headerStyle: { backgroundColor: "#1e40af" },
+  headerTintColor: "#fff",
+};
+
 // Bible Stack Navigator
 function BibleStack() {
   return (
-    <BibleStackNav.Navigator
-      screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: "#1e40af" },
-        headerTintColor: "#fff",
-      }}
-    >
+    <BibleStackNav.Navigator screenOptions={headerTheme}>
       <BibleStackNav.Screen
         name="Home"
         component={HomeScreen}
@@ -93,8 +94,12 @@ function BibleStack() {
 // Search Stack Navigator
 function SearchStack() {
   return (
-    <SearchStackNav.Navigator screenOptions={{ headerShown: false }}>
-      <SearchStackNav.Screen name="Search" component={SearchScreen} />
+    <SearchStackNav.Navigator screenOptions={headerTheme}>
+      <SearchStackNav.Screen
+        name="Search"
+        component={SearchScreen}
+        options={{ title: "Search" }}
+      />
     </SearchStackNav.Navigator>
   );
 }
@@ -102,8 +107,12 @@ function SearchStack() {
 // Bookmarks Stack Navigator
 function BookmarksStack() {
   return (
-    <BookmarksStackNav.Navigator screenOptions={{ headerShown: false }}>
-      <BookmarksStackNav.Screen name="Bookmarks" component={BookmarksScreen} />
+    <BookmarksStackNav.Navigator screenOptions={headerTheme}>
+      <BookmarksStackNav.Screen
+        name="Bookmarks"
+        component={BookmarksScreen}
+        options={{ title: "Bookmarks" }}
+      />
     </BookmarksStackNav.Navigator>
   );
 }
@@ -111,13 +120,7 @@ function BookmarksStack() {
 // Settings Stack Navigator
 function SettingsStack() {
   return (
-    <SettingsStackNav.Navigator
-      screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: "#1e40af" },
-        headerTintColor: "#fff",
-      }}
-    >
+    <SettingsStackNav.Navigator screenOptions={headerTheme}>
       <SettingsStackNav.Screen
         name="Settings"
         component={SettingsScreen}
@@ -190,7 +193,7 @@ function RootNavigator() {
         name="Reader"
         component={ReaderScreen}
         options={({ route }) => ({
-          headerShown: true,
+          headerShown: false,
           title: `${route.params.bookName} ${route.params.chapter}`,
           headerStyle: { backgroundColor: "#1e40af" },
           headerTintColor: "#fff",
@@ -206,7 +209,8 @@ export default function App() {
       <BibleDatabaseProvider>
         <BookmarksProvider>
           <NavigationContainer>
-            <StatusBar style="auto" />
+            {/* StatusBar to match header color */}
+            <StatusBar backgroundColor="#1e40af" style="light" />
             <RootNavigator />
           </NavigationContainer>
         </BookmarksProvider>

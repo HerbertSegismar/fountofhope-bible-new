@@ -1,13 +1,37 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
+const STORAGE_KEY = "selected_bible_version";
+
 const SettingsScreen = () => {
-  const { currentVersion, availableVersions, switchVersion, isInitializing } =
-    useBibleDatabase();
+  const {
+    currentVersion,
+    availableVersions,
+    switchVersion,
+    isInitializing,
+    getDatabase,
+  } = useBibleDatabase();
 
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
+
+  useEffect(() => {
+    // Load persisted version on mount
+    const loadVersion = async () => {
+      try {
+        const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
+        if (savedVersion && savedVersion !== currentVersion) {
+          setSelectedVersion(savedVersion);
+          getDatabase(savedVersion) || switchVersion(savedVersion);
+        }
+      } catch (err) {
+        console.warn("Failed to load persisted version:", err);
+      }
+    };
+    loadVersion();
+  }, []);
 
   useEffect(() => {
     setSelectedVersion(currentVersion);
@@ -19,7 +43,11 @@ const SettingsScreen = () => {
     setSelectedVersion(version);
 
     try {
-      await switchVersion(version);
+      await AsyncStorage.setItem(STORAGE_KEY, version);
+
+      // Open database if not already open
+      getDatabase(version) || switchVersion(version);
+
       Alert.alert(
         "Success",
         `Bible version switched to ${getVersionDisplayName(version)}`
@@ -64,6 +92,7 @@ const SettingsScreen = () => {
 
   return (
     <ScrollView className="flex-1 bg-slate-50">
+      {/* Bible Version Selection */}
       <View className="bg-white m-4 p-4 rounded-xl shadow-md">
         <Text className="text-lg font-bold text-slate-800 mb-1">
           Bible Version
@@ -126,6 +155,7 @@ const SettingsScreen = () => {
         )}
       </View>
 
+      {/* About Section */}
       <View className="bg-white m-4 p-4 rounded-xl shadow-md">
         <Text className="text-lg font-bold text-slate-800 mb-2">About</Text>
         <View className="flex-row justify-between py-2">

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList, Verse } from "../types";
-import { VerseCard } from "../components/VerseCard";
+import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 
@@ -41,7 +41,7 @@ export default function BookmarksScreen({ navigation }: Props) {
       }
       setLoading(true);
       try {
-        await loadBookmarks(); // load bookmarks into context
+        await loadBookmarks();
       } catch (err) {
         console.error(err);
         Alert.alert("Error", "Failed to load bookmarks");
@@ -173,7 +173,16 @@ export default function BookmarksScreen({ navigation }: Props) {
                     onPress={() => handleBookmarkPress(bookmark)}
                     activeOpacity={0.7}
                   >
-                    {verse && <VerseCard verse={verse} showReference compact />}
+                    {verse && (
+                      <VerseViewEnhanced
+                        verses={[verse]}
+                        bookName={verse.book_name || "Unknown Book"}
+                        chapterNumber={verse.chapter}
+                        showVerseNumbers
+                        fontSize={16}
+                        onVersePress={() => handleBookmarkPress(bookmark)}
+                      />
+                    )}
                     <Text className="text-gray-500 text-xs mt-2">
                       Saved on{" "}
                       {new Date(bookmark.createdAt).toLocaleDateString()}

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList, Verse } from "../types";
-import { VerseCard } from "../components/VerseCard";
+import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 type SearchScreenNavigationProp = StackNavigationProp<
@@ -37,7 +37,6 @@ export default function SearchScreen({ navigation }: Props) {
 
     try {
       setSearching(true);
-      // Remove limit to show all results
       const searchResults = await searchVerses(query);
       setResults(searchResults);
     } catch (error) {
@@ -92,24 +91,35 @@ export default function SearchScreen({ navigation }: Props) {
           </Text>
         </TouchableOpacity>
 
+        {/* Results Count */}
+        {results.length > 0 && !searching && (
+          <View className="mb-3">
+            <Text className="text-gray-600 text-sm">
+              Found {results.length} result{results.length !== 1 ? "s" : ""} for
+              "{query}"
+            </Text>
+          </View>
+        )}
+
         {/* Search Results */}
         {searching ? (
           <View className="flex-1 justify-center items-center py-8">
             <Text className="text-gray-600">Searching...</Text>
           </View>
         ) : (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            className="mb-20"
-          >
+          <ScrollView showsVerticalScrollIndicator={false} className="mb-20">
             <View className="space-y-3">
               {results.map((verse, idx) => (
-                <TouchableOpacity
+                <VerseViewEnhanced
                   key={`${verse.book_number}-${verse.chapter}-${verse.verse}-${idx}`}
-                  onPress={() => handleVersePress(verse)}
-                >
-                  <VerseCard verse={verse} highlight={query} />
-                </TouchableOpacity>
+                  verses={[verse]}
+                  bookName={verse.book_name || "Unknown"}
+                  chapterNumber={verse.chapter}
+                  showVerseNumbers={true}
+                  fontSize={16}
+                  onVersePress={handleVersePress}
+                  style={{ marginBottom: 5 }} // remove extra bottom margin
+                />
               ))}
             </View>
 
@@ -137,17 +147,6 @@ export default function SearchScreen({ navigation }: Props) {
               </View>
             )}
           </ScrollView>
-        )}
-
-        {/* Results count */}
-        {results.length > 0 && (
-          <View className="mt-4 bg-blue-50 p-3 rounded-lg">
-            <Text className="text-blue-800 text-sm">
-              Found {results.length} result{results.length !== 1 ? "s" : ""}
-              {currentVersion &&
-                ` • ${currentVersion.replace(".sqlite3", "").toUpperCase()}`}
-            </Text>
-          </View>
         )}
       </View>
     </SafeAreaView>

@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  StyleProp,
-  ViewStyle,
-} from "react-native";
+import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
@@ -18,10 +11,12 @@ interface ChapterViewProps {
   showVerseNumbers?: boolean;
   fontSize?: number;
   onVersePress?: (verse: Verse) => void;
-  style?: StyleProp<ViewStyle>;
+  style?: object; // Add this
 }
 
-// Render verse text and remove XML tags
+
+// Function to render verse text with XML tags removed
+// Numbers inside tags get half font size
 const renderVerseTextWithXmlHighlight = (
   text: string,
   baseFontSize: number
@@ -34,9 +29,12 @@ const renderVerseTextWithXmlHighlight = (
   let match;
 
   while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex)
+    // Plain text before this tag
+    if (match.index > lastIndex) {
       elements.push(text.slice(lastIndex, match.index));
+    }
 
+    // Inner text inside <tag>content</tag>
     if (match[1] && match[1].trim()) {
       const isNumber = /^\d+$/.test(match[1].trim());
       elements.push(
@@ -57,13 +55,21 @@ const renderVerseTextWithXmlHighlight = (
     lastIndex = regex.lastIndex;
   }
 
-  if (lastIndex < text.length) elements.push(text.slice(lastIndex));
+  // Remaining plain text after last tag
+  if (lastIndex < text.length) {
+    elements.push(text.slice(lastIndex));
+  }
+
+  // Remove leftover empty tags
   return elements
-    .map((el) => (typeof el === "string" ? el.replace(/<[^>]+>/g, "") : el))
+    .map((el) => {
+      if (typeof el === "string") return el.replace(/<[^>]+>/g, "");
+      return el;
+    })
     .filter(Boolean);
 };
 
-export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
+export const VerseViewEnhanced: React.FC<ChapterViewProps> = ({
   verses,
   bookName,
   chapterNumber,
@@ -71,13 +77,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   showVerseNumbers = true,
   fontSize = 16,
   onVersePress,
-  style,
+  style, // <-- destructure it
 }) => {
   const { currentVersion } = useBibleDatabase();
   const sortedVerses = [...verses].sort((a, b) => a.verse - b.verse);
 
+  // Render individual verses
   const renderVerses = () => {
-    if (!sortedVerses.length) {
+    if (sortedVerses.length === 0) {
       return (
         <Text className="text-gray-600 text-center">No verses available</Text>
       );
@@ -101,26 +108,37 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   style={{
                     fontSize,
                     lineHeight: fontSize * 1.6,
+                    flexShrink: 1,
                     flexWrap: "wrap",
                   }}
+                  textBreakStrategy="simple"
+                  allowFontScaling
+                  adjustsFontSizeToFit={false}
+                  minimumFontScale={0.85}
                 >
                   {showVerseNumbers && (
                     <Text
                       className="italic font-semibold text-blue-800"
-                      style={{ fontSize: fontSize - 2 }}
+                      style={{ fontSize: fontSize - 2, flexWrap: "wrap" }}
                     >
                       {verse.verse}{" "}
                     </Text>
                   )}
+
                   {renderVerseTextWithXmlHighlight(verse.text, fontSize).map(
-                    (el, idx) =>
-                      typeof el === "string" ? (
-                        <Text key={`${verse.verse}-${idx}`}>{el}</Text>
-                      ) : (
-                        React.cloneElement(el as React.ReactElement, {
-                          key: `${verse.verse}-${idx}`,
-                        })
-                      )
+                    (el, idx) => {
+                      const key = `${verse.verse}-${idx}`;
+                      if (typeof el === "string") {
+                        return (
+                          <Text key={key} className="flex-wrap">
+                            {el}
+                          </Text>
+                        );
+                      }
+                      return React.cloneElement(el as React.ReactElement, {
+                        key,
+                      });
+                    }
                   )}
                 </Text>
               </View>
@@ -131,43 +149,46 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     );
   };
 
-  const chapterContent = (
+  // Generate verse reference string
+  const referenceText =
+    sortedVerses.length > 0
+      ? `${bookName} ${chapterNumber}:${sortedVerses[0].verse}${
+          sortedVerses.length > 1
+            ? `-${sortedVerses[sortedVerses.length - 1].verse}`
+            : ""
+        }`
+      : "";
+
+  // Card content
+  const verseContent = (
     <View
-      className="bg-white p-6 rounded-lg shadow-sm min-h-[400px]"
-      style={[
-        verses[0]?.book_color
-          ? { borderLeftWidth: 4, borderLeftColor: verses[0].book_color }
-          : {},
-        style,
-      ]}
+      className="bg-white p-6 rounded-lg shadow-sm min-h-[20px]"
+      style={{
+        ...(sortedVerses[0]?.book_color
+          ? { borderLeftWidth: 4, borderLeftColor: sortedVerses[0].book_color }
+          : {}),
+        ...style, // <-- apply custom style
+      }}
     >
-      <Text
-        className="text-xl font-bold text-center mb-4 text-primary"
-        numberOfLines={2}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
-      >
-        {bookName} Chapter {chapterNumber}
-      </Text>
-
       {renderVerses()}
-
-      <Text className="text-center text-gray-500 mt-4 text-sm">
-        End of Chapter {chapterNumber}
-        {currentVersion && (
-          <> • {currentVersion.replace(".sqlite3", "").toUpperCase()}</>
-        )}
-      </Text>
+      {/* Reference below */}
+      <View>
+        {referenceText ? (
+          <Text className="text-blue-800 text-base italic font-medium mb-2">
+            {referenceText}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 
   if (onPress) {
     return (
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        {chapterContent}
+        {verseContent}
       </TouchableOpacity>
     );
   }
 
-  return chapterContent;
+  return verseContent;
 };

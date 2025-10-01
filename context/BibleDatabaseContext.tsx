@@ -7,6 +7,7 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BibleDatabase, Verse } from "../services/BibleDatabase";
 
 interface SearchOptions {
@@ -23,6 +24,7 @@ interface BibleDatabaseContextType {
   isInitializing: boolean;
   refreshDatabase: () => Promise<void>;
   searchVerses: (query: string, options?: SearchOptions) => Promise<Verse[]>;
+  getDatabase: (version: string) => BibleDatabase | undefined;
 }
 
 const BibleDatabaseContext = createContext<
@@ -32,6 +34,8 @@ const BibleDatabaseContext = createContext<
 interface BibleDatabaseProviderProps {
   children: ReactNode;
 }
+
+const STORAGE_KEY = "selected_bible_version";
 
 export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   children,
@@ -53,14 +57,24 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     "esvgsb.sqlite3",
   ];
 
-  // Initialize DB
+  // Keep all open databases for lightning-fast switching
+  const openDatabases = React.useRef<Map<string, BibleDatabase>>(new Map());
+
+  // Initialize a database version if not already open
   const initializeDatabase = useCallback(async (version: string) => {
     setIsInitializing(true);
     try {
-      const db = new BibleDatabase(version);
-      await db.init();
-      setBibleDB(db);
-      console.log(`Database initialized with version: ${version}`);
+      if (openDatabases.current.has(version)) {
+        const db = openDatabases.current.get(version)!;
+        setBibleDB(db);
+        console.log(`Database already open: ${version}`);
+      } else {
+        const db = new BibleDatabase(version);
+        await db.init();
+        openDatabases.current.set(version, db);
+        setBibleDB(db);
+        console.log(`Database initialized: ${version}`);
+      }
     } catch (error) {
       console.error("Failed to initialize database:", error);
       setBibleDB(null);
@@ -70,36 +84,43 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     }
   }, []);
 
-
-  // Auto-initialize on mount or when version changes
+  // Load persisted version on mount
   useEffect(() => {
-    initializeDatabase(currentVersion);
+    const loadVersion = async () => {
+      try {
+        const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
+        const versionToLoad = savedVersion || currentVersion;
+        await initializeDatabase(versionToLoad);
+        setCurrentVersion(versionToLoad);
+      } catch (err) {
+        console.warn("Failed to load persisted version:", err);
+        await initializeDatabase(currentVersion);
+      }
+    };
+    loadVersion();
   }, []);
 
-  // Switch DB version
+  // Switch version (opens DB if needed, does not close others)
   const switchVersion = useCallback(
     async (newVersion: string) => {
       if (newVersion === currentVersion) return;
 
       setIsInitializing(true);
       try {
-        if (bibleDB) await bibleDB.close();
+        await AsyncStorage.setItem(STORAGE_KEY, newVersion);
         await initializeDatabase(newVersion);
-        setCurrentVersion(newVersion); // ✅ move here
-      } catch (error) {
-        console.error("Failed to switch version:", error);
-        // re-init old version if needed
-        await initializeDatabase(currentVersion);
-        throw error;
+        setCurrentVersion(newVersion);
+      } catch (err) {
+        console.error("Failed to switch version:", err);
+        throw err;
       } finally {
         setIsInitializing(false);
       }
     },
-    [bibleDB, currentVersion, initializeDatabase]
+    [currentVersion, initializeDatabase]
   );
 
-
-  // Refresh DB
+  // Refresh current DB
   const refreshDatabase = useCallback(async () => {
     await initializeDatabase(currentVersion);
   }, [currentVersion, initializeDatabase]);
@@ -113,6 +134,12 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     [bibleDB]
   );
 
+  // Get a database if already open
+  const getDatabase = useCallback(
+    (version: string) => openDatabases.current.get(version),
+    []
+  );
+
   const value: BibleDatabaseContextType = {
     bibleDB,
     currentVersion,
@@ -121,7 +148,14 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     isInitializing,
     refreshDatabase,
     searchVerses,
+    getDatabase,
   };
+
+  React.useEffect(() => {
+    return () => {
+      openDatabases.current.forEach((db) => db.close());
+    };
+  }, []);
 
   return (
     <BibleDatabaseContext.Provider value={value}>

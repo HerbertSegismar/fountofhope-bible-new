@@ -11,6 +11,7 @@ import { RootStackParamList } from "../types";
 import { Button } from "../components/Button";
 import { BibleDatabaseError, Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -18,59 +19,10 @@ interface Props {
   navigation: HomeScreenNavigationProp;
 }
 
-// --- XML highlight renderer with unique keys ---
-const renderVerseTextWithXmlHighlight = (
-  text?: string,
-  baseFontSize = 16,
-  verseNumber?: number
-) => {
-  if (!text) return null;
-
-  const elements: React.ReactNode[] = [];
-  let lastIndex = 0;
-  const regex = /<[^/>]+>([^<]*)<\/[^>]+>|<[^>]+\/>|<\/[^>]+>/g;
-  let match;
-  let elIndex = 0;
-
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      elements.push(
-        <Text key={`plain-${verseNumber}-${elIndex++}`}>
-          {text.slice(lastIndex, match.index)}
-        </Text>
-      );
-    }
-
-    if (match[1] && match[1].trim()) {
-      const isNumber = /^\d+$/.test(match[1].trim());
-      elements.push(
-        <Text
-          key={`xml-${verseNumber}-${elIndex++}`}
-          className={`${isNumber ? "text-[0.5rem]" : "text-[0.85rem]"} italic text-orange-500`}
-        >
-          {match[1]}
-        </Text>
-      );
-    }
-
-    lastIndex = regex.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    elements.push(
-      <Text key={`plain-${verseNumber}-${elIndex++}`}>
-        {text.slice(lastIndex)}
-      </Text>
-    );
-  }
-
-  return elements;
-};
-
 export default function HomeScreen({ navigation }: Props) {
   const { bibleDB, currentVersion, isInitializing } = useBibleDatabase();
 
-  const [verseOfTheDay, setVerseOfTheDay] = useState<Verse | null>(null);
+  const [verseRange, setVerseRange] = useState<Verse[] | null>(null);
   const [bookLongName, setBookLongName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +67,6 @@ export default function HomeScreen({ navigation }: Props) {
 
   const loadRandomVerse = async () => {
     if (!bibleDB) return setError("Database not available");
-
     try {
       setLoading(true);
       setError(null);
@@ -128,16 +79,23 @@ export default function HomeScreen({ navigation }: Props) {
         return;
       }
 
-      const randomVerse = verses[Math.floor(Math.random() * verses.length)];
-      setVerseOfTheDay(randomVerse);
+      // Random start index
+      const startIndex = Math.floor(Math.random() * verses.length);
+      // Random range length between 1-5, ensure we don't exceed chapter
+      const maxRange = Math.min(5, verses.length - startIndex);
+      const rangeLength = Math.floor(Math.random() * maxRange) + 1;
 
+      const range = verses.slice(startIndex, startIndex + rangeLength);
+      setVerseRange(range);
+
+      // Load book long name
       try {
         const bookInfo = await bibleDB.getBook(bookId);
         setBookLongName(
-          bookInfo?.long_name ?? randomVerse.book_name ?? "Unknown Book"
+          bookInfo?.long_name ?? range[0].book_name ?? "Unknown Book"
         );
       } catch {
-        setBookLongName(randomVerse.book_name ?? "Unknown Book");
+        setBookLongName(range[0].book_name ?? "Unknown Book");
       }
     } catch (err) {
       console.error("Failed to load random verse:", err);
@@ -149,36 +107,17 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-  const handleVersePress = async () => {
-    if (!verseOfTheDay || !bibleDB) return;
-
-    try {
-      const bookInfo = await bibleDB.getBook(verseOfTheDay.book_number);
-      navigation.navigate("VerseList", {
-        book: bookInfo ?? {
-          book_number: verseOfTheDay.book_number,
-          short_name: verseOfTheDay.book_name ?? "Unknown",
-          long_name: bookLongName || verseOfTheDay.book_name || "Unknown Book",
-          book_color: verseOfTheDay.book_color || "#3B82F6",
-        },
-        chapter: verseOfTheDay.chapter,
-      });
-    } catch {
-      navigation.navigate("VerseList", {
-        book: {
-          book_number: verseOfTheDay.book_number,
-          short_name: verseOfTheDay.book_name ?? "Unknown",
-          long_name: bookLongName || verseOfTheDay.book_name || "Unknown Book",
-          book_color: verseOfTheDay.book_color || "#3B82F6",
-        },
-        chapter: verseOfTheDay.chapter,
-      });
-    }
+  const handleVersePress = (verse: Verse) => {
+    navigation.navigate("VerseList", {
+      book: {
+        book_number: verse.book_number,
+        short_name: verse.book_name ?? "Unknown",
+        long_name: bookLongName || verse.book_name || "Unknown Book",
+        book_color: verse.book_color || "#3B82F6",
+      },
+      chapter: verse.chapter,
+    });
   };
-
-  const formattedReference = verseOfTheDay
-    ? `${bookLongName} ${verseOfTheDay.chapter}:${verseOfTheDay.verse}`
-    : "";
 
   if (loading || isInitializing || !bibleDB) {
     return (
@@ -197,6 +136,16 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
     );
   }
+
+  // Formatted reference for Verse of the Day
+  const formattedReference =
+    verseRange && verseRange.length > 0
+      ? `${bookLongName} ${verseRange[0].chapter}:${verseRange[0].verse}${
+          verseRange.length > 1
+            ? `-${verseRange[verseRange.length - 1].verse}`
+            : ""
+        }`
+      : "";
 
   return (
     <ScrollView
@@ -219,7 +168,7 @@ export default function HomeScreen({ navigation }: Props) {
         <View className="flex-row justify-between items-center mb-4">
           <View>
             <Text className="text-lg font-semibold text-gray-800">
-              Fresh Revelation
+              Fresh Revelations
             </Text>
             <Text className="text-sm text-gray-500">
               Version: {currentVersion.replace(".sqlite3", "").toUpperCase()}
@@ -229,54 +178,24 @@ export default function HomeScreen({ navigation }: Props) {
             onPress={loadRandomVerse}
             className="bg-blue-500 px-4 py-2 rounded-lg"
           >
-            <Text className="text-white text-sm font-medium">New Verse</Text>
+            <Text className="text-white text-sm font-medium">Refresh</Text>
           </TouchableOpacity>
         </View>
 
-        {verseOfTheDay ? (
-          <TouchableOpacity onPress={handleVersePress} activeOpacity={0.7}>
-            <View
-              className="bg-white rounded-lg shadow-sm border-l-4 min-h-[140px]"
-              style={{ borderLeftColor: verseOfTheDay.book_color || "#3B82F6" }}
-            >
-              <View className="flex-1 p-5 justify-between">
-                <View className="flex-1 mb-4">
-                  <Text
-                    className="text-gray-800 text-lg leading-7 text-justify"
-                    textBreakStrategy="highQuality"
-                    allowFontScaling
-                    adjustsFontSizeToFit={false}
-                    minimumFontScale={0.85}
-                  >
-                    "
-                    {renderVerseTextWithXmlHighlight(
-                      verseOfTheDay.text,
-                      16,
-                      verseOfTheDay.verse
-                    )}
-                    "
-                  </Text>
-                </View>
+        {verseRange && verseRange.length > 0 && (
+          <VerseViewEnhanced
+            verses={verseRange} // show the full range
+            bookName={bookLongName}
+            chapterNumber={verseRange[0].chapter}
+            fontSize={16}
+            onVersePress={handleVersePress}
+          />
+        )}
 
-                <View>
-                  <View className="border-t border-gray-100 pt-3">
-                    <Text className="text-blue-600 font-semibold text-sm text-right">
-                      {formattedReference}
-                    </Text>
-                  </View>
-                  <Text className="text-gray-500 text-xs text-center mt-2">
-                    Tap to read full chapter
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ) : (
-          <View className="bg-white p-4 rounded-lg border border-gray-200">
-            <Text className="text-gray-600 text-center">
-              No verse available
-            </Text>
-          </View>
+        {verseRange && verseRange.length > 0 && (
+          <Text className="text-gray-500 text-xs text-center mt-2">
+            {formattedReference} • Tap to read full chapter
+          </Text>
         )}
       </View>
 
@@ -301,10 +220,10 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       {/* Quick Tips */}
-      {verseOfTheDay && (
+      {verseRange && verseRange.length > 0 && (
         <View className="bg-white p-4 rounded-lg border border-gray-200">
           <Text className="text-gray-600 text-center text-sm">
-            ✨ Tap "New Verse" for fresh inspiration anytime
+            ✨ Tap "Refresh" for fresh inspiration anytime
           </Text>
         </View>
       )}
