@@ -21,17 +21,13 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 
-// Param list types for each stack
-export type RootStackParamList = {
-  AppTabs: undefined;
-  Reader: { bookId: number; chapter: number; bookName: string };
-};
-
+// Param list types
 export type BibleStackParamList = {
   Home: undefined;
   BookList: undefined;
   ChapterList: { book: Book };
   VerseList: { book: Book; chapter: number };
+  Reader: { bookId: number; chapter: number; bookName: string };
 };
 
 export type SearchStackParamList = {
@@ -46,8 +42,7 @@ export type SettingsStackParamList = {
   Settings: undefined;
 };
 
-// Create stack navigators
-const RootStack = createStackNavigator<RootStackParamList>();
+// Navigators
 const BibleStackNav = createStackNavigator<BibleStackParamList>();
 const SearchStackNav = createStackNavigator<SearchStackParamList>();
 const BookmarksStackNav = createStackNavigator<BookmarksStackParamList>();
@@ -61,7 +56,7 @@ const headerTheme = {
   headerTintColor: "#fff",
 };
 
-// Bible Stack Navigator
+// Bible Stack Navigator (Reader inside here)
 function BibleStack() {
   return (
     <BibleStackNav.Navigator screenOptions={headerTheme}>
@@ -87,11 +82,19 @@ function BibleStack() {
           title: `${route.params.book.short_name} ${route.params.chapter}`,
         })}
       />
+      <BibleStackNav.Screen
+        name="Reader"
+        component={ReaderScreen}
+        options={({ route }) => ({
+          title: `${route.params.bookName} ${route.params.chapter}`,
+          headerShown: false,
+        })}
+      />
     </BibleStackNav.Navigator>
   );
 }
 
-// Search Stack Navigator
+// Search Stack
 function SearchStack() {
   return (
     <SearchStackNav.Navigator screenOptions={headerTheme}>
@@ -104,7 +107,7 @@ function SearchStack() {
   );
 }
 
-// Bookmarks Stack Navigator
+// Bookmarks Stack
 function BookmarksStack() {
   return (
     <BookmarksStackNav.Navigator screenOptions={headerTheme}>
@@ -117,7 +120,7 @@ function BookmarksStack() {
   );
 }
 
-// Settings Stack Navigator
+// Settings Stack
 function SettingsStack() {
   return (
     <SettingsStackNav.Navigator screenOptions={headerTheme}>
@@ -130,7 +133,7 @@ function SettingsStack() {
   );
 }
 
-// Bottom Tab Navigator combining all stacks
+// Bottom Tabs
 function AppTabs() {
   return (
     <Tab.Navigator
@@ -184,34 +187,16 @@ function AppTabs() {
   );
 }
 
-// Root navigator with AppTabs and Reader screen
-function RootNavigator() {
-  return (
-    <RootStack.Navigator screenOptions={{ headerShown: false }}>
-      <RootStack.Screen name="AppTabs" component={AppTabs} />
-      <RootStack.Screen
-        name="Reader"
-        component={ReaderScreen}
-        options={({ route }) => ({
-          headerShown: false,
-          title: `${route.params.bookName} ${route.params.chapter}`,
-          headerStyle: { backgroundColor: "#1e40af" },
-          headerTintColor: "#fff",
-        })}
-      />
-    </RootStack.Navigator>
-  );
-}
-
+// App Entry
 export default function App() {
   return (
     <SafeAreaProvider>
       <BibleDatabaseProvider>
         <BookmarksProvider>
           <NavigationContainer>
-            {/* StatusBar to match header color */}
+            {/* Match status bar with header color */}
             <StatusBar backgroundColor="#1e40af" style="light" />
-            <RootNavigator />
+            <AppTabs />
           </NavigationContainer>
         </BookmarksProvider>
       </BibleDatabaseProvider>

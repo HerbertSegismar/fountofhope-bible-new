@@ -85,20 +85,30 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   }, []);
 
   // Load persisted version on mount
-  useEffect(() => {
-    const loadVersion = async () => {
-      try {
-        const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
-        const versionToLoad = savedVersion || currentVersion;
-        await initializeDatabase(versionToLoad);
-        setCurrentVersion(versionToLoad);
-      } catch (err) {
-        console.warn("Failed to load persisted version:", err);
-        await initializeDatabase(currentVersion);
-      }
-    };
-    loadVersion();
-  }, []);
+ useEffect(() => {
+   const loadVersion = async () => {
+     try {
+       const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
+       const versionToLoad = savedVersion || currentVersion;
+       if (!openDatabases.current.has(versionToLoad)) {
+         await initializeDatabase(versionToLoad);
+       } else {
+         setBibleDB(openDatabases.current.get(versionToLoad)!);
+       }
+       setCurrentVersion(versionToLoad);
+     } catch (err) {
+       console.warn("Failed to load persisted version:", err);
+       // Do not call initializeDatabase again here — just fallback to currentVersion
+       if (!openDatabases.current.has(currentVersion)) {
+         await initializeDatabase(currentVersion);
+       } else {
+         setBibleDB(openDatabases.current.get(currentVersion)!);
+       }
+     }
+   };
+   loadVersion();
+ }, []);
+
 
   // Switch version (opens DB if needed, does not close others)
   const switchVersion = useCallback(
