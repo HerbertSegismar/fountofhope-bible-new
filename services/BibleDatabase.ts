@@ -14,10 +14,9 @@ import {
   Story,
   Introduction,
   DatabaseInfo,
-  SearchOptions,
-  VerseRange,
   DatabaseMigration,
   DatabaseStats,
+  SearchOptions
 } from "../types";
 
 class BibleDatabaseError extends Error {
@@ -65,42 +64,35 @@ class BibleDatabase {
 
   // ==================== PUBLIC METHODS ====================
 
-  // services/BibleDatabase.ts (inside BibleDatabase class)
-  async searchVerses(
-    query: string,
-    options?: { limit?: number; bookNumber?: number; chapter?: number }
-  ): Promise<Verse[]> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
+  // services/BibleDatabase.ts
+  async searchVerses(query: string, options?: SearchOptions): Promise<Verse[]> {
+    if (!this.db) {
+      throw new Error("Database not initialized");
+    }
 
-      if (!query.trim()) return [];
+    let sql = `
+    SELECT v.*, b.short_name as book_name 
+    FROM verses v 
+    JOIN books b ON v.book_number = b.book_number 
+    WHERE v.text LIKE ?
+  `;
 
-      const params: any[] = [`%${query.trim()}%`];
-      let sql = `
-      SELECT v.*, b.short_name as book_name, b.book_color
-      FROM verses v
-      JOIN books b ON v.book_number = b.book_number
-      WHERE v.text LIKE ?
-    `;
+    const params: any[] = [`%${query}%`];
 
-      if (options?.bookNumber) {
-        sql += " AND v.book_number = ?";
-        params.push(options.bookNumber);
-      }
-      if (options?.chapter) {
-        sql += " AND v.chapter = ?";
-        params.push(options.chapter);
-      }
+    // Add book range filter if provided
+    if (options?.bookRange) {
+      sql += ` AND v.book_number BETWEEN ? AND ?`;
+      params.push(options.bookRange.start, options.bookRange.end);
+    }
 
-      sql += " ORDER BY v.book_number, v.chapter, v.verse";
+    sql += ` ORDER BY v.book_number, v.chapter, v.verse`;
 
-      if (options?.limit) {
-        sql += " LIMIT ?";
-        params.push(options.limit);
-      }
-
-      return await this.db!.getAllAsync<Verse>(sql, params);
-    }, `searchVerses(${query})`);
+    try {
+      return await this.db.getAllAsync<Verse>(sql, params);
+    } catch (error) {
+      console.error("Search error:", error);
+      throw error;
+    }
   }
 
   async init(): Promise<void> {

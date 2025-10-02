@@ -48,6 +48,16 @@ export interface Story {
   title: string;
 }
 
+export interface SearchOptions {
+  limit?: number;
+  bookNumber?: number;
+  chapter?: number;
+  bookRange?: {
+    start: number;
+    end: number;
+  };
+}
+
 export interface Introduction {
   book_number: number;
   introduction: string;

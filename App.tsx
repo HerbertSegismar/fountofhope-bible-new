@@ -114,7 +114,7 @@ function BookmarksStack() {
       <BookmarksStackNav.Screen
         name="Bookmarks"
         component={BookmarksScreen}
-        options={{ title: "Bookmarks" }}
+        options={{ title: "Saved Bookmarks" }}
       />
     </BookmarksStackNav.Navigator>
   );

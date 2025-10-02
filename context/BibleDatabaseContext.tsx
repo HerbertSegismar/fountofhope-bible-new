@@ -8,13 +8,8 @@ import React, {
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BibleDatabase, Verse } from "../services/BibleDatabase";
-
-interface SearchOptions {
-  limit?: number;
-  bookNumber?: number;
-  chapter?: number;
-}
+import { BibleDatabase } from "../services/BibleDatabase";
+import { Verse, SearchOptions } from "../types"; // Import from types
 
 interface BibleDatabaseContextType {
   bibleDB: BibleDatabase | null;
@@ -85,30 +80,28 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   }, []);
 
   // Load persisted version on mount
- useEffect(() => {
-   const loadVersion = async () => {
-     try {
-       const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
-       const versionToLoad = savedVersion || currentVersion;
-       if (!openDatabases.current.has(versionToLoad)) {
-         await initializeDatabase(versionToLoad);
-       } else {
-         setBibleDB(openDatabases.current.get(versionToLoad)!);
-       }
-       setCurrentVersion(versionToLoad);
-     } catch (err) {
-       console.warn("Failed to load persisted version:", err);
-       // Do not call initializeDatabase again here — just fallback to currentVersion
-       if (!openDatabases.current.has(currentVersion)) {
-         await initializeDatabase(currentVersion);
-       } else {
-         setBibleDB(openDatabases.current.get(currentVersion)!);
-       }
-     }
-   };
-   loadVersion();
- }, []);
-
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
+        const versionToLoad = savedVersion || currentVersion;
+        if (!openDatabases.current.has(versionToLoad)) {
+          await initializeDatabase(versionToLoad);
+        } else {
+          setBibleDB(openDatabases.current.get(versionToLoad)!);
+        }
+        setCurrentVersion(versionToLoad);
+      } catch (err) {
+        console.warn("Failed to load persisted version:", err);
+        if (!openDatabases.current.has(currentVersion)) {
+          await initializeDatabase(currentVersion);
+        } else {
+          setBibleDB(openDatabases.current.get(currentVersion)!);
+        }
+      }
+    };
+    loadVersion();
+  }, []);
 
   // Switch version (opens DB if needed, does not close others)
   const switchVersion = useCallback(
@@ -135,11 +128,13 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     await initializeDatabase(currentVersion);
   }, [currentVersion, initializeDatabase]);
 
-  // Search helper
+  // Search helper - UPDATED to pass options to bibleDB
   const searchVerses = useCallback(
     async (query: string, options?: SearchOptions) => {
-      if (!bibleDB) return [];
-      return bibleDB.searchVerses(query, options);
+      if (!bibleDB) {
+        throw new Error("Bible database not available");
+      }
+      return await bibleDB.searchVerses(query, options);
     },
     [bibleDB]
   );

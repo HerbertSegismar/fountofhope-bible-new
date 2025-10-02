@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
-interface ChapterViewProps {
+interface VerseViewProps {
   verses: Verse[];
   bookName: string;
   chapterNumber: number;
@@ -11,15 +11,15 @@ interface ChapterViewProps {
   showVerseNumbers?: boolean;
   fontSize?: number;
   onVersePress?: (verse: Verse) => void;
-  style?: object; // Add this
+  style?: object;
+  highlight?: string;
 }
 
-
-// Function to render verse text with XML tags removed
-// Numbers inside tags get half font size
+// Helper
 const renderVerseTextWithXmlHighlight = (
   text: string,
-  baseFontSize: number
+  baseFontSize: number,
+  highlight?: string
 ) => {
   if (!text) return [];
 
@@ -29,64 +29,71 @@ const renderVerseTextWithXmlHighlight = (
   let match;
 
   while ((match = regex.exec(text)) !== null) {
-    // Plain text before this tag
-    if (match.index > lastIndex) {
+    if (match.index > lastIndex)
       elements.push(text.slice(lastIndex, match.index));
-    }
 
-    // Inner text inside <tag>content</tag>
     if (match[1] && match[1].trim()) {
       const isNumber = /^\d+$/.test(match[1].trim());
       elements.push(
         <Text
           key={match.index}
-          className="italic"
           style={{
             fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
             color: "#ff5722",
-            flexWrap: "wrap",
+            fontStyle: "italic",
           }}
         >
           {match[1]}
         </Text>
       );
     }
-
     lastIndex = regex.lastIndex;
   }
 
-  // Remaining plain text after last tag
-  if (lastIndex < text.length) {
-    elements.push(text.slice(lastIndex));
-  }
+  if (lastIndex < text.length) elements.push(text.slice(lastIndex));
 
-  // Remove leftover empty tags
   return elements
     .map((el) => {
-      if (typeof el === "string") return el.replace(/<[^>]+>/g, "");
+      if (typeof el === "string") {
+        const cleanText = el.replace(/<[^>]+>/g, "");
+        if (!highlight) return cleanText;
+
+        const regex = new RegExp(`(${highlight})`, "gi");
+        return cleanText.split(regex).map((part, i) =>
+          part.toLowerCase() === highlight.toLowerCase() ? (
+            <Text key={`hl-${i}-${part}`} style={{ backgroundColor: "yellow" }}>
+              {part}
+            </Text>
+          ) : (
+            <Text key={`txt-${i}-${part}`}>{part}</Text>
+          )
+        );
+      }
       return el;
     })
+    .flat()
     .filter(Boolean);
 };
 
-export const VerseViewEnhanced: React.FC<ChapterViewProps> = ({
+export const VerseViewEnhanced: React.FC<VerseViewProps> = ({
   verses,
   bookName,
   chapterNumber,
-  onPress,
   showVerseNumbers = true,
   fontSize = 16,
   onVersePress,
-  style, // <-- destructure it
+  style,
+  highlight,
 }) => {
   const { currentVersion } = useBibleDatabase();
   const sortedVerses = [...verses].sort((a, b) => a.verse - b.verse);
 
-  // Render individual verses
   const renderVerses = () => {
     if (sortedVerses.length === 0) {
       return (
-        <Text className="text-gray-600 text-center">No verses available</Text>
+        <Text style={{ textAlign: "center", color: "#666" }}>
+          No verses available
+        </Text>
       );
     }
 
@@ -95,50 +102,49 @@ export const VerseViewEnhanced: React.FC<ChapterViewProps> = ({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
       >
-        <View className="space-y-4">
+        <View style={{ gap: 12 }}>
           {sortedVerses.map((verse) => (
             <TouchableOpacity
               key={verse.verse}
               activeOpacity={onVersePress ? 0.7 : 1}
               onPress={() => onVersePress?.(verse)}
             >
-              <View className="flex-row mb-2">
+              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+                {showVerseNumbers && (
+                  <Text
+                    style={{
+                      fontSize: fontSize - 2,
+                      fontWeight: "600",
+                      fontStyle: "italic",
+                      color: "#1e40af",
+                      marginRight: 4,
+                    }}
+                  >
+                    {verse.verse}
+                  </Text>
+                )}
                 <Text
-                  className="text-gray-800 flex-1 text-justify"
                   style={{
                     fontSize,
                     lineHeight: fontSize * 1.6,
                     flexShrink: 1,
                     flexWrap: "wrap",
+                    width: "100%",
                   }}
-                  textBreakStrategy="simple"
-                  allowFontScaling
-                  adjustsFontSizeToFit={false}
-                  minimumFontScale={0.85}
+                  numberOfLines={0}
                 >
-                  {showVerseNumbers && (
-                    <Text
-                      className="italic font-semibold text-blue-800"
-                      style={{ fontSize: fontSize - 2, flexWrap: "wrap" }}
-                    >
-                      {verse.verse}{" "}
-                    </Text>
-                  )}
-
-                  {renderVerseTextWithXmlHighlight(verse.text, fontSize).map(
-                    (el, idx) => {
-                      const key = `${verse.verse}-${idx}`;
-                      if (typeof el === "string") {
-                        return (
-                          <Text key={key} className="flex-wrap">
-                            {el}
-                          </Text>
-                        );
-                      }
-                      return React.cloneElement(el as React.ReactElement, {
-                        key,
-                      });
-                    }
+                  {renderVerseTextWithXmlHighlight(
+                    verse.text,
+                    fontSize,
+                    highlight
+                  ).map((el, idx) =>
+                    typeof el === "string" ? (
+                      <Text key={`${verse.verse}-${idx}`}>{el}</Text>
+                    ) : (
+                      React.cloneElement(el as React.ReactElement, {
+                        key: `${verse.verse}-${idx}`,
+                      })
+                    )
                   )}
                 </Text>
               </View>
@@ -149,46 +155,40 @@ export const VerseViewEnhanced: React.FC<ChapterViewProps> = ({
     );
   };
 
-  // Generate verse reference string
-  const referenceText =
-    sortedVerses.length > 0
-      ? `${bookName} ${chapterNumber}:${sortedVerses[0].verse}${
-          sortedVerses.length > 1
-            ? `-${sortedVerses[sortedVerses.length - 1].verse}`
-            : ""
-        }`
-      : "";
-
-  // Card content
-  const verseContent = (
+  return (
     <View
-      className="bg-white p-6 rounded-lg shadow-sm min-h-[20px]"
-      style={{
-        ...(sortedVerses[0]?.book_color
-          ? { borderLeftWidth: 4, borderLeftColor: sortedVerses[0].book_color }
-          : {}),
-        ...style, // <-- apply custom style
-      }}
+      style={[
+        {
+          backgroundColor: "white",
+          padding: 16,
+          borderRadius: 8,
+          shadowOpacity: 0.1,
+          shadowRadius: 4,
+          minHeight: 40,
+          borderLeftWidth: sortedVerses[0]?.book_color ? 4 : 0,
+          borderLeftColor: sortedVerses[0]?.book_color || "transparent",
+        },
+        style,
+      ]}
     >
       {renderVerses()}
-      {/* Reference below */}
-      <View>
-        {referenceText ? (
-          <Text className="text-blue-800 text-base italic font-medium mb-2">
-            {referenceText}
-          </Text>
-        ) : null}
-      </View>
+      {sortedVerses.length > 0 && (
+        <Text
+          style={{
+            color: "#1e40af",
+            fontSize: 14,
+            fontStyle: "italic",
+            marginTop: 8,
+          }}
+        >
+          {bookName} {chapterNumber}:{sortedVerses[0].verse}
+          {sortedVerses.length > 1
+            ? `-${sortedVerses[sortedVerses.length - 1].verse}`
+            : ""}
+          {currentVersion &&
+            ` • ${currentVersion.replace(".sqlite3", "").toUpperCase()}`}
+        </Text>
+      )}
     </View>
   );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        {verseContent}
-      </TouchableOpacity>
-    );
-  }
-
-  return verseContent;
 };

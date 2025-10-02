@@ -21,14 +21,14 @@ interface ChapterViewProps {
   style?: StyleProp<ViewStyle>;
 }
 
-// Render verse text and remove XML tags
+// Render verse text and remove XML tags (returns strings and Text nodes)
 const renderVerseTextWithXmlHighlight = (
   text: string,
   baseFontSize: number
 ) => {
   if (!text) return [];
 
-  const elements: React.ReactNode[] = [];
+  const elements: Array<string | React.ReactNode> = [];
   let lastIndex = 0;
   const regex = /<[^/>]+>([^<]*)<\/[^>]+>|<[^>]+\/>|<\/[^>]+>/g;
   let match;
@@ -41,12 +41,11 @@ const renderVerseTextWithXmlHighlight = (
       const isNumber = /^\d+$/.test(match[1].trim());
       elements.push(
         <Text
+          // IMPORTANT: don't set flexWrap here
           key={match.index}
-          className="italic"
           style={{
             fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
             color: "#ff5722",
-            flexWrap: "wrap",
           }}
         >
           {match[1]}
@@ -79,50 +78,69 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const renderVerses = () => {
     if (!sortedVerses.length) {
       return (
-        <Text className="text-gray-600 text-center">No verses available</Text>
+        <Text style={{ color: "#6b7280", textAlign: "center" }}>
+          No verses available
+        </Text>
       );
     }
 
     return (
       <ScrollView
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
       >
-        <View className="space-y-4">
+        <View style={{ gap: 2 }}>
           {sortedVerses.map((verse) => (
             <TouchableOpacity
               key={verse.verse}
               activeOpacity={onVersePress ? 0.7 : 1}
               onPress={() => onVersePress?.(verse)}
             >
-              <View className="flex-row mb-2">
-                <Text
-                  className="text-gray-800 flex-1 text-justify"
-                  style={{
-                    fontSize,
-                    lineHeight: fontSize * 1.6,
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {showVerseNumbers && (
-                    <Text
-                      className="italic font-semibold text-blue-800"
-                      style={{ fontSize: fontSize - 2 }}
-                    >
-                      {verse.verse}{" "}
-                    </Text>
-                  )}
-                  {renderVerseTextWithXmlHighlight(verse.text, fontSize).map(
-                    (el, idx) =>
-                      typeof el === "string" ? (
-                        <Text key={`${verse.verse}-${idx}`}>{el}</Text>
-                      ) : (
-                        React.cloneElement(el as React.ReactElement, {
-                          key: `${verse.verse}-${idx}`,
-                        })
-                      )
-                  )}
-                </Text>
+              {/* Row with fixed-width verse-number and shrinkable text container */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  marginBottom: 8,
+                  alignItems: "flex-start",
+                }}
+              >
+                {showVerseNumbers && (
+                  <Text
+                    style={{
+                      width: 22,
+                      marginRight: 4,
+                      fontSize: Math.max(12, fontSize - 2),
+                      color: "#1e40af",
+                      textAlign: "right",
+                      includeFontPadding: false,
+                    }}
+                  >
+                    {verse.verse}
+                  </Text>
+                )}
+
+                {/* This container must be able to shrink: flex:1 + minWidth:0 */}
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    style={{
+                      fontSize,
+                      lineHeight: fontSize * 1.6,
+                      textAlign: "left", // try left to avoid justify issues; change to "justify" if desired
+                    }}
+                  >
+                    {renderVerseTextWithXmlHighlight(verse.text, fontSize).map(
+                      (el, idx) =>
+                        typeof el === "string" ? (
+                          <Text key={`${verse.verse}-${idx}`}>{el}</Text>
+                        ) : (
+                          React.cloneElement(el as React.ReactElement, {
+                            key: `${verse.verse}-${idx}`,
+                          })
+                        )
+                    )}
+                  </Text>
+                </View>
               </View>
             </TouchableOpacity>
           ))}
@@ -133,8 +151,15 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const chapterContent = (
     <View
-      className="bg-white p-6 rounded-lg shadow-sm min-h-[400px]"
       style={[
+        {
+          backgroundColor: "#fff",
+          padding: 16,
+          borderRadius: 12,
+          minHeight: 400,
+          alignSelf: "stretch",
+          width: "100%",
+        },
         verses[0]?.book_color
           ? { borderLeftWidth: 4, borderLeftColor: verses[0].book_color }
           : {},
@@ -142,7 +167,13 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       ]}
     >
       <Text
-        className="text-xl font-bold text-center mb-4 text-primary"
+        style={{
+          fontSize: 20,
+          fontWeight: "700",
+          textAlign: "center",
+          marginBottom: 12,
+          color: "#0f172a",
+        }}
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.8}
@@ -152,7 +183,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
       {renderVerses()}
 
-      <Text className="text-center text-gray-500 mt-4 text-sm">
+      <Text
+        style={{
+          textAlign: "center",
+          color: "#6b7280",
+          marginTop: 12,
+          fontSize: 12,
+        }}
+      >
         End of Chapter {chapterNumber}
         {currentVersion && (
           <> • {currentVersion.replace(".sqlite3", "").toUpperCase()}</>

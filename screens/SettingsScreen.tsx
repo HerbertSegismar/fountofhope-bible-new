@@ -47,11 +47,6 @@ const SettingsScreen = () => {
 
       // Open database if not already open
       getDatabase(version) || switchVersion(version);
-
-      Alert.alert(
-        "Success",
-        `Bible version switched to ${getVersionDisplayName(version)}`
-      );
     } catch (error) {
       Alert.alert("Error", "Failed to switch Bible version");
       setSelectedVersion(currentVersion);

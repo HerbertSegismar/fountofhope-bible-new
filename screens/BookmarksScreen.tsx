@@ -27,10 +27,14 @@ export default function BookmarksScreen({ navigation }: Props) {
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { bookmarks, removeBookmark, loadBookmarks } =
     useContext(BookmarksContext);
+
   const [verseDetails, setVerseDetails] = useState<{ [key: string]: Verse }>(
     {}
   );
   const [loading, setLoading] = useState(true);
+  const [bookLongNames, setBookLongNames] = useState<Record<number, string>>(
+    {}
+  );
 
   // Load bookmarks once when screen mounts or database changes
   useEffect(() => {
@@ -61,6 +65,8 @@ export default function BookmarksScreen({ navigation }: Props) {
       }
 
       const details: { [key: string]: Verse } = {};
+      const names: Record<number, string> = { ...bookLongNames };
+
       for (const bookmark of bookmarks) {
         try {
           const verse = await bibleDB.getVerse(
@@ -69,21 +75,37 @@ export default function BookmarksScreen({ navigation }: Props) {
             bookmark.verse
           );
           if (verse) details[bookmark.id] = verse;
+
+          // Fetch long name if missing
+          if (!names[bookmark.book_number]) {
+            const book = await bibleDB.getBook(bookmark.book_number);
+            names[bookmark.book_number] = book?.long_name ?? "Unknown Book";
+          }
         } catch (err) {
           console.error(`Failed to load verse ${bookmark.id}:`, err);
+          names[bookmark.book_number] =
+            names[bookmark.book_number] || "Unknown Book";
         }
       }
+
       setVerseDetails(details);
+      setBookLongNames(names);
     };
+
     fetchVerseDetails();
   }, [bookmarks, bibleDB]);
 
-  const handleBookmarkPress = (bookmark: (typeof bookmarks)[0]) => {
-    const verse = verseDetails[bookmark.id];
-    navigation.navigate("Reader", {
-      bookId: bookmark.book_number,
-      chapter: bookmark.chapter,
-      bookName: verse?.book_name || "Unknown Book",
+  const handleBookmarkPress = (verse: Verse) => {
+    const longName =
+      bookLongNames[verse.book_number] || verse.book_name || "Unknown Book";
+    const tabNavigation = navigation.getParent();
+    tabNavigation?.navigate("Bible", {
+      screen: "Reader",
+      params: {
+        bookId: verse.book_number,
+        chapter: verse.chapter,
+        bookName: longName,
+      },
     });
   };
 
@@ -133,17 +155,14 @@ export default function BookmarksScreen({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
+    <SafeAreaView className="flex-1 bg-gray-50 -top-10">
       {/* Header */}
-      <View className="bg-white p-6 shadow-sm">
-        <Text className="text-2xl font-bold text-primary text-center">
-          My Bookmarks
-        </Text>
-        <Text className="text-gray-600 text-center mt-1">
+      <View className="shadow-sm mb-2">
+        <Text className="text-gray-600 text-center">
           {bookmarks.length} saved verse{bookmarks.length !== 1 ? "s" : ""}
         </Text>
         {currentVersion && (
-          <Text className="text-sm text-gray-500 text-center mt-1">
+          <Text className="text-sm text-gray-500 text-center">
             {currentVersion.replace(".sqlite3", "").toUpperCase()} Version
           </Text>
         )}
@@ -164,23 +183,28 @@ export default function BookmarksScreen({ navigation }: Props) {
           <View className="space-y-4">
             {bookmarks.map((bookmark) => {
               const verse = verseDetails[bookmark.id];
+              const longName =
+                verse && bookLongNames[verse.book_number]
+                  ? bookLongNames[verse.book_number]
+                  : verse?.book_name || "Unknown Book";
+
               return (
                 <View
                   key={bookmark.id}
                   className="bg-blue-100 rounded-lg shadow-sm overflow-hidden p-4 mb-4"
                 >
                   <TouchableOpacity
-                    onPress={() => handleBookmarkPress(bookmark)}
+                    onPress={() => verse && handleBookmarkPress(verse)}
                     activeOpacity={0.7}
                   >
                     {verse && (
                       <VerseViewEnhanced
                         verses={[verse]}
-                        bookName={verse.book_name || "Unknown Book"}
+                        bookName={longName}
                         chapterNumber={verse.chapter}
                         showVerseNumbers
                         fontSize={16}
-                        onVersePress={() => handleBookmarkPress(bookmark)}
+                        onVersePress={() => handleBookmarkPress(verse)}
                       />
                     )}
                     <Text className="text-gray-500 text-xs mt-2">
@@ -202,17 +226,6 @@ export default function BookmarksScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-
-      {/* Refresh Button */}
-      {bookmarks.length > 0 && (
-        <TouchableOpacity
-          className="absolute bottom-6 left-6 bg-gray-600 w-14 h-14 rounded-full justify-center items-center shadow-lg"
-          onPress={loadBookmarks}
-          activeOpacity={0.8}
-        >
-          <Text className="text-white text-lg font-bold">↻</Text>
-        </TouchableOpacity>
-      )}
     </SafeAreaView>
   );
 }
