@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Text,
   TextInput,
@@ -7,6 +13,7 @@ import {
   View,
   ActivityIndicator,
   FlatList,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -94,6 +101,134 @@ const PopularSearchTerms = React.memo(
   }
 );
 
+// Back to Top Button Component
+const BackToTopButton = React.memo(
+  ({
+    isVisible,
+    onPress,
+    animatedValue,
+  }: {
+    isVisible: boolean;
+    onPress: () => void;
+    animatedValue: Animated.Value;
+  }) => {
+    const translateY = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [100, 0],
+    });
+
+    const opacity = animatedValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+    });
+
+    if (!isVisible) return null;
+
+    return (
+      <Animated.View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          right: 20,
+          transform: [{ translateY }],
+          opacity,
+          zIndex: 1000,
+        }}
+      >
+        <TouchableOpacity
+          onPress={onPress}
+          className="bg-blue-500 rounded-full p-4 shadow-lg border border-blue-300"
+          activeOpacity={0.8}
+        >
+          <View className="items-center justify-center">
+            <Text className="text-white font-bold text-lg">↑</Text>
+            <Text className="text-white text-xs mt-1">Top</Text>
+          </View>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  }
+);
+
+// Empty states component
+const EmptyStates = React.memo(
+  ({
+    hasSearched,
+    query,
+    loading,
+    onPopularSearch,
+  }: {
+    hasSearched: boolean;
+    query: string;
+    loading: boolean;
+    onPopularSearch: (term: string) => void;
+  }) => {
+    if (loading) return null;
+
+    if (hasSearched && !query) {
+      return (
+        <View className="flex-1 justify-center items-center py-8">
+          <Text className="text-center text-gray-600 text-lg mb-2">
+            Search the Bible
+          </Text>
+          <Text className="text-center text-gray-500 text-sm mb-6">
+            Enter a word or phrase to find relevant verses
+          </Text>
+          <View className="bg-blue-50 p-4 rounded-lg w-full">
+            <Text className="text-blue-800 text-sm text-center font-medium mb-2">
+              Popular Search Terms
+            </Text>
+            <PopularSearchTerms onSearch={onPopularSearch} />
+          </View>
+        </View>
+      );
+    }
+
+    if (hasSearched && query && !loading) {
+      return (
+        <View className="flex-1 justify-center py-8">
+          <Text className="text-center text-gray-600 text-lg mb-2">
+            No results found for "{query}"
+          </Text>
+          <Text className="text-center text-gray-500 text-sm mb-4">
+            Try different keywords or check spelling
+          </Text>
+          <View className="bg-gray-50 p-4 rounded-lg mx-4">
+            <Text className="text-gray-600 text-sm text-center mb-2">
+              Search tips:
+            </Text>
+            <Text className="text-gray-500 text-xs text-center">
+              • Try simpler or more common words{"\n"}• Check for typos
+              {"\n"}• Search for single words first
+            </Text>
+          </View>
+        </View>
+      );
+    }
+
+    if (!query && !hasSearched) {
+      return (
+        <View className="flex-1 justify-center py-8">
+          <Text className="text-center text-gray-600 text-lg mb-2">
+            Search the Bible
+          </Text>
+          <Text className="text-center text-gray-500 text-sm mb-6">
+            Enter a word or phrase to find relevant verses
+          </Text>
+          <View className="bg-blue-50 p-4 rounded-lg mx-4">
+            <Text className="text-blue-800 text-sm text-center font-medium mb-2">
+              Popular Search Terms
+            </Text>
+            <PopularSearchTerms onSearch={onPopularSearch} />
+          </View>
+        </View>
+      );
+    }
+
+    return null;
+  }
+);
+
 export default function SearchScreen({ navigation }: Props) {
   const { searchVerses, bibleDB } = useBibleDatabase();
   const [hasSearched, setHasSearched] = useState(false);
@@ -102,6 +237,12 @@ export default function SearchScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<SearchScope>("whole");
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  // Refs and animations
+  const flatListRef = useRef<FlatList>(null);
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const backToTopAnimation = useRef(new Animated.Value(0)).current;
 
   // Use the correct book ranges for your database
   const otRange = { start: 10, end: 460 };
@@ -124,6 +265,43 @@ export default function SearchScreen({ navigation }: Props) {
       range: ntRange,
     },
   };
+
+  // Handle scroll to show/hide back to top button
+  const handleScroll = useCallback(
+    (event: any) => {
+      const currentScrollY = event.nativeEvent.contentOffset.y;
+      scrollY.setValue(currentScrollY);
+
+      // Show back to top button after scrolling down 300 pixels
+      if (currentScrollY > 300 && !showBackToTop) {
+        setShowBackToTop(true);
+        Animated.timing(backToTopAnimation, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      } else if (currentScrollY <= 300 && showBackToTop) {
+        setShowBackToTop(false);
+        Animated.timing(backToTopAnimation, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      }
+    },
+    [showBackToTop, scrollY, backToTopAnimation]
+  );
+
+  // Scroll to top function
+  const scrollToTop = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    setShowBackToTop(false);
+    Animated.timing(backToTopAnimation, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [backToTopAnimation]);
 
   // Memoized scope configuration
   const scopeEntries = useMemo(
@@ -161,6 +339,11 @@ export default function SearchScreen({ navigation }: Props) {
         setResults(searchResults);
 
         console.log(`Found ${searchResults.length} results`);
+
+        // Reset scroll position when new search is performed
+        setTimeout(() => {
+          scrollToTop();
+        }, 100);
       } catch (err) {
         console.error("Search error:", err);
         setError("Failed to search. Please try again.");
@@ -168,7 +351,7 @@ export default function SearchScreen({ navigation }: Props) {
         setLoading(false);
       }
     },
-    [query, scope, searchVerses]
+    [query, scope, searchVerses, scrollToTop]
   );
 
   // Handle popular search term selection
@@ -223,7 +406,9 @@ export default function SearchScreen({ navigation }: Props) {
     setQuery("");
     setResults([]);
     setHasSearched(false);
-  }, []);
+    setShowBackToTop(false);
+    backToTopAnimation.setValue(0);
+  }, [backToTopAnimation]);
 
   const getResultStats = useCallback(() => {
     if (!hasSearched || loading) return null;
@@ -258,31 +443,10 @@ export default function SearchScreen({ navigation }: Props) {
     [query, handleVersePress]
   );
 
-  // Loading state
-  if (loading) {
-    return (
-      <View className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-lg text-gray-600 mt-4">
-          Searching {scopeConfig[scope].label}...
-        </Text>
-      </View>
-    );
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <View className="flex-1 justify-center items-center bg-gray-50 p-6">
-        <Text className="text-lg text-red-600 text-center mb-4">{error}</Text>
-        <Button title="Try Again" onPress={() => handleSearch()} />
-      </View>
-    );
-  }
-
-  return (
-    <SafeAreaView className="flex-1 bg-gray-50 -top-10 mb-5">
-      <View className="p-4 flex-1">
+  // List header component
+  const ListHeader = useMemo(
+    () => (
+      <View className="pb-4">
         {/* Scope Selection */}
         <View className="mb-2">
           <View className="flex-row justify-between">
@@ -337,66 +501,85 @@ export default function SearchScreen({ navigation }: Props) {
             {resultStats || `Search ${scopeConfig[scope].label}`}
           </Text>
         </TouchableOpacity>
+      </View>
+    ),
+    [
+      scopeEntries,
+      scope,
+      query,
+      resultStats,
+      handleScopeChange,
+      handleSearch,
+      clearSearch,
+    ]
+  );
 
-        {/* Search Results with FlatList for virtualization */}
-        {hasSearched && results.length > 0 ? (
-          <FlatList
-            data={results}
-            keyExtractor={keyExtractor}
-            renderItem={renderItem}
-            showsVerticalScrollIndicator={false}
-            initialNumToRender={15}
-            maxToRenderPerBatch={20}
-            windowSize={10}
-            removeClippedSubviews={true}
-            updateCellsBatchingPeriod={50}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            className="flex-1"
-          />
-        ) : (
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
-          >
-            {/* Empty states */}
-            {hasSearched && results.length === 0 && !loading && (
-              <View className="py-8">
-                <Text className="text-center text-gray-600 text-lg mb-2">
-                  No results found for "{query}"
-                </Text>
-                <Text className="text-center text-gray-500 text-sm">
-                  Try different keywords or check spelling
-                </Text>
-                <View className="mt-4 bg-gray-50 p-4 rounded-lg">
-                  <Text className="text-gray-600 text-sm text-center mb-2">
-                    Search tips:
-                  </Text>
-                  <Text className="text-gray-500 text-xs text-center">
-                    • Try simpler or more common words{"\n"}• Check for typos
-                    {"\n"}• Search for single words first
-                  </Text>
-                </View>
-              </View>
-            )}
+  // Loading state
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 justify-center items-center">
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text className="text-lg text-gray-600 mt-4">
+            Searching {scopeConfig[scope].label}...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-            {!query && !hasSearched && (
-              <View className="py-8">
-                <Text className="text-center text-gray-600 text-lg mb-2">
-                  Search the Bible
-                </Text>
-                <Text className="text-center text-gray-500 text-sm">
-                  Enter a word or phrase to find relevant verses
-                </Text>
-                <View className="mt-4 bg-blue-50 p-4 rounded-lg">
-                  <Text className="text-blue-800 text-sm text-center font-medium mb-2">
-                    Popular Search Terms
-                  </Text>
-                  <PopularSearchTerms onSearch={handlePopularSearch} />
-                </View>
-              </View>
-            )}
-          </ScrollView>
-        )}
+  // Error state
+  if (error) {
+    return (
+      <SafeAreaView className="flex-1 bg-gray-50">
+        <View className="flex-1 justify-center items-center p-6">
+          <Text className="text-lg text-red-600 text-center mb-4">{error}</Text>
+          <Button title="Try Again" onPress={() => handleSearch()} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView className="flex-1 bg-gray-50">
+      <View className="flex-1 px-4">
+        {/* Use FlatList for both results and empty states to utilize full height */}
+        <FlatList
+          ref={flatListRef}
+          data={results}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          ListHeaderComponent={ListHeader}
+          ListEmptyComponent={
+            <EmptyStates
+              hasSearched={hasSearched}
+              query={query}
+              loading={loading}
+              onPopularSearch={handlePopularSearch}
+            />
+          }
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={15}
+          maxToRenderPerBatch={20}
+          windowSize={10}
+          removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
+          contentContainerStyle={{
+            flexGrow: 1,
+            paddingBottom: 20,
+          }}
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+        />
+
+        {/* Back to Top Button */}
+        <BackToTopButton
+          isVisible={showBackToTop && results.length > 10}
+          onPress={scrollToTop}
+          animatedValue={backToTopAnimation}
+        />
       </View>
     </SafeAreaView>
   );
