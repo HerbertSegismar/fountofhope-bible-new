@@ -1,5 +1,4 @@
-// screens/SearchScreen.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Text,
   TextInput,
@@ -7,6 +6,7 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  FlatList,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -26,6 +26,73 @@ interface Props {
 }
 
 type SearchScope = "whole" | "ot" | "nt";
+
+// Memoized verse item component to prevent unnecessary re-renders
+const SearchResultItem = React.memo(
+  ({
+    verse,
+    query,
+    onVersePress,
+  }: {
+    verse: Verse;
+    query: string;
+    onVersePress: (verse: Verse) => void;
+  }) => {
+    const getBookDisplayName = useCallback(
+      (bookNumber: number, fallbackName?: string) => {
+        const bookInfo = getBookInfo(bookNumber);
+        return bookInfo?.long || fallbackName || "Unknown Book";
+      },
+      []
+    );
+
+    const longName = getBookDisplayName(verse.book_number, verse.book_name);
+
+    return (
+      <View style={{ marginBottom: 8 }}>
+        <VerseViewEnhanced
+          verses={[verse]}
+          bookName={longName}
+          chapterNumber={verse.chapter}
+          showVerseNumbers={true}
+          fontSize={16}
+          onVersePress={onVersePress}
+          highlight={query}
+        />
+      </View>
+    );
+  }
+);
+
+// Memoized popular search terms
+const PopularSearchTerms = React.memo(
+  ({ onSearch }: { onSearch: (term: string) => void }) => {
+    const terms = [
+      "faith",
+      "love",
+      "hope",
+      "grace",
+      "peace",
+      "joy",
+      "forgiveness",
+      "salvation",
+    ];
+
+    return (
+      <View className="flex-row flex-wrap justify-center">
+        {terms.map((term) => (
+          <TouchableOpacity
+            key={term}
+            onPress={() => onSearch(term)}
+            className="bg-white border border-blue-200 rounded-full px-3 py-1 m-1"
+          >
+            <Text className="text-blue-600 text-xs">{term}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  }
+);
 
 export default function SearchScreen({ navigation }: Props) {
   const { searchVerses, bibleDB } = useBibleDatabase();
@@ -58,100 +125,107 @@ export default function SearchScreen({ navigation }: Props) {
     },
   };
 
-  // Handle search with an optional query parameter
-  const handleSearch = async (searchQuery?: string) => {
-    const actualQuery = searchQuery || query;
+  // Memoized scope configuration
+  const scopeEntries = useMemo(
+    () => Object.entries(scopeConfig) as [SearchScope, any][],
+    []
+  );
 
-    setHasSearched(true);
-    if (!actualQuery.trim()) {
-      setResults([]);
-      return;
-    }
+  // Handle search with debouncing and cancellation
+  const handleSearch = useCallback(
+    async (searchQuery?: string) => {
+      const actualQuery = searchQuery || query;
 
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Prepare search options based on scope
-      const searchOptions: SearchOptions = {
-        bookRange: scopeConfig[scope].range || undefined,
-      };
-
-      console.log(
-        `Searching for "${actualQuery}" in ${scope} with range:`,
-        searchOptions.bookRange
-      );
-
-      // Search with scope filtering
-      const searchResults = await searchVerses(actualQuery, searchOptions);
-      setResults(searchResults);
-
-      console.log(`Found ${searchResults.length} results`);
-
-      // Log the books found for verification
-      if (searchResults.length > 0) {
-        const foundBooks = [
-          ...new Set(searchResults.map((v) => v.book_number)),
-        ].sort((a, b) => a - b);
-        const bookNames = foundBooks.map((num) => {
-          const info = getBookInfo(num);
-          return `${num} (${info?.long || "Unknown"})`;
-        });
-        console.log("Books in results:", bookNames);
+      setHasSearched(true);
+      if (!actualQuery.trim()) {
+        setResults([]);
+        return;
       }
-    } catch (err) {
-      console.error("Search error:", err);
-      setError("Failed to search. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Prepare search options based on scope
+        const searchOptions: SearchOptions = {
+          bookRange: scopeConfig[scope].range || undefined,
+        };
+
+        console.log(
+          `Searching for "${actualQuery}" in ${scope} with range:`,
+          searchOptions.bookRange
+        );
+
+        // Search with scope filtering
+        const searchResults = await searchVerses(actualQuery, searchOptions);
+        setResults(searchResults);
+
+        console.log(`Found ${searchResults.length} results`);
+      } catch (err) {
+        console.error("Search error:", err);
+        setError("Failed to search. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [query, scope, searchVerses]
+  );
 
   // Handle popular search term selection
-  const handlePopularSearch = async (term: string) => {
-    setQuery(term); // Update the input field
+  const handlePopularSearch = useCallback(
+    (term: string) => {
+      setQuery(term);
+      // Small timeout to ensure UI responsiveness
+      setTimeout(() => {
+        handleSearch(term);
+      }, 50);
+    },
+    [handleSearch]
+  );
 
-    // Use a small timeout to ensure the state is updated and UI is responsive
-    setTimeout(() => {
-      handleSearch(term); // Pass the term directly to handleSearch
-    }, 50);
-  };
+  const getBookDisplayName = useCallback(
+    (bookNumber: number, fallbackName?: string) => {
+      const bookInfo = getBookInfo(bookNumber);
+      return bookInfo?.long || fallbackName || "Unknown Book";
+    },
+    []
+  );
 
-  // Get book name using the mapping
-  const getBookDisplayName = (bookNumber: number, fallbackName?: string) => {
-    const bookInfo = getBookInfo(bookNumber);
-    return bookInfo?.long || fallbackName || "Unknown Book";
-  };
+  const handleScopeChange = useCallback(
+    (newScope: SearchScope) => {
+      setScope(newScope);
+      // Clear results when scope changes to avoid confusion
+      if (hasSearched) {
+        setResults([]);
+        setHasSearched(false);
+      }
+    },
+    [hasSearched]
+  );
 
-  const handleScopeChange = (newScope: SearchScope) => {
-    setScope(newScope);
-    // Clear results when scope changes to avoid confusion
-    if (hasSearched) {
-      setResults([]);
-      setHasSearched(false);
-    }
-  };
+  const handleVersePress = useCallback(
+    (verse: Verse) => {
+      const longName = getBookDisplayName(verse.book_number, verse.book_name);
+      const tabNavigation = navigation.getParent();
+      tabNavigation?.navigate("Bible", {
+        screen: "Reader",
+        params: {
+          bookId: verse.book_number,
+          chapter: verse.chapter,
+          bookName: longName,
+        },
+      });
+    },
+    [navigation, getBookDisplayName]
+  );
 
-  const handleVersePress = (verse: Verse) => {
-    const longName = getBookDisplayName(verse.book_number, verse.book_name);
-    const tabNavigation = navigation.getParent();
-    tabNavigation?.navigate("Bible", {
-      screen: "Reader",
-      params: {
-        bookId: verse.book_number,
-        chapter: verse.chapter,
-        bookName: longName,
-      },
-    });
-  };
-
-  const clearSearch = () => {
+  const clearSearch = useCallback(() => {
     setQuery("");
     setResults([]);
     setHasSearched(false);
-  };
+  }, []);
 
-  const getResultStats = () => {
+  const getResultStats = useCallback(() => {
     if (!hasSearched || loading) return null;
 
     if (results.length === 0) {
@@ -160,8 +234,31 @@ export default function SearchScreen({ navigation }: Props) {
 
     const bookCount = new Set(results.map((r) => r.book_number)).size;
     return `Found ${results.length} result${results.length !== 1 ? "s" : ""} in ${bookCount} book${bookCount !== 1 ? "s" : ""} for "${query}"`;
-  };
+  }, [hasSearched, loading, results, query, scope]);
 
+  // Memoized search stats
+  const resultStats = useMemo(() => getResultStats(), [getResultStats]);
+
+  // Memoized key extractor for FlatList
+  const keyExtractor = useCallback(
+    (item: Verse, index: number) =>
+      `${item.book_number}-${item.chapter}-${item.verse}-${index}`,
+    []
+  );
+
+  // Memoized render item for FlatList
+  const renderItem = useCallback(
+    ({ item }: { item: Verse }) => (
+      <SearchResultItem
+        verse={item}
+        query={query}
+        onVersePress={handleVersePress}
+      />
+    ),
+    [query, handleVersePress]
+  );
+
+  // Loading state
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
@@ -173,6 +270,7 @@ export default function SearchScreen({ navigation }: Props) {
     );
   }
 
+  // Error state
   if (error) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50 p-6">
@@ -184,31 +282,29 @@ export default function SearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50 -top-10 mb-5">
-      <View className="p-4">
+      <View className="p-4 flex-1">
         {/* Scope Selection */}
         <View className="mb-2">
           <View className="flex-row justify-between">
-            {(Object.entries(scopeConfig) as [SearchScope, any][]).map(
-              ([value, config]) => (
-                <TouchableOpacity
-                  key={value}
-                  className={`flex-1 p-2 mx-1 rounded-lg border-2 ${
-                    scope === value
-                      ? "border-blue-300 bg-blue-100"
-                      : "border-green-300 bg-green-100"
+            {scopeEntries.map(([value, config]) => (
+              <TouchableOpacity
+                key={value}
+                className={`flex-1 p-2 mx-1 rounded-lg border-2 ${
+                  scope === value
+                    ? "border-blue-300 bg-blue-100"
+                    : "border-green-300 bg-green-100"
+                }`}
+                onPress={() => handleScopeChange(value)}
+              >
+                <Text
+                  className={`font-medium text-center text-sm ${
+                    scope === value ? "text-blue-600" : "text-green-700"
                   }`}
-                  onPress={() => handleScopeChange(value)}
                 >
-                  <Text
-                    className={`font-medium text-center text-sm ${
-                      scope === value ? "text-blue-600" : "text-green-700"
-                    }`}
-                  >
-                    {config.label}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
+                  {config.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -238,101 +334,69 @@ export default function SearchScreen({ navigation }: Props) {
           disabled={!query.trim()}
         >
           <Text className="text-white font-semibold text-center">
-            {getResultStats()
-              ? getResultStats()
-              : `Search ${scopeConfig[scope].label}`}
+            {resultStats || `Search ${scopeConfig[scope].label}`}
           </Text>
         </TouchableOpacity>
 
-        {/* Search Results */}
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          className="mb-10"
-          contentContainerStyle={{ paddingBottom: 20 }}
-        >
-          <View className="space-y-3">
-            {results.map((verse, idx) => {
-              const longName = getBookDisplayName(
-                verse.book_number,
-                verse.book_name
-              );
-
-              return (
-                <View
-                  key={`${verse.book_number}-${verse.chapter}-${verse.verse}-${idx}`}
-                >
-                  <VerseViewEnhanced
-                    verses={[verse]}
-                    bookName={longName}
-                    chapterNumber={verse.chapter}
-                    showVerseNumbers={true}
-                    fontSize={16}
-                    onVersePress={handleVersePress}
-                    highlight={query}
-                    style={{ marginBottom: 8 }}
-                  />
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Empty states */}
-          {hasSearched && results.length === 0 && !loading && (
-            <View className="py-8">
-              <Text className="text-center text-gray-600 text-lg mb-2">
-                No results found for "{query}"
-              </Text>
-              <Text className="text-center text-gray-500 text-sm">
-                Try different keywords or check spelling
-              </Text>
-              <View className="mt-4 bg-gray-50 p-4 rounded-lg">
-                <Text className="text-gray-600 text-sm text-center mb-2">
-                  Search tips:
+        {/* Search Results with FlatList for virtualization */}
+        {hasSearched && results.length > 0 ? (
+          <FlatList
+            data={results}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={15}
+            maxToRenderPerBatch={20}
+            windowSize={10}
+            removeClippedSubviews={true}
+            updateCellsBatchingPeriod={50}
+            contentContainerStyle={{ paddingBottom: 20 }}
+            className="flex-1"
+          />
+        ) : (
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+          >
+            {/* Empty states */}
+            {hasSearched && results.length === 0 && !loading && (
+              <View className="py-8">
+                <Text className="text-center text-gray-600 text-lg mb-2">
+                  No results found for "{query}"
                 </Text>
-                <Text className="text-gray-500 text-xs text-center">
-                  • Try simpler or more common words{"\n"}• Check for typos
-                  {"\n"}• Search for single words first
+                <Text className="text-center text-gray-500 text-sm">
+                  Try different keywords or check spelling
                 </Text>
-              </View>
-            </View>
-          )}
-
-          {!query && !hasSearched && (
-            <View className="py-8">
-              <Text className="text-center text-gray-600 text-lg mb-2">
-                Search the Bible
-              </Text>
-              <Text className="text-center text-gray-500 text-sm">
-                Enter a word or phrase to find relevant verses
-              </Text>
-              <View className="mt-4 bg-blue-50 p-4 rounded-lg">
-                <Text className="text-blue-800 text-sm text-center font-medium mb-2">
-                  Popular Search Terms
-                </Text>
-                <View className="flex-row flex-wrap justify-center">
-                  {[
-                    "faith",
-                    "love",
-                    "hope",
-                    "grace",
-                    "peace",
-                    "joy",
-                    "forgiveness",
-                    "salvation",
-                  ].map((term) => (
-                    <TouchableOpacity
-                      key={term}
-                      onPress={() => handlePopularSearch(term)}
-                      className="bg-white border border-blue-200 rounded-full px-3 py-1 m-1"
-                    >
-                      <Text className="text-blue-600 text-xs">{term}</Text>
-                    </TouchableOpacity>
-                  ))}
+                <View className="mt-4 bg-gray-50 p-4 rounded-lg">
+                  <Text className="text-gray-600 text-sm text-center mb-2">
+                    Search tips:
+                  </Text>
+                  <Text className="text-gray-500 text-xs text-center">
+                    • Try simpler or more common words{"\n"}• Check for typos
+                    {"\n"}• Search for single words first
+                  </Text>
                 </View>
               </View>
-            </View>
-          )}
-        </ScrollView>
+            )}
+
+            {!query && !hasSearched && (
+              <View className="py-8">
+                <Text className="text-center text-gray-600 text-lg mb-2">
+                  Search the Bible
+                </Text>
+                <Text className="text-center text-gray-500 text-sm">
+                  Enter a word or phrase to find relevant verses
+                </Text>
+                <View className="mt-4 bg-blue-50 p-4 rounded-lg">
+                  <Text className="text-blue-800 text-sm text-center font-medium mb-2">
+                    Popular Search Terms
+                  </Text>
+                  <PopularSearchTerms onSearch={handlePopularSearch} />
+                </View>
+              </View>
+            )}
+          </ScrollView>
+        )}
       </View>
     </SafeAreaView>
   );

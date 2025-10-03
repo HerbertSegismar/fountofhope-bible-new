@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
@@ -15,12 +15,12 @@ interface VerseViewProps {
   highlight?: string;
 }
 
-// Helper
+// Optimized highlighting function
 const renderVerseTextWithXmlHighlight = (
   text: string,
   baseFontSize: number,
   highlight?: string
-) => {
+): React.ReactNode[] => {
   if (!text) return [];
 
   const elements: React.ReactNode[] = [];
@@ -28,10 +28,17 @@ const renderVerseTextWithXmlHighlight = (
   const regex = /<[^/>]+>([^<]*)<\/[^>]+>|<[^>]+\/>|<\/[^>]+>/g;
   let match;
 
+  // Process XML tags first
   while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex)
-      elements.push(text.slice(lastIndex, match.index));
+    // Add text before match
+    if (match.index > lastIndex) {
+      const beforeText = text.slice(lastIndex, match.index);
+      if (beforeText) {
+        elements.push(...highlightText(beforeText, highlight));
+      }
+    }
 
+    // Process matched XML content
     if (match[1] && match[1].trim()) {
       const isNumber = /^\d+$/.test(match[1].trim());
       elements.push(
@@ -49,144 +56,196 @@ const renderVerseTextWithXmlHighlight = (
     lastIndex = regex.lastIndex;
   }
 
-  if (lastIndex < text.length) elements.push(text.slice(lastIndex));
+  // Add remaining text after last match
+  if (lastIndex < text.length) {
+    const remainingText = text.slice(lastIndex);
+    if (remainingText) {
+      elements.push(...highlightText(remainingText, highlight));
+    }
+  }
 
-  return elements
-    .map((el) => {
-      if (typeof el === "string") {
-        const cleanText = el.replace(/<[^>]+>/g, "");
-        if (!highlight) return cleanText;
-
-        const regex = new RegExp(`(${highlight})`, "gi");
-        return cleanText.split(regex).map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <Text key={`hl-${i}-${part}`} style={{ backgroundColor: "yellow" }}>
-              {part}
-            </Text>
-          ) : (
-            <Text key={`txt-${i}-${part}`}>{part}</Text>
-          )
-        );
-      }
-      return el;
-    })
-    .flat()
-    .filter(Boolean);
+  return elements;
 };
 
-export const VerseViewEnhanced: React.FC<VerseViewProps> = ({
-  verses,
-  bookName,
-  chapterNumber,
-  showVerseNumbers = true,
-  fontSize = 16,
-  onVersePress,
-  style,
-  highlight,
-}) => {
-  const { currentVersion } = useBibleDatabase();
-  const sortedVerses = [...verses].sort((a, b) => a.verse - b.verse);
+// Separate function for text highlighting to avoid nested complexity
+const highlightText = (text: string, highlight?: string): React.ReactNode[] => {
+  if (!highlight) return [text];
 
-  const renderVerses = () => {
+  const cleanText = text.replace(/<[^>]+>/g, "");
+  if (!cleanText) return [];
+
+  const regex = new RegExp(`(${escapeRegex(highlight)})`, "gi");
+  const parts = cleanText.split(regex);
+
+  return parts.map((part, i) =>
+    part.toLowerCase() === highlight.toLowerCase() ? (
+      <Text key={`hl-${i}`} style={{ backgroundColor: "yellow" }}>
+        {part}
+      </Text>
+    ) : (
+      <Text key={`txt-${i}`}>{part}</Text>
+    )
+  );
+};
+
+// Helper to escape regex special characters
+const escapeRegex = (string: string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+// Memoized verse text component
+const VerseText = React.memo(
+  ({
+    verse,
+    fontSize,
+    highlight,
+    showVerseNumbers,
+    onVersePress,
+  }: {
+    verse: Verse;
+    fontSize: number;
+    highlight?: string;
+    showVerseNumbers: boolean;
+    onVersePress?: (verse: Verse) => void;
+  }) => {
+    const renderedText = useMemo(
+      () => renderVerseTextWithXmlHighlight(verse.text, fontSize, highlight),
+      [verse.text, fontSize, highlight]
+    );
+
+    return (
+      <TouchableOpacity
+        activeOpacity={onVersePress ? 0.7 : 1}
+        onPress={() => onVersePress?.(verse)}
+      >
+        <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
+          {showVerseNumbers && (
+            <Text
+              style={{
+                fontSize: fontSize - 4,
+                fontWeight: "600",
+                color: "#1e40af",
+                marginRight: 4,
+              }}
+            >
+              {verse.verse}
+            </Text>
+          )}
+          <Text
+            style={{
+              fontSize,
+              lineHeight: fontSize * 1.4,
+              flexShrink: 1,
+              flexWrap: "wrap",
+            }}
+            numberOfLines={0}
+          >
+            {renderedText.map((el, idx) =>
+              typeof el === "string" ? (
+                <Text key={`${verse.verse}-${idx}`}>{el}</Text>
+              ) : (
+                React.cloneElement(el as React.ReactElement, {
+                  key: `${verse.verse}-${idx}`,
+                })
+              )
+            )}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
+);
+
+export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
+  ({
+    verses,
+    bookName,
+    chapterNumber,
+    showVerseNumbers = true,
+    fontSize = 16,
+    onVersePress,
+    style,
+    highlight,
+  }) => {
+    const { currentVersion } = useBibleDatabase();
+
+    const sortedVerses = useMemo(
+      () => [...verses].sort((a, b) => a.verse - b.verse),
+      [verses]
+    );
+
+    const verseRangeText = useMemo(() => {
+      if (sortedVerses.length === 0) return "";
+
+      return sortedVerses.length > 1
+        ? `${sortedVerses[0].verse}-${sortedVerses[sortedVerses.length - 1].verse}`
+        : `${sortedVerses[0].verse}`;
+    }, [sortedVerses]);
+
+    const versionText = useMemo(
+      () =>
+        currentVersion
+          ? ` • ${currentVersion.replace(".sqlite3", "").toUpperCase()}`
+          : "",
+      [currentVersion]
+    );
+
     if (sortedVerses.length === 0) {
       return (
-        <Text style={{ textAlign: "center", color: "#666" }}>
-          No verses available
-        </Text>
+        <View
+          style={[
+            style,
+            { backgroundColor: "white", padding: 16, borderRadius: 8 },
+          ]}
+        >
+          <Text style={{ textAlign: "center", color: "#666" }}>
+            No verses available
+          </Text>
+        </View>
       );
     }
 
     return (
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+      <View
+        style={[
+          {
+            backgroundColor: "white",
+            padding: 16,
+            borderRadius: 8,
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            minHeight: 40,
+            borderLeftWidth: sortedVerses[0]?.book_color ? 4 : 0,
+            borderLeftColor: sortedVerses[0]?.book_color || "transparent",
+          },
+          style,
+        ]}
       >
         <View style={{ gap: 12 }}>
           {sortedVerses.map((verse) => (
-            <TouchableOpacity
+            <VerseText
               key={verse.verse}
-              activeOpacity={onVersePress ? 0.7 : 1}
-              onPress={() => onVersePress?.(verse)}
-            >
-              <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-                {showVerseNumbers && (
-                  <Text
-                    style={{
-                      fontSize: fontSize - 4,
-                      fontWeight: "600",
-                      color: "#1e40af",
-                      marginRight: 4,
-                    }}
-                  >
-                    {verse.verse}
-                  </Text>
-                )}
-                <Text
-                  style={{
-                    fontSize,
-                    lineHeight: fontSize * 1.4,
-                    flexShrink: 1,
-                    flexWrap: "wrap",
-                    width: "100%",
-                  }}
-                  numberOfLines={0}
-                >
-                  {renderVerseTextWithXmlHighlight(
-                    verse.text,
-                    fontSize,
-                    highlight
-                  ).map((el, idx) =>
-                    typeof el === "string" ? (
-                      <Text key={`${verse.verse}-${idx}`}>{el}</Text>
-                    ) : (
-                      React.cloneElement(el as React.ReactElement, {
-                        key: `${verse.verse}-${idx}`,
-                      })
-                    )
-                  )}
-                </Text>
-              </View>
-            </TouchableOpacity>
+              verse={verse}
+              fontSize={fontSize}
+              highlight={highlight}
+              showVerseNumbers={showVerseNumbers}
+              onVersePress={onVersePress}
+            />
           ))}
         </View>
-      </ScrollView>
-    );
-  };
 
-  return (
-    <View
-      style={[
-        {
-          backgroundColor: "white",
-          padding: 16,
-          borderRadius: 8,
-          shadowOpacity: 0.1,
-          shadowRadius: 4,
-          minHeight: 40,
-          borderLeftWidth: sortedVerses[0]?.book_color ? 4 : 0,
-          borderLeftColor: sortedVerses[0]?.book_color || "transparent",
-        },
-        style,
-      ]}
-    >
-      {renderVerses()}
-      {sortedVerses.length > 0 && (
         <Text
           style={{
             color: "#1e40af",
             fontSize: 13,
             fontStyle: "italic",
-            marginTop: -4,
+            marginTop: 8,
           }}
         >
-          {bookName} {chapterNumber}:{sortedVerses[0].verse}
-          {sortedVerses.length > 1
-            ? `-${sortedVerses[sortedVerses.length - 1].verse}`
-            : ""}
-          {currentVersion &&
-            ` • ${currentVersion.replace(".sqlite3", "").toUpperCase()}`}
+          {bookName} {chapterNumber}:{verseRangeText}
+          {versionText}
         </Text>
-      )}
-    </View>
-  );
-};
+      </View>
+    );
+  }
+);
