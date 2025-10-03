@@ -162,17 +162,6 @@ export default function SearchScreen({ navigation }: Props) {
     return `Found ${results.length} result${results.length !== 1 ? "s" : ""} in ${bookCount} book${bookCount !== 1 ? "s" : ""} for "${query}"`;
   };
 
-  // Show current scope and book count for debugging
-  const ScopeInfo = () => (
-    <View className="bg-blue-50 p-2 rounded-lg mb-4 border border-blue-200">
-      <Text className="text-blue-800 text-xs text-center">
-        Searching: {scopeConfig[scope].label}
-        {scopeConfig[scope].range &&
-          ` (Books ${scopeConfig[scope].range.start}-${scopeConfig[scope].range.end})`}
-      </Text>
-    </View>
-  );
-
   if (loading) {
     return (
       <View className="flex-1 justify-center items-center bg-gray-50">
@@ -194,16 +183,16 @@ export default function SearchScreen({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50 -top-10">
+    <SafeAreaView className="flex-1 bg-gray-50 -top-10 mb-5">
       <View className="p-4">
         {/* Scope Selection */}
-        <View className="mb-6">
+        <View className="mb-2">
           <View className="flex-row justify-between">
             {(Object.entries(scopeConfig) as [SearchScope, any][]).map(
               ([value, config]) => (
                 <TouchableOpacity
                   key={value}
-                  className={`flex-1 mx-1 p-3 rounded-lg border-2 ${
+                  className={`flex-1 p-2 mx-1 rounded-lg border-2 ${
                     scope === value
                       ? "border-blue-300 bg-blue-100"
                       : "border-green-300 bg-green-100"
@@ -212,17 +201,10 @@ export default function SearchScreen({ navigation }: Props) {
                 >
                   <Text
                     className={`font-medium text-center text-sm ${
-                      scope === value ? "text-blue-600" : "text-gray-700"
+                      scope === value ? "text-blue-600" : "text-green-700"
                     }`}
                   >
                     {config.label}
-                  </Text>
-                  <Text
-                    className={`text-xs text-center mt-1 ${
-                      scope === value ? "text-blue-500" : "text-gray-500"
-                    }`}
-                  >
-                    {config.description}
                   </Text>
                 </TouchableOpacity>
               )
@@ -234,7 +216,7 @@ export default function SearchScreen({ navigation }: Props) {
         <View className="flex-row items-center mb-4">
           <View className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200">
             <TextInput
-              className="p-4 text-base"
+              className="p-2 text-base"
               placeholder={`Search ${scopeConfig[scope].label.toLowerCase()}...`}
               value={query}
               onChangeText={setQuery}
@@ -256,23 +238,16 @@ export default function SearchScreen({ navigation }: Props) {
           disabled={!query.trim()}
         >
           <Text className="text-white font-semibold text-center">
-            Search {scopeConfig[scope].label}
+            {getResultStats()
+              ? getResultStats()
+              : `Search ${scopeConfig[scope].label}`}
           </Text>
         </TouchableOpacity>
-
-        {/* Results Summary */}
-        {getResultStats() && (
-          <View className="mb-3 p-3 bg-blue-50 rounded-lg">
-            <Text className="text-blue-800 text-sm text-center">
-              {getResultStats()}
-            </Text>
-          </View>
-        )}
 
         {/* Search Results */}
         <ScrollView
           showsVerticalScrollIndicator={false}
-          className="mb-28"
+          className="mb-10"
           contentContainerStyle={{ paddingBottom: 20 }}
         >
           <View className="space-y-3">

@@ -191,12 +191,6 @@ export default function HomeScreen({ navigation }: Props) {
             onVersePress={handleVersePress}
           />
         )}
-
-        {verseRange && verseRange.length > 0 && (
-          <Text className="text-gray-500 text-xs text-center mt-2">
-            {formattedReference} • Tap to read full chapter
-          </Text>
-        )}
       </View>
 
       {/* Daily Inspiration */}

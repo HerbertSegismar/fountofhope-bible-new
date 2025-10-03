@@ -28,6 +28,9 @@ export type RootStackParamList = {
     bookId: number;
     chapter: number;
     bookName: string;
+    verse?: number;
+    bookColor?: string;
+    testament?: string;
   };
   ChapterList: {
     book: Book;

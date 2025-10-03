@@ -40,7 +40,6 @@ const renderVerseTextWithXmlHighlight = (
           style={{
             fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
             color: "#ff5722",
-            fontStyle: "italic",
           }}
         >
           {match[1]}
@@ -113,9 +112,8 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = ({
                 {showVerseNumbers && (
                   <Text
                     style={{
-                      fontSize: fontSize - 2,
+                      fontSize: fontSize - 4,
                       fontWeight: "600",
-                      fontStyle: "italic",
                       color: "#1e40af",
                       marginRight: 4,
                     }}
@@ -126,7 +124,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = ({
                 <Text
                   style={{
                     fontSize,
-                    lineHeight: fontSize * 1.6,
+                    lineHeight: fontSize * 1.4,
                     flexShrink: 1,
                     flexWrap: "wrap",
                     width: "100%",
@@ -176,9 +174,9 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = ({
         <Text
           style={{
             color: "#1e40af",
-            fontSize: 14,
+            fontSize: 13,
             fontStyle: "italic",
-            marginTop: 8,
+            marginTop: -4,
           }}
         >
           {bookName} {chapterNumber}:{sortedVerses[0].verse}

@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../types";
-import { useBibleDatabase } from "../context/BibleDatabaseContext"; // Import the context
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 type ChapterListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -30,10 +30,15 @@ const CHAPTERS_PER_ROW = 6;
 const CHAPTER_SIZE =
   (width - 32 - (CHAPTERS_PER_ROW - 1) * 12) / CHAPTERS_PER_ROW;
 
+// Interface for verse mapping
+interface VerseMapping {
+  [chapter: number]: number; // chapter -> verse count
+}
+
 export default function ChapterListScreen({ navigation, route }: Props) {
   const { book } = route.params;
   const [loading, setLoading] = useState(false);
-  const [verseCounts, setVerseCounts] = useState<{ [key: number]: number }>({});
+  const [verseMapping, setVerseMapping] = useState<VerseMapping>({});
   const [chapterCount, setChapterCount] = useState(0);
 
   // Use the context
@@ -41,7 +46,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     loadChapterData();
-  }, [book, bibleDB, currentVersion]); // Reload when database or version changes
+  }, [book, bibleDB, currentVersion]);
 
   const loadChapterData = async () => {
     if (!bibleDB) {
@@ -51,12 +56,13 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
     try {
       setLoading(true);
+
       // Get the number of chapters for this book
       const count = await bibleDB.getChapterCount(Number(book.book_number));
       setChapterCount(count);
 
-      // Load verse counts for the first few chapters
-      await loadVerseCounts(count);
+      // Load verse mapping for all chapters
+      await loadVerseMapping(count);
     } catch (error) {
       console.error("Failed to load chapter data:", error);
       Alert.alert("Error", "Failed to load chapter information");
@@ -65,62 +71,77 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     }
   };
 
-  const loadVerseCounts = async (maxChapters: number) => {
+  const loadVerseMapping = async (maxChapters: number) => {
     if (!bibleDB) return;
 
     try {
-      const counts: { [key: number]: number } = {};
+      const mapping: VerseMapping = {};
 
-      // Load verse counts for the first few chapters to improve performance
+      // Create an array of all chapters to load
       const chaptersToLoad = Array.from(
-        { length: Math.min(maxChapters, 15) }, // Increased to 15 for better coverage
+        { length: maxChapters },
         (_, i) => i + 1
       );
 
+      // Load verse counts for all chapters
       for (const chapter of chaptersToLoad) {
         try {
-          const count = await bibleDB.getVerseCount(
+          const verseCount = await bibleDB.getVerseCount(
             Number(book.book_number),
             chapter
           );
-          counts[chapter] = count;
+          mapping[chapter] = verseCount;
         } catch (error) {
           console.error(
             `Failed to load verse count for ${book.short_name} ${chapter}:`,
             error
           );
-          counts[chapter] = 0;
+          mapping[chapter] = 0; // Default to 0 if there's an error
         }
       }
 
-      setVerseCounts(counts);
+      setVerseMapping(mapping);
     } catch (error) {
-      console.error("Failed to load verse counts:", error);
+      console.error("Failed to load verse mapping:", error);
     }
   };
 
-  const chapters = Array.from({ length: chapterCount }, (_, i) => i + 1);
-
   const handleChapterPress = (chapter: number) => {
-    navigation.navigate("VerseList", {
-      book,
-      chapter,
-    });
+    // Get the verse count for this chapter from our mapping
+    const verseCount = verseMapping[chapter] || 0;
+
+    if (verseCount > 0) {
+      navigation.navigate("VerseList", {
+        book,
+        chapter,
+      });
+    } else {
+      Alert.alert(
+        "No Verses Available",
+        `No verses found for ${book.short_name} chapter ${chapter}`,
+        [{ text: "OK" }]
+      );
+    }
   };
 
   const handleLongPress = (chapter: number) => {
-    const verseCount = verseCounts[chapter];
+    const verseCount = verseMapping[chapter] || 0;
     Alert.alert(
       `${book.short_name} ${chapter}`,
-      verseCount
+      verseCount > 0
         ? `This chapter has ${verseCount} verse${verseCount !== 1 ? "s" : ""}`
-        : "Verse count not available",
+        : "No verses available for this chapter",
       [{ text: "OK" }]
     );
   };
 
   const getChapterColor = (chapter: number) => {
-    // Use book color if available, otherwise fallback to testament colors
+    const verseCount = verseMapping[chapter] || 0;
+
+    if (verseCount === 0) {
+      return "bg-gray-100 border-gray-300";
+    }
+
     if (book.book_color) {
       return "bg-white border-l-4";
     } else if (book.testament === "NT") {
@@ -137,11 +158,43 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     return {};
   };
 
-  const getTextColor = () => {
+  const getTextColor = (chapter: number) => {
+    const verseCount = verseMapping[chapter] || 0;
+
+    if (verseCount === 0) {
+      return "text-gray-400";
+    }
+
     if (book.book_color) {
       return { color: book.book_color };
     }
     return book.testament === "NT" ? "text-blue-800" : "text-green-800";
+  };
+
+  const getChapterDisplay = (chapter: number) => {
+    const verseCount = verseMapping[chapter] || 0;
+
+    if (verseCount === 0) {
+      return (
+        <View className="justify-center items-center">
+          <Text className="font-bold text-lg text-gray-400">{chapter}</Text>
+          <Text className="text-xs text-gray-400 mt-1">No verses</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View className="justify-center items-center">
+        <Text
+          className={`font-bold text-lg ${typeof getTextColor(chapter) === "string" ? getTextColor(chapter) : ""}`}
+        >
+          {chapter}
+        </Text>
+        <Text className="text-xs text-gray-500 mt-1">
+          {verseCount} v{verseCount !== 1 ? "s" : ""}
+        </Text>
+      </View>
+    );
   };
 
   const refreshData = () => {
@@ -155,6 +208,9 @@ export default function ChapterListScreen({ navigation, route }: Props) {
         <Text className="text-lg text-gray-600 mt-4">Loading chapters...</Text>
         <Text className="text-sm text-gray-500 mt-2">
           {currentVersion.replace(".sqlite3", "").toUpperCase()}
+        </Text>
+        <Text className="text-xs text-gray-400 mt-1">
+          Loading verse mapping for {book.long_name}
         </Text>
       </SafeAreaView>
     );
@@ -176,6 +232,12 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     );
   }
 
+  const chapters = Array.from({ length: chapterCount }, (_, i) => i + 1);
+  const totalVerses = Object.values(verseMapping).reduce(
+    (sum, count) => sum + count,
+    0
+  );
+
   return (
     <ScrollView
       className="flex-1 bg-gray-50"
@@ -195,7 +257,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
           </Text>
           <Text className="text-xs text-gray-400 text-center mt-1">
             {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
-            {chapterCount} chapters
+            {chapterCount} chapters • {totalVerses} total verses
           </Text>
         </View>
 
@@ -217,10 +279,9 @@ export default function ChapterListScreen({ navigation, route }: Props) {
                 onLongPress={() => handleLongPress(chapter)}
                 delayLongPress={500}
                 activeOpacity={0.7}
+                disabled={!verseMapping[chapter] || verseMapping[chapter] === 0}
               >
-                <Text className={`font-bold text-lg ${getTextColor()}`}>
-                  {chapter}
-                </Text>
+                {getChapterDisplay(chapter)}
               </TouchableOpacity>
             ))}
           </View>
@@ -248,7 +309,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
           </View>
           <View className="flex-row justify-between items-center mt-2">
             <Text className="text-sm text-gray-600">
-              Total Chapters: {chapterCount}
+              Total: {chapterCount} chapters, {totalVerses} verses
             </Text>
             <TouchableOpacity onPress={refreshData}>
               <Text className="text-blue-500 text-sm font-medium">Refresh</Text>

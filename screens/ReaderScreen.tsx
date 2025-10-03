@@ -8,6 +8,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Alert,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -28,21 +29,29 @@ interface Props {
   route: ReaderScreenRouteProp;
 }
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 export default function ReaderScreen({ navigation, route }: Props) {
-  const { bookId, chapter, bookName } = route.params;
+  const { bookId, chapter, bookName, verse: targetVerse } = route.params;
   const [verses, setVerses] = useState<Verse[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentChapter, setCurrentChapter] = useState(chapter);
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
   const [showEnd, setShowEnd] = useState(false);
+  const [hasScrolledToVerse, setHasScrolledToVerse] = useState(false);
+  const [verseHeights, setVerseHeights] = useState<{ [key: number]: number }>(
+    {}
+  );
 
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { addBookmark } = useContext(BookmarksContext);
 
-  // Animated scroll
+  // Refs for scrolling
+  const scrollViewRef = useRef<ScrollView>(null);
+  const versePositions = useRef<{ [key: number]: number }>({});
+
+  // Animated scroll for progress bar
   const scrollY = useRef(new Animated.Value(0)).current;
   const [contentHeight, setContentHeight] = useState(1);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
@@ -56,10 +65,22 @@ export default function ReaderScreen({ navigation, route }: Props) {
     if (bibleDB) loadChapter();
   }, [bibleDB, bookId, currentChapter]);
 
+  useEffect(() => {
+    // Scroll to target verse after verses are loaded and layout is complete
+    if (targetVerse && verses.length > 0 && !hasScrolledToVerse) {
+      setTimeout(() => {
+        scrollToVerse(targetVerse);
+      }, 500); // Increased timeout to ensure layout is complete
+    }
+  }, [verses, targetVerse, hasScrolledToVerse, verseHeights]);
+
   const loadChapter = async () => {
     if (!bibleDB) return;
     try {
       setLoading(true);
+      setHasScrolledToVerse(false);
+      setVerseHeights({});
+
       const bookDetails = await bibleDB.getBook(bookId);
       setBook(bookDetails);
       const chapterVerses = await bibleDB.getVerses(bookId, currentChapter);
@@ -71,6 +92,46 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setLoading(false);
       setShowEnd(false);
     }
+  };
+
+  const scrollToVerse = (verseNumber: number) => {
+    if (versePositions.current[verseNumber] && scrollViewRef.current) {
+      const versePosition = versePositions.current[verseNumber];
+      const verseHeight = verseHeights[verseNumber] || 100; // Default height if not measured
+
+      // Calculate position to center the verse
+      const scrollPosition = Math.max(
+        0,
+        versePosition - scrollViewHeight / 2 + verseHeight / 2
+      );
+
+      scrollViewRef.current.scrollTo({
+        y: scrollPosition,
+        animated: true,
+      });
+      setHasScrolledToVerse(true);
+    } else {
+      // Fallback: estimate position based on verse index
+      const verseIndex = verses.findIndex((v) => v.verse === verseNumber);
+      if (verseIndex !== -1) {
+        const estimatedPosition = verseIndex * 120; // Approximate height per verse
+        const scrollPosition = Math.max(
+          0,
+          estimatedPosition - scrollViewHeight / 2 + 60
+        ); // Center the verse
+        scrollViewRef.current?.scrollTo({
+          y: scrollPosition,
+          animated: true,
+        });
+        setHasScrolledToVerse(true);
+      }
+    }
+  };
+
+  const handleVerseLayout = (verseNumber: number, event: any) => {
+    const { y, height } = event.nativeEvent.layout;
+    versePositions.current[verseNumber] = y;
+    setVerseHeights((prev) => ({ ...prev, [verseNumber]: height }));
   };
 
   const goToPreviousChapter = () => {
@@ -107,20 +168,49 @@ export default function ReaderScreen({ navigation, route }: Props) {
             Alert.alert("Bookmarked!", "Verse added to bookmarks.");
           },
         },
+        {
+          text: "Center Verse",
+          onPress: () => scrollToVerse(verse.verse),
+        },
         { text: "Share", onPress: () => Alert.alert("Share", "Coming soon!") },
       ]
     );
+  };
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    scrollY.setValue(offsetY);
+
+    // Check if we reached the end
+    if (offsetY + scrollViewHeight >= contentHeight - 20) {
+      setShowEnd(true);
+    } else {
+      setShowEnd(false);
+    }
+  };
+
+  const getHeaderTitle = () => {
+    if (targetVerse) {
+      return `${bookName} ${currentChapter}:${targetVerse}`;
+    }
+    return `${bookName} ${currentChapter}`;
   };
 
   if (!bibleDB || loading) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
         <Text className="text-lg text-gray-600 mt-4">
-          Loading {bookName} {currentChapter}...
+          Loading {bookName} {currentChapter}
+          {targetVerse && `:${targetVerse}`}...
         </Text>
         {currentVersion && (
           <Text className="text-sm text-gray-500 mt-2">
             {currentVersion.replace(".sqlite3", "").toUpperCase()}
+          </Text>
+        )}
+        {targetVerse && (
+          <Text className="text-xs text-gray-400 mt-1">
+            Centering verse {targetVerse}
           </Text>
         )}
       </SafeAreaView>
@@ -128,8 +218,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
+    <View className="flex-1 bg-white">
       {/* Header */}
+      <View className="bg-primary w-screen h-24 flex items-start justify-end">
+        <Text className="text-white ml-6 tracking-wider text-xl">Reader</Text>
+      </View>
       <View className="bg-primary px-4 py-2">
         <View className="flex-row justify-between items-center">
           <TouchableOpacity
@@ -146,7 +239,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
               numberOfLines={2}
               adjustsFontSizeToFit
             >
-              {bookName} {currentChapter}
+              {getHeaderTitle()}
             </Text>
           </View>
 
@@ -190,22 +283,27 @@ export default function ReaderScreen({ navigation, route }: Props) {
             <Text className="text-gray-700 font-bold">A+</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Scroll to Verse Button */}
+        {targetVerse && !hasScrolledToVerse && (
+          <TouchableOpacity
+            onPress={() => scrollToVerse(targetVerse)}
+            className="bg-blue-500 px-3 py-1 rounded-full"
+          >
+            <Text className="text-white text-xs">Center {targetVerse}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
-      {/* Chapter Content with Scroll-based progress */}
-      <Animated.ScrollView
+      {/* Chapter Content */}
+      <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 40 }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: false }
-        )}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         onContentSizeChange={(_, height) => setContentHeight(height)}
         onLayout={(e) => setScrollViewHeight(e.nativeEvent.layout.height)}
-        onScrollEndDrag={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
-          const offset = e.nativeEvent.contentOffset.y;
-          if (offset + scrollViewHeight >= contentHeight - 20) setShowEnd(true);
-        }}
       >
         <ChapterViewEnhanced
           verses={verses}
@@ -214,8 +312,45 @@ export default function ReaderScreen({ navigation, route }: Props) {
           showVerseNumbers
           fontSize={fontSize}
           onVersePress={handleVersePress}
+          onVerseLayout={handleVerseLayout}
+          highlightVerse={targetVerse}
         />
-      </Animated.ScrollView>
-    </SafeAreaView>
+      </ScrollView>
+
+      {/* Quick Navigation Footer */}
+      <View className="flex-row justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-200">
+        <TouchableOpacity
+          onPress={() =>
+            navigation.navigate("VerseList", {
+              book: book || { book_number: bookId, long_name: bookName },
+              chapter: currentChapter,
+            })
+          }
+          className="bg-white px-4 py-2 rounded-lg border border-gray-300"
+        >
+          <Text className="text-gray-700 text-sm">Verse List</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() =>
+            navigation.navigate("ChapterList", {
+              book: book || { book_number: bookId, long_name: bookName },
+            })
+          }
+          className="bg-white px-4 py-2 rounded-lg border border-gray-300"
+        >
+          <Text className="text-gray-700 text-sm">All Chapters</Text>
+        </TouchableOpacity>
+
+        {targetVerse && (
+          <TouchableOpacity
+            onPress={() => scrollToVerse(targetVerse)}
+            className="bg-blue-500 px-4 py-2 rounded-lg"
+          >
+            <Text className="text-white text-sm">Center {targetVerse}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
   );
 }

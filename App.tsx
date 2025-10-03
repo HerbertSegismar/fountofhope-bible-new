@@ -20,6 +20,7 @@ import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
+import { VerseMeasurementsProvider } from "./context/VerseMeasurementsContext";
 
 // Param list types
 export type BibleStackParamList = {
@@ -191,15 +192,17 @@ function AppTabs() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <BibleDatabaseProvider>
-        <BookmarksProvider>
-          <NavigationContainer>
-            {/* Match status bar with header color */}
-            <StatusBar backgroundColor="#1e40af" style="light" />
-            <AppTabs />
-          </NavigationContainer>
-        </BookmarksProvider>
-      </BibleDatabaseProvider>
+      <VerseMeasurementsProvider>
+        <BibleDatabaseProvider>
+          <BookmarksProvider>
+            <NavigationContainer>
+              {/* Match status bar with header color */}
+              <StatusBar backgroundColor="#1e40af" style="light" />
+              <AppTabs />
+            </NavigationContainer>
+          </BookmarksProvider>
+        </BibleDatabaseProvider>
+      </VerseMeasurementsProvider>
     </SafeAreaProvider>
   );
 }
