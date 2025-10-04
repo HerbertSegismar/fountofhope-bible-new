@@ -4,11 +4,11 @@
     "slug": "fountofhope-bible",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/foh-512x512.png",
+    "icon": "./assets/fountofhope-512x512.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/foh-512x512.png",
+      "image": "./assets/fountofhope-512x512.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -23,14 +23,14 @@
       "versionCode": 1,
       "permissions": [],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/foh-512x512.png",
+        "foregroundImage": "./assets/fountofhope-512x512.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "favicon": "./assets/foh-512x512.png"
+      "favicon": "./assets/fountofhope-512x512.png"
     },
     "plugins": [
       "expo-sqlite",

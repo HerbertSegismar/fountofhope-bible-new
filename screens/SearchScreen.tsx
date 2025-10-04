@@ -33,7 +33,7 @@ interface Props {
   navigation: SearchScreenNavigationProp;
 }
 
-// Updated SearchScope type with refined categories
+// Updated SearchScope type with refined categories and individual books
 type SearchScope =
   | "whole"
   | "old-testament"
@@ -46,7 +46,8 @@ type SearchScope =
   | "gospels"
   | "historical-nt"
   | "letters"
-  | "vision";
+  | "vision"
+  | `book-${number}`; // Add individual book scope
 
 // Book ranges for each category based on your BIBLE_BOOKS_MAP
 const SCOPE_RANGES = {
@@ -129,7 +130,51 @@ const SCOPE_CONFIG = {
   },
 };
 
-// Group scopes by category for the dropdown
+// Helper function to check if a scope is a book scope
+const isBookScope = (scope: SearchScope): scope is `book-${number}` => {
+  return scope.startsWith("book-");
+};
+
+// Get book number from book scope
+const getBookNumberFromScope = (scope: SearchScope): number | null => {
+  if (isBookScope(scope)) {
+    return parseInt(scope.replace("book-", ""), 10);
+  }
+  return null;
+};
+
+// Dynamic scope config that handles individual books
+const getScopeConfig = (scope: SearchScope) => {
+  // Handle book scopes dynamically
+  if (isBookScope(scope)) {
+    const bookNumber = getBookNumberFromScope(scope);
+    if (bookNumber) {
+      const bookInfo = getBookInfo(bookNumber);
+      if (bookInfo) {
+        return {
+          label: bookInfo.long,
+          description: `Search only ${bookInfo.long}`,
+          category: "Individual Books",
+        };
+      }
+    }
+    return {
+      label: "Unknown Book",
+      description: "Search this book",
+      category: "Individual Books",
+    };
+  }
+
+  // Return existing config for non-book scopes
+  return SCOPE_CONFIG[scope];
+};
+
+// Generate individual book scopes from BIBLE_BOOKS_MAP
+const INDIVIDUAL_BOOK_SCOPES: SearchScope[] = Object.keys(BIBLE_BOOKS_MAP).map(
+  (bookNumber) => `book-${bookNumber}` as SearchScope
+);
+
+// Group scopes by category for the dropdown - now including Individual Books
 const SCOPE_CATEGORIES = {
   All: ["whole"],
   "Old Testament": [
@@ -147,9 +192,166 @@ const SCOPE_CATEGORIES = {
     "letters",
     "vision",
   ],
+  "Individual Books": INDIVIDUAL_BOOK_SCOPES,
 };
 
-// Memoized components remain the same until the main component...
+// Book color mapping for fallback colors
+const BOOK_COLORS: { [key: string]: string } = {
+  genesis: "#8B4513",
+  exodus: "#FF8C00",
+  leviticus: "#DC143C",
+  numbers: "#32CD32",
+  deuteronomy: "#1E90FF",
+  joshua: "#FFD700",
+  judges: "#8A2BE2",
+  ruth: "#FF69B4",
+  "1 samuel": "#4682B4",
+  "2 samuel": "#5F9EA0",
+  "1 kings": "#DA70D6",
+  "2 kings": "#CD5C5C",
+  "1 chronicles": "#F0E68C",
+  "2 chronicles": "#90EE90",
+  ezra: "#87CEEB",
+  nehemiah: "#D2691E",
+  esther: "#FF6347",
+  job: "#40E0D0",
+  psalms: "#FFA500",
+  proverbs: "#9ACD32",
+  ecclesiastes: "#808080",
+  "song of solomon": "#FF1493",
+  isaiah: "#4B0082",
+  jeremiah: "#008000",
+  lamentations: "#696969",
+  ezekiel: "#8FBC8F",
+  daniel: "#DAA520",
+  hosea: "#FF4500",
+  joel: "#2E8B57",
+  amos: "#A0522D",
+  obadiah: "#800000",
+  jonah: "#FFDAB9",
+  micah: "#778899",
+  nahum: "#BDB76B",
+  habakkuk: "#8B008B",
+  zephaniah: "#FF00FF",
+  haggai: "#DCDCDC",
+  zechariah: "#F5DEB3",
+  malachi: "#F4A460",
+  matthew: "#0000FF",
+  mark: "#FF0000",
+  luke: "#008000",
+  john: "#800080",
+  acts: "#FFA500",
+  romans: "#800000",
+  "1 corinthians": "#808000",
+  "2 corinthians": "#00FFFF",
+  galatians: "#FF00FF",
+  ephesians: "#C0C0C0",
+  philippians: "#36454F",
+  colossians: "#E6E6FA",
+  "1 thessalonians": "#FFB6C1",
+  "2 thessalonians": "#F0FFF0",
+  "1 timothy": "#FFFACD",
+  "2 timothy": "#ADD8E6",
+  titus: "#F08080",
+  philemon: "#E0FFFF",
+  hebrews: "#FFA07A",
+  james: "#20B2AA",
+  "1 peter": "#FFE4B5",
+  "2 peter": "#F5F5DC",
+  "1 john": "#FF69B4",
+  "2 john": "#CD853F",
+  "3 john": "#FFEBCD",
+  jude: "#DEB887",
+  revelation: "#DC143C",
+};
+
+// Helper function to get book color with fallbacks
+const getBookColor = (bookName: string, verse?: Verse): string => {
+  // Priority 1: book_color from verse object
+  if (verse?.book_color) return verse.book_color;
+
+  // Priority 2: Lookup in our color mapping
+  const normalizedBookName = bookName.toLowerCase().trim();
+  const color = BOOK_COLORS[normalizedBookName];
+  if (color) return color;
+
+  // Priority 3: Generate consistent color from book name
+  return generateColorFromString(bookName);
+};
+
+// Generate consistent color from string (fallback)
+const generateColorFromString = (str: string): string => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const colors = [
+    "#3B82F6",
+    "#EF4444",
+    "#10B981",
+    "#F59E0B",
+    "#8B5CF6",
+    "#EC4899",
+    "#06B6D4",
+    "#84CC16",
+    "#F97316",
+    "#6366F1",
+  ];
+
+  return colors[Math.abs(hash) % colors.length];
+};
+
+// Helper function to enhance search results with colors
+const enhanceSearchResultsWithColors = async (
+  results: Verse[],
+  bibleDB: any
+): Promise<Verse[]> => {
+  if (!results.length || !bibleDB) return results;
+
+  try {
+    // Get unique book numbers from results
+    const uniqueBookNumbers = [...new Set(results.map((r) => r.book_number))];
+
+    // Fetch book details for each unique book
+    const bookPromises = uniqueBookNumbers.map(async (bookNumber) => {
+      try {
+        const book = await bibleDB.getBook(bookNumber);
+        return {
+          bookNumber,
+          bookColor:
+            book?.book_color || BOOK_COLORS[book?.long_name?.toLowerCase()],
+        };
+      } catch (error) {
+        console.error(`Error fetching book ${bookNumber}:`, error);
+        return {
+          bookNumber,
+          bookColor: generateColorFromString(bookNumber.toString()),
+        };
+      }
+    });
+
+    const bookColors = await Promise.all(bookPromises);
+    const colorMap = Object.fromEntries(
+      bookColors.map((bc) => [bc.bookNumber, bc.bookColor])
+    );
+
+    // Add colors to results
+    return results.map((result) => ({
+      ...result,
+      book_color: colorMap[result.book_number],
+    }));
+  } catch (error) {
+    console.error("Error enhancing search results with colors:", error);
+    // Fallback: generate colors from book names
+    return results.map((result) => ({
+      ...result,
+      book_color: getBookColor(result.book_name || "Unknown", result),
+    }));
+  }
+};
+
+// Memoized components
 const SearchResultItem = React.memo(
   ({
     verse,
@@ -169,6 +371,7 @@ const SearchResultItem = React.memo(
     );
 
     const longName = getBookDisplayName(verse.book_number, verse.book_name);
+    const bookColor = getBookColor(longName, verse);
 
     return (
       <View style={{ marginBottom: 8 }}>
@@ -180,6 +383,8 @@ const SearchResultItem = React.memo(
           fontSize={16}
           onVersePress={onVersePress}
           highlight={query}
+          compact={true}
+          bookColor={bookColor} // Pass the book color explicitly
         />
       </View>
     );
@@ -341,7 +546,7 @@ const EmptyStates = React.memo(
   }
 );
 
-// New Scope Dropdown Component
+// Updated Scope Dropdown Component with Individual Books and Fixed Header
 const ScopeDropdown = React.memo(
   ({
     scope,
@@ -354,7 +559,7 @@ const ScopeDropdown = React.memo(
     isOpen: boolean;
     onToggle: () => void;
   }) => {
-    const currentConfig = SCOPE_CONFIG[scope];
+    const currentConfig = getScopeConfig(scope);
 
     return (
       <View className="mb-4">
@@ -385,16 +590,23 @@ const ScopeDropdown = React.memo(
             onPress={onToggle}
           >
             <View className="bg-white rounded-lg max-h-80">
+              {/* Fixed Header - Not Scrollable */}
+              <View className="bg-blue-500 px-4 py-3 border-b border-blue-400 sticky top-0 z-10">
+                <Text className="font-bold text-white text-center text-base">
+                  Select Search Scope
+                </Text>
+              </View>
+              
               <ScrollView>
                 {Object.entries(SCOPE_CATEGORIES).map(([category, scopes]) => (
                   <View key={category}>
                     <View className="bg-blue-500 px-4 py-2 border-b border-gray-200">
-                      <Text className="font-bold text-white text-sm">
+                      <Text className="font-semibold text-white text-sm">
                         {category}
                       </Text>
                     </View>
                     {scopes.map((scopeKey) => {
-                      const config = SCOPE_CONFIG[scopeKey as SearchScope];
+                      const config = getScopeConfig(scopeKey as SearchScope);
                       return (
                         <TouchableOpacity
                           key={scopeKey}
@@ -500,20 +712,28 @@ export default function SearchScreen({ navigation }: Props) {
         setError(null);
 
         // Prepare search options based on scope
-        const searchOptions: SearchOptions = {
-          bookRange: SCOPE_RANGES[scope] || undefined,
-        };
+        let searchOptions: SearchOptions = {};
 
-        console.log(
-          `Searching for "${actualQuery}" in ${scope} with range:`,
-          searchOptions.bookRange
-        );
+        if (isBookScope(scope)) {
+          // Handle individual book search
+          const bookNumber = getBookNumberFromScope(scope);
+          if (bookNumber) {
+            searchOptions.bookRange = { start: bookNumber, end: bookNumber };
+          }
+        } else {
+          // Handle category-based search
+          searchOptions.bookRange = SCOPE_RANGES[scope] || undefined;
+        }
 
         // Search with scope filtering
         const searchResults = await searchVerses(actualQuery, searchOptions);
-        setResults(searchResults);
 
-        console.log(`Found ${searchResults.length} results`);
+        // Enhance search results with book colors
+        const enhancedResults = await enhanceSearchResultsWithColors(
+          searchResults,
+          bibleDB
+        );
+        setResults(enhancedResults);
 
         // Reset scroll position when new search is performed
         setTimeout(() => {
@@ -526,7 +746,7 @@ export default function SearchScreen({ navigation }: Props) {
         setLoading(false);
       }
     },
-    [query, scope, searchVerses, scrollToTop]
+    [query, scope, searchVerses, scrollToTop, bibleDB]
   );
 
   // Handle popular search term selection
@@ -590,10 +810,17 @@ export default function SearchScreen({ navigation }: Props) {
     if (!hasSearched || loading) return null;
 
     if (results.length === 0) {
-      return `No results found for "${query}" in ${SCOPE_CONFIG[scope].label}`;
+      const config = getScopeConfig(scope);
+      return `No results found for "${query}" in ${config.label}`;
     }
 
     const bookCount = new Set(results.map((r) => r.book_number)).size;
+    const config = getScopeConfig(scope);
+
+    if (isBookScope(scope)) {
+      return `Found ${results.length} result${results.length !== 1 ? "s" : ""} in ${config.label}`;
+    }
+
     return `Found ${results.length} result${results.length !== 1 ? "s" : ""} in ${bookCount} book${bookCount !== 1 ? "s" : ""} for "${query}"`;
   }, [hasSearched, loading, results, query, scope]);
 
@@ -636,7 +863,7 @@ export default function SearchScreen({ navigation }: Props) {
           <View className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200">
             <TextInput
               className="p-4 text-base"
-              placeholder={`Search ${SCOPE_CONFIG[scope].label.toLowerCase()}...`}
+              placeholder={`Search ${getScopeConfig(scope).label.toLowerCase()}...`}
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => handleSearch()}
@@ -657,7 +884,7 @@ export default function SearchScreen({ navigation }: Props) {
           disabled={!query.trim()}
         >
           <Text className="text-white font-semibold text-center">
-            {resultStats || `Search ${SCOPE_CONFIG[scope].label}`}
+            {resultStats || `Search ${getScopeConfig(scope).label}`}
           </Text>
         </TouchableOpacity>
       </View>
@@ -680,7 +907,7 @@ export default function SearchScreen({ navigation }: Props) {
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text className="text-lg text-gray-600 mt-4">
-            Searching {SCOPE_CONFIG[scope].label}...
+            Searching {getScopeConfig(scope).label}...
           </Text>
         </View>
       </SafeAreaView>

@@ -126,7 +126,6 @@ const renderTree = (
           style={{
             fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
             color: "#ff5722",
-            backgroundColor: "rgba(0,255,0,0.2)",
           }}
         >
           {content}
@@ -442,7 +441,8 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
                   fontSize: compact ? 12 : 14,
                   fontWeight: "600",
                 }}
-                numberOfLines={2}
+                numberOfLines={1}
+                ellipsizeMode="tail"
               >
                 {bookName} {chapterNumber}:{verseRangeText}
               </Text>

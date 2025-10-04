@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleProp,
   ViewStyle,
+  TextStyle,
   LayoutChangeEvent,
   DimensionValue,
 } from "react-native";
@@ -21,7 +22,9 @@ interface ChapterViewProps {
   fontSize?: number;
   onVersePress?: (verse: Verse) => void;
   onVerseLayout?: (verseNumber: number, event: LayoutChangeEvent) => void;
+  onVerseRef?: (verseNumber: number, ref: View | null) => void;
   highlightVerse?: number;
+  highlightedVerses?: Set<number>;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -117,7 +120,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   fontSize = 16,
   onVersePress,
   onVerseLayout,
+  onVerseRef,
   highlightVerse,
+  highlightedVerses = new Set(),
   style,
 }) => {
   const { currentVersion } = useBibleDatabase();
@@ -142,28 +147,140 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     onVerseLayout?.(verseNumber, event);
   };
 
+  // Handle verse ref callback with null check
+  const handleVerseRef = (verseNumber: number, ref: View | null) => {
+    if (ref) {
+      onVerseRef?.(verseNumber, ref);
+    }
+  };
+
   const handleVersePress = (verse: Verse) => {
     onVersePress?.(verse);
   };
 
+  // Base style for verse numbers with proper typing
+  const getBaseVerseNumberStyle = (): TextStyle => ({
+    width: 20,
+    marginRight: 2,
+    fontSize: Math.max(12, fontSize - 2),
+    textAlign: "left" as const,
+    includeFontPadding: false,
+  });
+
+  // UPDATED: Enhanced getVerseStyle to handle highlighted verses
   const getVerseStyle = (verseNumber: number): ViewStyle => {
     const baseStyle: ViewStyle = {
-      flexDirection: "row",
-      alignItems: "flex-start",
+      flexDirection: "row" as const,
+      alignItems: "flex-start" as const,
       padding: 4,
       borderRadius: 8,
     };
 
-    if (highlightVerse === verseNumber) {
+    const isHighlighted = highlightedVerses.has(verseNumber);
+    const isTargetVerse = highlightVerse === verseNumber;
+
+    if (isTargetVerse && isHighlighted) {
+      // Combined style for both target and highlighted
+      return {
+        ...baseStyle,
+        backgroundColor: "#fff9e6", // Target verse background
+        borderLeftWidth: 4,
+        borderLeftColor: "#ffd700", // Target verse border
+        borderRightWidth: 4,
+        borderRightColor: "#3b82f6", // Highlight border
+      };
+    } else if (isTargetVerse) {
+      // Only target verse
       return {
         ...baseStyle,
         backgroundColor: "#fff9e6",
         borderLeftWidth: 4,
         borderLeftColor: "#ffd700",
       };
+    } else if (isHighlighted) {
+      // Only highlighted verse
+      return {
+        ...baseStyle,
+        backgroundColor: "#eff6ff", // Light blue background for highlights
+        borderLeftWidth: 4,
+        borderLeftColor: "#3b82f6", // Blue border for highlights
+      };
     }
 
     return baseStyle;
+  };
+
+  // UPDATED: Enhanced verse number style for highlighted verses with proper typing
+  const getVerseNumberStyle = (verseNumber: number): TextStyle => {
+    const baseStyle = getBaseVerseNumberStyle();
+    const isHighlighted = highlightedVerses.has(verseNumber);
+    const isTargetVerse = highlightVerse === verseNumber;
+
+    if (isTargetVerse && isHighlighted) {
+      return {
+        ...baseStyle,
+        color: "#dc2626", // Red for target verse
+        fontWeight: "bold" as const,
+      };
+    } else if (isTargetVerse) {
+      return {
+        ...baseStyle,
+        color: "#dc2626", // Red for target verse
+        fontWeight: "bold" as const,
+      };
+    } else if (isHighlighted) {
+      return {
+        ...baseStyle,
+        color: "#1e40af", // Blue for highlighted verses
+        fontWeight: "bold" as const,
+      };
+    } else {
+      return {
+        ...baseStyle,
+        color: "#1e40af", // Default blue
+        fontWeight: "normal" as const,
+      };
+    }
+  };
+
+  // Base style for verse text with proper typing
+  const getBaseVerseTextStyle = (): TextStyle => ({
+    fontSize,
+    lineHeight: fontSize * 1.6,
+    textAlign: "left" as const,
+  });
+
+  // UPDATED: Enhanced verse text style for highlighted verses with proper typing
+  const getVerseTextStyle = (verseNumber: number): TextStyle => {
+    const baseStyle = getBaseVerseTextStyle();
+    const isHighlighted = highlightedVerses.has(verseNumber);
+    const isTargetVerse = highlightVerse === verseNumber;
+
+    if (isTargetVerse && isHighlighted) {
+      return {
+        ...baseStyle,
+        color: "#1f2937", // Dark gray for target verse
+        fontWeight: "600" as const,
+      };
+    } else if (isTargetVerse) {
+      return {
+        ...baseStyle,
+        color: "#1f2937", // Dark gray for target verse
+        fontWeight: "600" as const,
+      };
+    } else if (isHighlighted) {
+      return {
+        ...baseStyle,
+        color: "#1e40af", // Blue text for highlighted verses
+        fontWeight: "500" as const,
+      };
+    } else {
+      return {
+        ...baseStyle,
+        color: "#374151", // Default gray
+        fontWeight: "normal" as const,
+      };
+    }
   };
 
   const renderVerseItem = (verse: (typeof verseElements)[0]) => (
@@ -175,32 +292,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       <View
         style={getVerseStyle(verse.verse)}
         onLayout={(event) => handleVerseLayout(verse.verse, event)}
+        ref={(ref) => handleVerseRef(verse.verse, ref)}
       >
         {showVerseNumbers && (
-          <Text
-            style={{
-              width: 20,
-              marginRight: 2,
-              fontSize: Math.max(12, fontSize - 2),
-              color: highlightVerse === verse.verse ? "#dc2626" : "#1e40af",
-              textAlign: "left",
-              includeFontPadding: false,
-              fontWeight: highlightVerse === verse.verse ? "bold" : "normal",
-            }}
-          >
-            {verse.verse}
-          </Text>
+          <Text style={getVerseNumberStyle(verse.verse)}>{verse.verse}</Text>
         )}
 
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            style={{
-              fontSize,
-              lineHeight: fontSize * 1.6,
-              textAlign: "left",
-              color: highlightVerse === verse.verse ? "#1f2937" : "#374151",
-            }}
-          >
+          <Text style={getVerseTextStyle(verse.verse)}>
             {renderVerseText(verse.elements, fontSize)}
           </Text>
         </View>
@@ -215,7 +314,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           <Text
             style={{
               color: "#6b7280",
-              textAlign: "center",
+              textAlign: "center" as const,
               fontSize: fontSize,
               lineHeight: fontSize * 1.6,
             }}
@@ -229,14 +328,23 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     return <View style={{ gap: 4 }}>{verseElements.map(renderVerseItem)}</View>;
   };
 
+  // UPDATED: Enhanced header to show highlight count
+  const getHeaderTitle = () => {
+    let title = `${bookName} ${chapterNumber}`;
+    if (highlightVerse) {
+      title += ` : ${highlightVerse}`;
+    }
+    return title;
+  };
+
   // Fixed container style with proper typing
   const containerStyle: ViewStyle = {
     backgroundColor: "#fff",
     padding: 16,
     borderRadius: 12,
     minHeight: 400,
-    alignSelf: "stretch",
-    width: "100%" as DimensionValue, // Fix the type issue here
+    alignSelf: "stretch" as const,
+    width: "100%" as DimensionValue,
   };
 
   // Apply border color if available
@@ -253,8 +361,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       <Text
         style={{
           fontSize: 20,
-          fontWeight: "700",
-          textAlign: "center",
+          fontWeight: "700" as const,
+          textAlign: "center" as const,
           marginBottom: 16,
           color: "#0f172a",
         }}
@@ -262,8 +370,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         adjustsFontSizeToFit
         minimumFontScale={0.8}
       >
-        {bookName} {chapterNumber}
-        {highlightVerse && ` : ${highlightVerse}`}
+        {getHeaderTitle()}
       </Text>
 
       {renderVerses()}
@@ -278,12 +385,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       >
         <Text
           style={{
-            textAlign: "center",
+            textAlign: "center" as const,
             color: "#6b7280",
             fontSize: 12,
           }}
         >
           {verseElements.length} verse{verseElements.length !== 1 ? "s" : ""}
+          {highlightedVerses.size > 0 &&
+            ` • ${highlightedVerses.size} highlighted`}
           {currentVersion && (
             <> • {currentVersion.replace(".sqlite3", "").toUpperCase()}</>
           )}

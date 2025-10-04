@@ -5,6 +5,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
@@ -155,6 +156,11 @@ export default function HomeScreen({ navigation }: Props) {
     >
       {/* Header */}
       <View className="items-center mb-6">
+        <Image
+          source={require("../assets/fohs-512x512.png")} // Update path as needed
+          className="size-40 mb-4 rounded-lg"
+          resizeMode="contain"
+        />
         <Text className="text-2xl font-bold text-primary text-center">
           Bible App
         </Text>
