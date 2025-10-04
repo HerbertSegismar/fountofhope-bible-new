@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import Ionicons from "react-native-vector-icons/Ionicons";
 
 interface VerseViewProps {
   verses: Verse[];
@@ -12,7 +13,7 @@ interface VerseViewProps {
   fontSize?: number;
   onVersePress?: (verse: Verse) => void;
   style?: object;
-  highlight?: string;
+  highlight?: string; // verse number to highlight
 }
 
 // Improved XML parsing function that handles nested tags
@@ -231,12 +232,14 @@ const VerseText = React.memo(
     highlight,
     showVerseNumbers,
     onVersePress,
+    isHighlighted = false,
   }: {
     verse: Verse;
     fontSize: number;
     highlight?: string;
     showVerseNumbers: boolean;
     onVersePress?: (verse: Verse) => void;
+    isHighlighted?: boolean;
   }) => {
     const renderedText = useMemo(
       () => renderVerseTextWithXmlHighlight(verse.text, fontSize, highlight),
@@ -247,19 +250,31 @@ const VerseText = React.memo(
       <TouchableOpacity
         activeOpacity={onVersePress ? 0.7 : 1}
         onPress={() => onVersePress?.(verse)}
+        style={{
+          backgroundColor: isHighlighted ? "#FFF3CD" : "transparent",
+          borderRadius: 8,
+          padding: isHighlighted ? 8 : 0,
+          borderWidth: isHighlighted ? 1 : 0,
+          borderColor: isHighlighted ? "#FFD700" : "transparent",
+        }}
       >
         <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
           {showVerseNumbers && (
-            <Text
-              style={{
-                fontSize: fontSize - 4,
-                fontWeight: "600",
-                color: "#1e40af",
-                marginRight: 4,
-              }}
-            >
-              {verse.verse}
-            </Text>
+            <View className="flex-row items-center">
+              <Text
+                style={{
+                  fontSize: fontSize - 4,
+                  fontWeight: "600",
+                  color: isHighlighted ? "#B8860B" : "#1e40af",
+                  marginRight: 6,
+                }}
+              >
+                {verse.verse}
+              </Text>
+              {isHighlighted && (
+                <Ionicons name="star" size={12} color="#B8860B" />
+              )}
+            </View>
           )}
           <Text
             style={{
@@ -267,6 +282,7 @@ const VerseText = React.memo(
               lineHeight: fontSize * 1.4,
               flexShrink: 1,
               flexWrap: "wrap",
+              color: isHighlighted ? "#8B6914" : "#000000",
             }}
             numberOfLines={0}
           >
@@ -352,21 +368,35 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
               highlight={highlight}
               showVerseNumbers={showVerseNumbers}
               onVersePress={onVersePress}
+              isHighlighted={highlight === verse.verse.toString()}
             />
           ))}
         </View>
 
-        <Text
-          style={{
-            color: "#1e40af",
-            fontSize: 13,
-            fontStyle: "italic",
-            marginTop: 8,
-          }}
-        >
-          {bookName} {chapterNumber}:{verseRangeText}
-          {versionText}
-        </Text>
+        <View className="flex-row items-center justify-between mt-3">
+          <Text
+            style={{
+              color: "#1e40af",
+              fontSize: 13,
+              fontStyle: "italic",
+            }}
+          >
+            {bookName} {chapterNumber}:{verseRangeText}
+            {versionText}
+          </Text>
+
+          {onVersePress && (
+            <TouchableOpacity
+              onPress={() => onVersePress?.(sortedVerses[0])}
+              className="flex-row items-center"
+            >
+              <Ionicons name="navigate" size={14} color="#3B82F6" />
+              <Text className="text-blue-500 text-xs font-medium ml-1">
+                Navigate
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     );
   }

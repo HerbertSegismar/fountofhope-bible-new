@@ -32,7 +32,12 @@ interface Props {
 const { width, height } = Dimensions.get("window");
 
 export default function ReaderScreen({ navigation, route }: Props) {
-  const { bookId, chapter, bookName, verse: targetVerse } = route.params;
+  // Use state to track the current bookId and chapter, but update them when route params change
+  const [bookId, setBookId] = useState(route.params.bookId);
+  const [chapter, setChapter] = useState(route.params.chapter);
+  const [bookName, setBookName] = useState(route.params.bookName);
+  const [targetVerse, setTargetVerse] = useState(route.params.verse);
+
   const [verses, setVerses] = useState<Verse[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentChapter, setCurrentChapter] = useState(chapter);
@@ -50,6 +55,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // Refs for scrolling
   const scrollViewRef = useRef<ScrollView>(null);
   const versePositions = useRef<{ [key: number]: number }>({});
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Animated scroll for progress bar
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -61,17 +67,61 @@ export default function ReaderScreen({ navigation, route }: Props) {
     Math.max(contentHeight - scrollViewHeight, 1)
   );
 
+  // Update state when route params change - THIS IS THE KEY FIX
+  useEffect(() => {
+    if (route.params.bookId !== bookId || route.params.chapter !== chapter) {
+      setBookId(route.params.bookId);
+      setChapter(route.params.chapter);
+      setCurrentChapter(route.params.chapter);
+      setBookName(route.params.bookName);
+      setTargetVerse(route.params.verse);
+      setHasScrolledToVerse(false);
+      setVerseHeights({});
+      versePositions.current = {};
+    }
+  }, [route.params]);
+
   useEffect(() => {
     if (bibleDB) loadChapter();
   }, [bibleDB, bookId, currentChapter]);
 
   useEffect(() => {
+    // Reset scroll state when target verse changes
+    if (targetVerse) {
+      setHasScrolledToVerse(false);
+    }
+  }, [targetVerse]);
+
+  useEffect(() => {
     // Scroll to target verse after verses are loaded and layout is complete
     if (targetVerse && verses.length > 0 && !hasScrolledToVerse) {
-      setTimeout(() => {
+      // Clear any existing timeout
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+
+      // Use multiple attempts to ensure we scroll to the verse
+      scrollTimeoutRef.current = setTimeout(() => {
         scrollToVerse(targetVerse);
-      }, 500); // Increased timeout to ensure layout is complete
+
+        // Second attempt after a delay in case first one fails
+        const secondAttempt = setTimeout(() => {
+          if (!hasScrolledToVerse) {
+            scrollToVerse(targetVerse);
+          }
+        }, 1000);
+
+        scrollTimeoutRef.current = secondAttempt;
+      }, 300);
     }
+
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+    };
   }, [verses, targetVerse, hasScrolledToVerse, verseHeights]);
 
   const loadChapter = async () => {
@@ -80,6 +130,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setLoading(true);
       setHasScrolledToVerse(false);
       setVerseHeights({});
+      versePositions.current = {};
 
       const bookDetails = await bibleDB.getBook(bookId);
       setBook(bookDetails);
@@ -95,11 +146,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
   };
 
   const scrollToVerse = (verseNumber: number) => {
-    if (versePositions.current[verseNumber] && scrollViewRef.current) {
-      const versePosition = versePositions.current[verseNumber];
-      const verseHeight = verseHeights[verseNumber] || 100; // Default height if not measured
+    if (!scrollViewRef.current) {
+      console.log("ScrollView ref not available");
+      return;
+    }
 
-      // Calculate position to center the verse
+    // Method 1: Use measured verse positions
+    if (versePositions.current[verseNumber] !== undefined) {
+      const versePosition = versePositions.current[verseNumber];
+      const verseHeight = verseHeights[verseNumber] || 100;
+
+      console.log(
+        `Scrolling to verse ${verseNumber} at position ${versePosition}`
+      );
+
       const scrollPosition = Math.max(
         0,
         versePosition - scrollViewHeight / 2 + verseHeight / 2
@@ -110,32 +170,50 @@ export default function ReaderScreen({ navigation, route }: Props) {
         animated: true,
       });
       setHasScrolledToVerse(true);
-    } else {
-      // Fallback: estimate position based on verse index
-      const verseIndex = verses.findIndex((v) => v.verse === verseNumber);
-      if (verseIndex !== -1) {
-        const estimatedPosition = verseIndex * 120; // Approximate height per verse
-        const scrollPosition = Math.max(
-          0,
-          estimatedPosition - scrollViewHeight / 2 + 60
-        ); // Center the verse
-        scrollViewRef.current?.scrollTo({
-          y: scrollPosition,
-          animated: true,
-        });
-        setHasScrolledToVerse(true);
-      }
+      return;
     }
+
+    // Method 2: Estimate position based on verse index
+    const verseIndex = verses.findIndex((v) => v.verse === verseNumber);
+    if (verseIndex !== -1) {
+      console.log(
+        `Using estimated position for verse ${verseNumber} at index ${verseIndex}`
+      );
+      const estimatedPosition = verseIndex * 120; // Approximate height per verse
+      const scrollPosition = Math.max(
+        0,
+        estimatedPosition - scrollViewHeight / 2 + 60
+      );
+
+      scrollViewRef.current.scrollTo({
+        y: scrollPosition,
+        animated: true,
+      });
+      setHasScrolledToVerse(true);
+      return;
+    }
+
+    console.log(`Verse ${verseNumber} not found in chapter`);
   };
 
   const handleVerseLayout = (verseNumber: number, event: any) => {
     const { y, height } = event.nativeEvent.layout;
     versePositions.current[verseNumber] = y;
     setVerseHeights((prev) => ({ ...prev, [verseNumber]: height }));
+
+    // If this is the target verse and we haven't scrolled yet, scroll to it
+    if (targetVerse === verseNumber && !hasScrolledToVerse) {
+      setTimeout(() => {
+        scrollToVerse(verseNumber);
+      }, 100);
+    }
   };
 
   const goToPreviousChapter = () => {
-    if (currentChapter > 1) setCurrentChapter((prev) => prev - 1);
+    if (currentChapter > 1) {
+      setCurrentChapter((prev) => prev - 1);
+      setTargetVerse(undefined); // Clear target verse when changing chapters
+    }
   };
 
   const goToNextChapter = async () => {
@@ -145,8 +223,12 @@ export default function ReaderScreen({ navigation, route }: Props) {
         bookId,
         currentChapter + 1
       );
-      if (nextChapterVerses.length > 0) setCurrentChapter((prev) => prev + 1);
-      else Alert.alert("End of Book", "This is the last chapter.");
+      if (nextChapterVerses.length > 0) {
+        setCurrentChapter((prev) => prev + 1);
+        setTargetVerse(undefined); // Clear target verse when changing chapters
+      } else {
+        Alert.alert("End of Book", "This is the last chapter.");
+      }
     } catch {
       Alert.alert("Error", "Cannot load next chapter");
     }
@@ -170,7 +252,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
         },
         {
           text: "Center Verse",
-          onPress: () => scrollToVerse(verse.verse),
+          onPress: () => {
+            setHasScrolledToVerse(false);
+            setTimeout(() => scrollToVerse(verse.verse), 100);
+          },
         },
         { text: "Share", onPress: () => Alert.alert("Share", "Coming soon!") },
       ]
@@ -344,7 +429,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
         {targetVerse && (
           <TouchableOpacity
-            onPress={() => scrollToVerse(targetVerse)}
+            onPress={() => {
+              setHasScrolledToVerse(false);
+              setTimeout(() => scrollToVerse(targetVerse), 100);
+            }}
             className="bg-blue-500 px-4 py-2 rounded-lg"
           >
             <Text className="text-white text-sm">Center {targetVerse}</Text>

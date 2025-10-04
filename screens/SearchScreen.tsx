@@ -14,6 +14,7 @@ import {
   ActivityIndicator,
   FlatList,
   Animated,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -32,9 +33,123 @@ interface Props {
   navigation: SearchScreenNavigationProp;
 }
 
-type SearchScope = "whole" | "ot" | "nt";
+// Updated SearchScope type with refined categories
+type SearchScope =
+  | "whole"
+  | "old-testament"
+  | "new-testament"
+  | "law"
+  | "historical"
+  | "poetic"
+  | "major-prophets"
+  | "minor-prophets"
+  | "gospels"
+  | "historical-nt"
+  | "letters"
+  | "vision";
 
-// Memoized verse item component to prevent unnecessary re-renders
+// Book ranges for each category based on your BIBLE_BOOKS_MAP
+const SCOPE_RANGES = {
+  whole: null,
+  "old-testament": { start: 10, end: 460 },
+  "new-testament": { start: 470, end: 730 },
+  law: { start: 10, end: 50 }, // Genesis to Deuteronomy
+  historical: { start: 60, end: 190 }, // Joshua to Esther
+  poetic: { start: 220, end: 260 }, // Job to Song of Solomon
+  "major-prophets": { start: 290, end: 340 }, // Isaiah to Daniel
+  "minor-prophets": { start: 350, end: 460 }, // Hosea to Malachi
+  gospels: { start: 470, end: 500 }, // Matthew to John
+  "historical-nt": { start: 510, end: 510 }, // Acts only
+  letters: { start: 520, end: 720 }, // Romans to Jude
+  vision: { start: 730, end: 730 }, // Revelation only
+};
+
+const SCOPE_CONFIG = {
+  whole: {
+    label: "Whole Bible",
+    description: "Search all books (Genesis - Revelation)",
+    category: "All",
+  },
+  "old-testament": {
+    label: "Old Testament",
+    description: "Genesis - Malachi",
+    category: "Old Testament",
+  },
+  "new-testament": {
+    label: "New Testament",
+    description: "Matthew - Revelation",
+    category: "New Testament",
+  },
+  law: {
+    label: "The Law",
+    description: "Genesis, Exodus, Leviticus, Numbers, Deuteronomy",
+    category: "Old Testament",
+  },
+  historical: {
+    label: "Historical Books",
+    description:
+      "Joshua, Judges, Ruth, Samuel, Kings, Chronicles, Ezra, Nehemiah, Esther",
+    category: "Old Testament",
+  },
+  poetic: {
+    label: "Poetic Books",
+    description: "Job, Psalms, Proverbs, Ecclesiastes, Song of Solomon",
+    category: "Old Testament",
+  },
+  "major-prophets": {
+    label: "Major Prophets",
+    description: "Isaiah, Jeremiah, Lamentations, Ezekiel, Daniel",
+    category: "Old Testament",
+  },
+  "minor-prophets": {
+    label: "Minor Prophets",
+    description:
+      "Hosea, Joel, Amos, Obadiah, Jonah, Micah, Nahum, Habakkuk, Zephaniah, Haggai, Zechariah, Malachi",
+    category: "Old Testament",
+  },
+  gospels: {
+    label: "The Gospels",
+    description: "Matthew, Mark, Luke, John",
+    category: "New Testament",
+  },
+  "historical-nt": {
+    label: "Historical Book",
+    description: "Acts",
+    category: "New Testament",
+  },
+  letters: {
+    label: "The Letters",
+    description: "Romans to Jude",
+    category: "New Testament",
+  },
+  vision: {
+    label: "The Book of Vision",
+    description: "Revelation",
+    category: "New Testament",
+  },
+};
+
+// Group scopes by category for the dropdown
+const SCOPE_CATEGORIES = {
+  All: ["whole"],
+  "Old Testament": [
+    "old-testament",
+    "law",
+    "historical",
+    "poetic",
+    "major-prophets",
+    "minor-prophets",
+  ],
+  "New Testament": [
+    "new-testament",
+    "gospels",
+    "historical-nt",
+    "letters",
+    "vision",
+  ],
+};
+
+// Memoized components remain the same until the main component...
 const SearchResultItem = React.memo(
   ({
     verse,
@@ -71,7 +186,6 @@ const SearchResultItem = React.memo(
   }
 );
 
-// Memoized popular search terms
 const PopularSearchTerms = React.memo(
   ({ onSearch }: { onSearch: (term: string) => void }) => {
     const terms = [
@@ -101,7 +215,6 @@ const PopularSearchTerms = React.memo(
   }
 );
 
-// Back to Top Button Component
 const BackToTopButton = React.memo(
   ({
     isVisible,
@@ -150,7 +263,6 @@ const BackToTopButton = React.memo(
   }
 );
 
-// Empty states component
 const EmptyStates = React.memo(
   ({
     hasSearched,
@@ -229,6 +341,97 @@ const EmptyStates = React.memo(
   }
 );
 
+// New Scope Dropdown Component
+const ScopeDropdown = React.memo(
+  ({
+    scope,
+    onScopeChange,
+    isOpen,
+    onToggle,
+  }: {
+    scope: SearchScope;
+    onScopeChange: (newScope: SearchScope) => void;
+    isOpen: boolean;
+    onToggle: () => void;
+  }) => {
+    const currentConfig = SCOPE_CONFIG[scope];
+
+    return (
+      <View className="mb-4">
+        <TouchableOpacity
+          onPress={onToggle}
+          className="bg-blue-500 border border-gray-300 rounded-lg p-4 flex-row justify-between items-center"
+        >
+          <View className="flex-1">
+            <Text className="font-semibold text-white">
+              {currentConfig.label}
+            </Text>
+            <Text className="text-white text-xs mt-1">
+              {currentConfig.description}
+            </Text>
+          </View>
+          <Text className="text-white text-lg">{isOpen ? "↑" : "↓"}</Text>
+        </TouchableOpacity>
+
+        <Modal
+          visible={isOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={onToggle}
+        >
+          <TouchableOpacity
+            className="flex-1 bg-black/50 justify-center p-4"
+            activeOpacity={1}
+            onPress={onToggle}
+          >
+            <View className="bg-white rounded-lg max-h-80">
+              <ScrollView>
+                {Object.entries(SCOPE_CATEGORIES).map(([category, scopes]) => (
+                  <View key={category}>
+                    <View className="bg-blue-500 px-4 py-2 border-b border-gray-200">
+                      <Text className="font-bold text-white text-sm">
+                        {category}
+                      </Text>
+                    </View>
+                    {scopes.map((scopeKey) => {
+                      const config = SCOPE_CONFIG[scopeKey as SearchScope];
+                      return (
+                        <TouchableOpacity
+                          key={scopeKey}
+                          onPress={() => {
+                            onScopeChange(scopeKey as SearchScope);
+                            onToggle();
+                          }}
+                          className={`px-4 py-3 border-b border-gray-100 ${
+                            scope === scopeKey ? "bg-blue-50" : "bg-white"
+                          }`}
+                        >
+                          <Text
+                            className={`font-medium ${
+                              scope === scopeKey
+                                ? "text-blue-600"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {config.label}
+                          </Text>
+                          <Text className="text-gray-500 text-xs mt-1">
+                            {config.description}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    );
+  }
+);
+
 export default function SearchScreen({ navigation }: Props) {
   const { searchVerses, bibleDB } = useBibleDatabase();
   const [hasSearched, setHasSearched] = useState(false);
@@ -238,33 +441,12 @@ export default function SearchScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<SearchScope>("whole");
   const [showBackToTop, setShowBackToTop] = useState(false);
+  const [showScopeDropdown, setShowScopeDropdown] = useState(false);
 
   // Refs and animations
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const backToTopAnimation = useRef(new Animated.Value(0)).current;
-
-  // Use the correct book ranges for your database
-  const otRange = { start: 10, end: 460 };
-  const ntRange = { start: 470, end: 730 };
-
-  const scopeConfig = {
-    whole: {
-      label: "Whole Bible",
-      description: "Search all books (1-66)",
-      range: null,
-    },
-    ot: {
-      label: "Old Testament",
-      description: "Genesis - Malachi",
-      range: otRange,
-    },
-    nt: {
-      label: "New Testament",
-      description: "Matthew - Revelation",
-      range: ntRange,
-    },
-  };
 
   // Handle scroll to show/hide back to top button
   const handleScroll = useCallback(
@@ -272,7 +454,6 @@ export default function SearchScreen({ navigation }: Props) {
       const currentScrollY = event.nativeEvent.contentOffset.y;
       scrollY.setValue(currentScrollY);
 
-      // Show back to top button after scrolling down 300 pixels
       if (currentScrollY > 300 && !showBackToTop) {
         setShowBackToTop(true);
         Animated.timing(backToTopAnimation, {
@@ -303,12 +484,6 @@ export default function SearchScreen({ navigation }: Props) {
     }).start();
   }, [backToTopAnimation]);
 
-  // Memoized scope configuration
-  const scopeEntries = useMemo(
-    () => Object.entries(scopeConfig) as [SearchScope, any][],
-    []
-  );
-
   // Handle search with debouncing and cancellation
   const handleSearch = useCallback(
     async (searchQuery?: string) => {
@@ -326,7 +501,7 @@ export default function SearchScreen({ navigation }: Props) {
 
         // Prepare search options based on scope
         const searchOptions: SearchOptions = {
-          bookRange: scopeConfig[scope].range || undefined,
+          bookRange: SCOPE_RANGES[scope] || undefined,
         };
 
         console.log(
@@ -358,7 +533,6 @@ export default function SearchScreen({ navigation }: Props) {
   const handlePopularSearch = useCallback(
     (term: string) => {
       setQuery(term);
-      // Small timeout to ensure UI responsiveness
       setTimeout(() => {
         handleSearch(term);
       }, 50);
@@ -374,32 +548,34 @@ export default function SearchScreen({ navigation }: Props) {
     []
   );
 
-  const handleScopeChange = useCallback(
-    (newScope: SearchScope) => {
-      setScope(newScope);
-      // Clear results when scope changes to avoid confusion
-      if (hasSearched) {
-        setResults([]);
-        setHasSearched(false);
-      }
-    },
-    [hasSearched]
-  );
+  const handleScopeChange = useCallback((newScope: SearchScope) => {
+    setScope(newScope);
+    setShowScopeDropdown(false);
+    // Clear results when scope changes to avoid confusion
+    setResults([]);
+    setHasSearched(false);
+  }, []);
 
   const handleVersePress = useCallback(
     (verse: Verse) => {
-      const longName = getBookDisplayName(verse.book_number, verse.book_name);
+      const bookInfo = getBookInfo(verse.book_number);
+      const longName = bookInfo?.long || verse.book_name || "Unknown Book";
+      const testament = verse.book_number >= 470 ? "NT" : "OT";
+
+      // Use the same pattern as VerseListScreen
       const tabNavigation = navigation.getParent();
       tabNavigation?.navigate("Bible", {
         screen: "Reader",
         params: {
           bookId: verse.book_number,
           chapter: verse.chapter,
+          verse: verse.verse,
           bookName: longName,
+          testament: testament,
         },
       });
     },
-    [navigation, getBookDisplayName]
+    [navigation]
   );
 
   const clearSearch = useCallback(() => {
@@ -414,7 +590,7 @@ export default function SearchScreen({ navigation }: Props) {
     if (!hasSearched || loading) return null;
 
     if (results.length === 0) {
-      return `No results found for "${query}" in ${scopeConfig[scope].label}`;
+      return `No results found for "${query}" in ${SCOPE_CONFIG[scope].label}`;
     }
 
     const bookCount = new Set(results.map((r) => r.book_number)).size;
@@ -447,37 +623,20 @@ export default function SearchScreen({ navigation }: Props) {
   const ListHeader = useMemo(
     () => (
       <View className="pb-4">
-        {/* Scope Selection */}
-        <View className="mb-2">
-          <View className="flex-row justify-between">
-            {scopeEntries.map(([value, config]) => (
-              <TouchableOpacity
-                key={value}
-                className={`flex-1 p-2 mx-1 rounded-lg border-2 ${
-                  scope === value
-                    ? "border-blue-300 bg-blue-100"
-                    : "border-green-300 bg-green-100"
-                }`}
-                onPress={() => handleScopeChange(value)}
-              >
-                <Text
-                  className={`font-medium text-center text-sm ${
-                    scope === value ? "text-blue-600" : "text-green-700"
-                  }`}
-                >
-                  {config.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        {/* Scope Selection Dropdown */}
+        <ScopeDropdown
+          scope={scope}
+          onScopeChange={handleScopeChange}
+          isOpen={showScopeDropdown}
+          onToggle={() => setShowScopeDropdown(!showScopeDropdown)}
+        />
 
         {/* Search Input */}
         <View className="flex-row items-center mb-4">
           <View className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200">
             <TextInput
-              className="p-2 text-base"
-              placeholder={`Search ${scopeConfig[scope].label.toLowerCase()}...`}
+              className="p-4 text-base"
+              placeholder={`Search ${SCOPE_CONFIG[scope].label.toLowerCase()}...`}
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={() => handleSearch()}
@@ -498,16 +657,16 @@ export default function SearchScreen({ navigation }: Props) {
           disabled={!query.trim()}
         >
           <Text className="text-white font-semibold text-center">
-            {resultStats || `Search ${scopeConfig[scope].label}`}
+            {resultStats || `Search ${SCOPE_CONFIG[scope].label}`}
           </Text>
         </TouchableOpacity>
       </View>
     ),
     [
-      scopeEntries,
       scope,
       query,
       resultStats,
+      showScopeDropdown,
       handleScopeChange,
       handleSearch,
       clearSearch,
@@ -521,7 +680,7 @@ export default function SearchScreen({ navigation }: Props) {
         <View className="flex-1 justify-center items-center">
           <ActivityIndicator size="large" color="#3B82F6" />
           <Text className="text-lg text-gray-600 mt-4">
-            Searching {scopeConfig[scope].label}...
+            Searching {SCOPE_CONFIG[scope].label}...
           </Text>
         </View>
       </SafeAreaView>
@@ -543,7 +702,6 @@ export default function SearchScreen({ navigation }: Props) {
   return (
     <SafeAreaView className="flex-1 bg-gray-50">
       <View className="flex-1 px-4">
-        {/* Use FlatList for both results and empty states to utilize full height */}
         <FlatList
           ref={flatListRef}
           data={results}
