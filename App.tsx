@@ -5,6 +5,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
+import { Platform } from "react-native";
 import "./global.css";
 
 import HomeScreen from "./screens/HomeScreen";
@@ -188,6 +189,20 @@ function AppTabs() {
   );
 }
 
+// Custom Status Bar component for auto-hiding
+function AutoHideStatusBar() {
+  return (
+    <StatusBar
+      backgroundColor="#1e40af"
+      style="light"
+      // Android only - makes status bar translucent and allows content to draw behind it
+      translucent={true}
+      // iOS only - hide status bar completely
+      hidden={false}
+    />
+  );
+}
+
 // App Entry
 export default function App() {
   return (
@@ -196,8 +211,7 @@ export default function App() {
         <BibleDatabaseProvider>
           <BookmarksProvider>
             <NavigationContainer>
-              {/* Match status bar with header color */}
-              <StatusBar backgroundColor="#1e40af" style="light" />
+              <AutoHideStatusBar />
               <AppTabs />
             </NavigationContainer>
           </BookmarksProvider>

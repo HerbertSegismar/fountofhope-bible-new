@@ -862,7 +862,7 @@ export default function SearchScreen({ navigation }: Props) {
         <View className="flex-row items-center mb-4">
           <View className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200">
             <TextInput
-              className="p-4 text-base"
+              className="p-4 text-base placeholder:text-gray-400 text-blue-500"
               placeholder={`Search ${getScopeConfig(scope).label.toLowerCase()}...`}
               value={query}
               onChangeText={setQuery}

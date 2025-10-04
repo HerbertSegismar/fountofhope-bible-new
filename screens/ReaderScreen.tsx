@@ -54,7 +54,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
   const [showEnd, setShowEnd] = useState(false);
-  const [highlightedVerses, setHighlightedVerses] = useState<Set<number>>(new Set()); // NEW: Highlighted verses state
+  const [highlightedVerses, setHighlightedVerses] = useState<Set<number>>(
+    new Set()
+  );
+
+  // NEW: Full screen state for landscape mode
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(width > height);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const [scrollThreshold] = useState(50); // Scroll distance to trigger full screen
 
   // Scroll and measurement state
   const [hasScrolledToVerse, setHasScrolledToVerse] = useState(false);
@@ -87,9 +95,61 @@ export default function ReaderScreen({ navigation, route }: Props) {
     Math.max(contentHeight - scrollViewHeight, 1)
   );
 
-  // NEW: Toggle verse highlight
+  // NEW: Handle orientation changes
+  useEffect(() => {
+    const updateLayout = () => {
+      const { width: newWidth, height: newHeight } = Dimensions.get("window");
+      const newIsLandscape = newWidth > newHeight;
+      setIsLandscape(newIsLandscape);
+
+      // Auto-exit full screen when rotating to portrait
+      if (!newIsLandscape && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+
+    const subscription = Dimensions.addEventListener("change", updateLayout);
+    return () => subscription?.remove();
+  }, [isFullScreen]);
+
+  // NEW: Toggle full screen mode
+  const toggleFullScreen = useCallback(() => {
+    setIsFullScreen((prev) => !prev);
+  }, []);
+
+  // NEW: Handle scroll for full screen functionality with improved logic
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetY = event.nativeEvent.contentOffset.y;
+    scrollY.setValue(offsetY);
+
+    // Full screen logic for landscape mode
+    if (isLandscape) {
+      const scrollDelta = offsetY - lastScrollY;
+
+      // Only allow entering full screen when scrolling down past threshold
+      if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100) {
+        setIsFullScreen(true);
+      }
+      // IMPORTANT: Remove the automatic exit on scroll up to prevent showing hidden items
+      // The full screen will now only be exited via the toggle button or orientation change
+      // else if (scrollDelta < -scrollThreshold && isFullScreen) {
+      //   setIsFullScreen(false); // REMOVED THIS LINE
+      // }
+
+      setLastScrollY(offsetY);
+    }
+
+    // Existing scroll logic
+    if (offsetY + scrollViewHeight >= contentHeight - 20) {
+      setShowEnd(true);
+    } else {
+      setShowEnd(false);
+    }
+  };
+
+  // Toggle verse highlight
   const toggleVerseHighlight = useCallback((verseNumber: number) => {
-    setHighlightedVerses(prev => {
+    setHighlightedVerses((prev) => {
       const newHighlights = new Set(prev);
       if (newHighlights.has(verseNumber)) {
         newHighlights.delete(verseNumber);
@@ -123,7 +183,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setContentReady(false);
       setScrollViewReady(false);
       setChapterContainerY(0);
-      setHighlightedVerses(new Set()); // NEW: Clear highlights when chapter changes
+      setHighlightedVerses(new Set());
+      setIsFullScreen(false); // NEW: Reset full screen on chapter change
       measurementCount.current = 0;
       scrollAttempts.current = 0;
     }
@@ -198,7 +259,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setScrollViewReady(false);
       setVerseMeasurements({});
       setChapterContainerY(0);
-      setHighlightedVerses(new Set()); // NEW: Clear highlights when loading new chapter
+      setHighlightedVerses(new Set());
+      setIsFullScreen(false); // NEW: Reset full screen when loading new chapter
       measurementCount.current = 0;
       scrollAttempts.current = 0;
       verseRefs.current = {};
@@ -385,17 +447,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     []
   );
 
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const offsetY = event.nativeEvent.contentOffset.y;
-    scrollY.setValue(offsetY);
-
-    if (offsetY + scrollViewHeight >= contentHeight - 20) {
-      setShowEnd(true);
-    } else {
-      setShowEnd(false);
-    }
-  };
-
   const goToPreviousChapter = () => {
     if (currentChapter > 1) {
       setCurrentChapter((prev) => prev - 1);
@@ -427,7 +478,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // UPDATED: Verse press handler with highlight option
   const handleVersePress = (verse: Verse) => {
     const isHighlighted = highlightedVerses.has(verse.verse);
-    
+
     Alert.alert(
       `${verse.book_name} ${verse.chapter}:${verse.verse}`,
       "Options:",
@@ -487,101 +538,115 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   return (
     <View className="flex-1 bg-white">
-      {/* Header */}
-      <View className="bg-primary w-screen h-24 flex items-start justify-end">
-        <Text className="text-white ml-6 tracking-wider text-xl">Reader</Text>
-      </View>
+      {/* Header - Conditionally rendered based on full screen mode */}
+      {!isFullScreen && (
+        <View className="bg-primary w-screen h-24 flex items-start justify-end">
+          <Text className="text-white ml-6 tracking-wider text-xl">Reader</Text>
+        </View>
+      )}
 
-      {/* Chapter Navigation */}
-      <View className="bg-primary px-4 py-2">
-        <View className="flex-row justify-between items-center">
-          <TouchableOpacity
-            onPress={goToPreviousChapter}
-            disabled={currentChapter <= 1}
-            className={`p-2 ${currentChapter <= 1 ? "opacity-30" : ""}`}
-          >
-            <Text className="text-white font-semibold text-sm">← Prev</Text>
-          </TouchableOpacity>
-
-          <View className="flex-1 items-center">
-            <Text
-              className="text-white font-bold text-center text-sm"
-              numberOfLines={2}
-              adjustsFontSizeToFit
+      {/* Chapter Navigation - Conditionally rendered based on full screen mode */}
+      {!isFullScreen && (
+        <View className="bg-primary px-4 py-2">
+          <View className="flex-row justify-between items-center">
+            <TouchableOpacity
+              onPress={goToPreviousChapter}
+              disabled={currentChapter <= 1}
+              className={`p-2 ${currentChapter <= 1 ? "opacity-30" : ""}`}
             >
-              {getHeaderTitle()}
-            </Text>
+              <Text className="text-white font-semibold text-sm">← Prev</Text>
+            </TouchableOpacity>
+
+            <View className="flex-1 items-center">
+              <Text
+                className="text-white font-bold text-center text-sm"
+                numberOfLines={2}
+                adjustsFontSizeToFit
+              >
+                {getHeaderTitle()}
+              </Text>
+            </View>
+
+            <TouchableOpacity onPress={goToNextChapter} className="p-2">
+              <Text className="text-white font-semibold text-sm">Next →</Text>
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={goToNextChapter} className="p-2">
-            <Text className="text-white font-semibold text-sm">Next →</Text>
-          </TouchableOpacity>
+          {/* Progress Bar */}
+          <View className="mt-2 w-full h-1 bg-blue-300 rounded-full">
+            <Animated.View
+              className="h-1 bg-yellow-400 rounded-full"
+              style={{
+                width: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ["0%", "100%"],
+                  extrapolate: "clamp",
+                }),
+              }}
+            />
+          </View>
         </View>
+      )}
 
-        {/* Progress Bar */}
-        <View className="mt-2 w-full h-1 bg-blue-300 rounded-full">
-          <Animated.View
-            className="h-1 bg-yellow-400 rounded-full"
-            style={{
-              width: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: ["0%", "100%"],
-                extrapolate: "clamp",
-              }),
-            }}
-          />
-        </View>
-      </View>
-
-      {/* Font Size Controls */}
-      <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
-        <Text className="text-gray-600 text-sm">Font Size</Text>
-        <View className="flex-row items-center space-x-3">
-          <TouchableOpacity
-            onPress={decreaseFontSize}
-            className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
-          >
-            <Text className="text-gray-700 font-bold">A-</Text>
-          </TouchableOpacity>
-          <Text className="text-gray-700 w-10 text-center text-sm">
-            {fontSize}px
-          </Text>
-          <TouchableOpacity
-            onPress={increaseFontSize}
-            className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
-          >
-            <Text className="text-gray-700 font-bold">A+</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Scroll to Verse Button */}
-        {targetVerse && !hasScrolledToVerse && (
-          <TouchableOpacity
-            onPress={async () => {
-              setHasScrolledToVerse(false);
-              scrollAttempts.current = 0;
-              await scrollToTargetVerse();
-            }}
-            className="bg-blue-500 px-3 py-1 rounded-full"
-          >
-            <Text className="text-white text-xs">
-              {`Center ${targetVerse}`}
+      {/* Font Size Controls - Conditionally rendered based on full screen mode */}
+      {!isFullScreen && (
+        <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
+          <Text className="text-gray-600 text-sm">Font Size</Text>
+          <View className="flex-row items-center space-x-3">
+            <TouchableOpacity
+              onPress={decreaseFontSize}
+              className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
+            >
+              <Text className="text-gray-700 font-bold">A-</Text>
+            </TouchableOpacity>
+            <Text className="text-gray-700 w-10 text-center text-sm">
+              {fontSize}px
             </Text>
-          </TouchableOpacity>
-        )}
-      </View>
+            <TouchableOpacity
+              onPress={increaseFontSize}
+              className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
+            >
+              <Text className="text-gray-700 font-bold">A+</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Scroll to Verse Button */}
+          {targetVerse && !hasScrolledToVerse && (
+            <TouchableOpacity
+              onPress={async () => {
+                setHasScrolledToVerse(false);
+                scrollAttempts.current = 0;
+                await scrollToTargetVerse();
+              }}
+              className="bg-blue-500 px-3 py-1 rounded-full"
+            >
+              <Text className="text-white text-xs">
+                {`Center ${targetVerse}`}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {/* Chapter Content */}
       <ScrollView
         ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        contentContainerStyle={{
+          paddingBottom: 40,
+          // Add extra padding in full screen mode for better reading experience
+          paddingHorizontal: isFullScreen ? 20 : 0,
+        }}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         onContentSizeChange={handleContentSizeChange}
         onLayout={handleScrollViewLayout}
       >
-        <View ref={chapterContainerRef} onLayout={handleChapterContainerLayout}>
+        <View
+          ref={chapterContainerRef}
+          onLayout={handleChapterContainerLayout}
+          className={isFullScreen ? "pt-4" : ""} // Add top padding in full screen mode
+        >
           <ChapterViewEnhanced
             verses={verses}
             bookName={bookName}
@@ -592,49 +657,65 @@ export default function ReaderScreen({ navigation, route }: Props) {
             onVerseLayout={handleVerseLayout}
             onVerseRef={handleVerseRef}
             highlightVerse={targetVerse}
-            highlightedVerses={highlightedVerses} // NEW: Pass highlighted verses
+            highlightedVerses={highlightedVerses}
+            // NEW: Pass full screen state to potentially adjust styling
+            isFullScreen={isFullScreen}
           />
         </View>
       </ScrollView>
 
-      {/* Quick Navigation Footer */}
-      <View className="flex-row justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-200">
-        <TouchableOpacity
-          onPress={() =>
-            navigation.navigate("VerseList", {
-              book: book || { book_number: bookId, long_name: bookName },
-              chapter: currentChapter,
-            })
-          }
-          className="bg-white px-4 py-2 rounded-lg border border-gray-300"
-        >
-          <Text className="text-gray-700 text-sm">Verse List</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() =>
-            navigation.navigate("ChapterList", {
-              book: book || { book_number: bookId, long_name: bookName },
-            })
-          }
-          className="bg-white px-4 py-2 rounded-lg border border-gray-300"
-        >
-          <Text className="text-gray-700 text-sm">All Chapters</Text>
-        </TouchableOpacity>
-
-        {targetVerse && (
+      {/* Quick Navigation Footer - Conditionally rendered based on full screen mode */}
+      {!isFullScreen && (
+        <View className="flex-row justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-200">
           <TouchableOpacity
-            onPress={async () => {
-              setHasScrolledToVerse(false);
-              scrollAttempts.current = 0;
-              await scrollToTargetVerse();
-            }}
-            className="bg-blue-500 px-4 py-2 rounded-lg"
+            onPress={() =>
+              navigation.navigate("VerseList", {
+                book: book || { book_number: bookId, long_name: bookName },
+                chapter: currentChapter,
+              })
+            }
+            className="bg-white px-4 py-2 rounded-lg border border-gray-300"
           >
-            <Text className="text-white text-sm">Center {targetVerse}</Text>
+            <Text className="text-gray-700 text-sm">Verse List</Text>
           </TouchableOpacity>
-        )}
-      </View>
+
+          <TouchableOpacity
+            onPress={() =>
+              navigation.navigate("ChapterList", {
+                book: book || { book_number: bookId, long_name: bookName },
+              })
+            }
+            className="bg-white px-4 py-2 rounded-lg border border-gray-300"
+          >
+            <Text className="text-gray-700 text-sm">All Chapters</Text>
+          </TouchableOpacity>
+
+          {targetVerse && (
+            <TouchableOpacity
+              onPress={async () => {
+                setHasScrolledToVerse(false);
+                scrollAttempts.current = 0;
+                await scrollToTargetVerse();
+              }}
+              className="bg-blue-500 px-4 py-2 rounded-lg"
+            >
+              <Text className="text-white text-sm">Center {targetVerse}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      {/* NEW: Full screen toggle button (visible in landscape mode) */}
+      {isLandscape && (
+        <TouchableOpacity
+          onPress={toggleFullScreen}
+          className="absolute top-10 right-14 size-12 bg-gray-800/40 bg-opacity-70 rounded-full items-center justify-center z-10"
+        >
+          <Text className="text-white text-lg font-bold">
+            {isFullScreen ? "◱" : "◲"}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
