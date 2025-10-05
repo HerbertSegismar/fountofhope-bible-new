@@ -17,11 +17,13 @@ import {
   ScrollView,
   LayoutChangeEvent,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { useFocusEffect } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList, Verse } from "../types";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
@@ -41,6 +43,14 @@ interface Props {
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
+interface Book {
+  book_number: number;
+  short_name: string;
+  long_name: string;
+  book_color?: string;
+  testament?: string;
+}
+
 export default function ReaderScreen({ navigation, route }: Props) {
   // State from route params
   const [bookId, setBookId] = useState(route.params.bookId);
@@ -55,6 +65,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
   const [showEnd, setShowEnd] = useState(false);
+
+  // Settings dropdown state
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedVersion, setSelectedVersion] = useState("");
+
+  // Navigation modal state
+  const [showNavigation, setShowNavigation] = useState(false);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [chapters, setChapters] = useState<number[]>([]);
+  const [versesList, setVersesList] = useState<number[]>([]);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<number>(1);
+  const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
+  const [isLoadingNavigation, setIsLoadingNavigation] = useState(false);
 
   // Full screen state for landscape mode
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -71,7 +95,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [scrollViewReady, setScrollViewReady] = useState(false);
   const [chapterContainerY, setChapterContainerY] = useState(0);
 
-  const { bibleDB, currentVersion } = useBibleDatabase();
+  const { bibleDB, currentVersion, availableVersions, switchVersion } =
+    useBibleDatabase();
   const { addBookmark } = useContext(BookmarksContext);
   const {
     toggleVerseHighlight,
@@ -79,7 +104,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     loading: highlightedVersesLoading,
   } = useHighlights();
 
-  // Get highlighted verses for current chapter
   const highlightedVerses = getChapterHighlights(bookId, currentChapter);
 
   // Refs
@@ -101,39 +125,254 @@ export default function ReaderScreen({ navigation, route }: Props) {
     Math.max(contentHeight - scrollViewHeight, 1)
   );
 
-  // Update landscape state when screen gains focus
+  // Helper functions
+  const getVersionDisplayName = (version: string) => {
+    const versionMap: { [key: string]: string } = {
+      "niv11.sqlite3": "NIV (2011)",
+      "csb17.sqlite3": "CSB (2017)",
+      "ylt.sqlite3": "Young's Literal Translation",
+      "nlt15.sqlite3": "NLT (2015)",
+      "nkjv.sqlite3": "NKJV",
+      "nasb.sqlite3": "NASB",
+      "logos.sqlite3": "Logos Edition",
+      "kj2.sqlite3": "King James II",
+      "esv.sqlite3": "ESV",
+      "esvgsb.sqlite3": "ESV Gospel Study Bible",
+    };
+    return versionMap[version] || version;
+  };
+
+  const getVersionDescription = (version: string) => {
+    const descriptionMap: { [key: string]: string } = {
+      "niv11.sqlite3": "New International Version",
+      "csb17.sqlite3": "Christian Standard Bible",
+      "ylt.sqlite3": "Young's Literal Translation",
+      "nlt15.sqlite3": "New Living Translation",
+      "nkjv.sqlite3": "New King James Version",
+      "nasb.sqlite3": "New American Standard Bible",
+      "logos.sqlite3": "Logos Bible",
+      "kj2.sqlite3": "King James 2",
+      "esv.sqlite3": "English Standard Version",
+      "esvgsb.sqlite3": "ESV Global Study Bible",
+    };
+    return descriptionMap[version] || "Bible translation";
+  };
+
+  // Navigation functions
+  const loadBooks = async () => {
+    if (!bibleDB) return;
+    try {
+      setIsLoadingNavigation(true);
+      const bookList = await bibleDB.getBooks();
+      setBooks(bookList);
+
+      // Set current book as selected
+      const currentBook = bookList.find((b) => b.book_number === bookId);
+      if (currentBook) {
+        setSelectedBook(currentBook);
+        setSelectedChapter(currentChapter);
+        await loadChaptersForBook(currentBook.book_number);
+        await loadVersesForChapter(currentBook.book_number, currentChapter);
+      }
+    } catch (error) {
+      console.error("Failed to load books:", error);
+      Alert.alert("Error", "Failed to load books");
+    } finally {
+      setIsLoadingNavigation(false);
+    }
+  };
+
+  const loadChaptersForBook = async (bookId: number) => {
+    if (!bibleDB) return;
+    try {
+      const chapterCount = await bibleDB.getChapterCount(bookId);
+      const chaptersArray = Array.from(
+        { length: chapterCount },
+        (_, i) => i + 1
+      );
+      setChapters(chaptersArray);
+    } catch (error) {
+      console.error("Failed to load chapters:", error);
+      setChapters([]);
+    }
+  };
+
+  const loadVersesForChapter = async (bookId: number, chapter: number) => {
+    if (!bibleDB) return;
+    try {
+      const verses = await bibleDB.getVerses(bookId, chapter);
+      const verseNumbers = verses.map((v) => v.verse);
+      setVersesList(verseNumbers);
+    } catch (error) {
+      console.error("Failed to load verses:", error);
+      setVersesList([]);
+    }
+  };
+
+  const handleBookSelect = async (book: Book) => {
+    setSelectedBook(book);
+    setSelectedChapter(1);
+    setSelectedVerse(null);
+    setIsLoadingNavigation(true);
+    try {
+      await loadChaptersForBook(book.book_number);
+      await loadVersesForChapter(book.book_number, 1);
+    } finally {
+      setIsLoadingNavigation(false);
+    }
+  };
+
+  const handleChapterSelect = async (chapter: number) => {
+    setSelectedChapter(chapter);
+    setSelectedVerse(null);
+    setIsLoadingNavigation(true);
+    try {
+      if (selectedBook) {
+        await loadVersesForChapter(selectedBook.book_number, chapter);
+      }
+    } finally {
+      setIsLoadingNavigation(false);
+    }
+  };
+
+  const handleVerseSelect = (verse: number) => {
+    setSelectedVerse(verse);
+  };
+
+  // FIXED: Use navigation to navigate to the same screen with new parameters
+  const handleNavigateToLocation = () => {
+    if (!selectedBook) return;
+
+    console.log(
+      "Navigating to:",
+      selectedBook.long_name,
+      selectedChapter,
+      selectedVerse
+    );
+
+    // Close the modal first
+    setShowNavigation(false);
+
+    // Use navigation to navigate to the same screen with new parameters
+    // This is the same pattern that works in VerseListScreen
+    navigation.navigate("Reader", {
+      bookId: selectedBook.book_number,
+      chapter: selectedChapter,
+      verse: selectedVerse || undefined,
+      bookName: selectedBook.long_name,
+      bookColor: selectedBook.book_color,
+      testament: selectedBook.testament,
+    });
+  };
+
+  const handleVersionSelect = async (version: string) => {
+    if (version === currentVersion) return;
+
+    try {
+      await switchVersion(version);
+      setShowSettings(false);
+      // Reload chapter with new version
+      await loadChapter();
+    } catch (error) {
+      console.error("Version switch failed:", error);
+      Alert.alert("Error", "Failed to switch Bible version. Please try again.");
+    }
+  };
+
+  // Load chapter data
+  const loadChapter = async () => {
+    if (!bibleDB) return;
+    try {
+      setLoading(true);
+      setHasScrolledToVerse(false);
+      setContentReady(false);
+      setScrollViewReady(false);
+      setVerseMeasurements({});
+      setChapterContainerY(0);
+      setIsFullScreen(false);
+      measurementCount.current = 0;
+      scrollAttempts.current = 0;
+      verseRefs.current = {};
+
+      console.log("Loading chapter:", bookId, currentChapter);
+
+      const bookDetails = await bibleDB.getBook(bookId);
+      setBook(bookDetails);
+      const chapterVerses = await bibleDB.getVerses(bookId, currentChapter);
+      setVerses(chapterVerses);
+      totalVerses.current = chapterVerses.length;
+
+      setTimeout(() => {
+        if (isMounted.current) {
+          setContentReady(true);
+        }
+      }, 200);
+    } catch (error) {
+      console.error("Failed to load chapter:", error);
+      Alert.alert("Error", "Failed to load chapter content");
+    } finally {
+      if (isMounted.current) {
+        setLoading(false);
+        setShowEnd(false);
+      }
+    }
+  };
+
+  // Effects
+  useEffect(() => {
+    setSelectedVersion(currentVersion);
+  }, [currentVersion]);
+
+  useEffect(() => {
+    if (showNavigation && bibleDB) {
+      loadBooks();
+    }
+  }, [showNavigation, bibleDB]);
+
+  // Load chapter when route params change - THIS IS THE KEY FIX
+  useEffect(() => {
+    console.log("Route params changed:", route.params);
+    if (bibleDB) {
+      loadChapter();
+    }
+  }, [bibleDB, route.params.bookId, route.params.chapter]);
+
+  // Also update local state when route params change
+  useEffect(() => {
+    if (route.params.bookId !== bookId || route.params.chapter !== chapter) {
+      console.log("Updating local state from route params");
+      setBookId(route.params.bookId);
+      setChapter(route.params.chapter);
+      setCurrentChapter(route.params.chapter);
+      setBookName(route.params.bookName);
+      setTargetVerse(route.params.verse);
+    }
+  }, [route.params]);
+
   useFocusEffect(
     useCallback(() => {
-      // Check current orientation when screen comes into focus
       const { width, height } = Dimensions.get("window");
       const currentIsLandscape = width > height;
       setIsLandscape(currentIsLandscape);
 
-      // Auto-exit full screen when returning to portrait
       if (!currentIsLandscape && isFullScreen) {
         setIsFullScreen(false);
       }
     }, [isFullScreen])
   );
 
-  // Handle orientation changes with improved logic
   useEffect(() => {
     const updateLayout = () => {
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
       const newIsLandscape = newWidth > newHeight;
-
-      // Always update landscape state
       setIsLandscape(newIsLandscape);
 
-      // Auto-exit full screen when rotating to portrait
       if (!newIsLandscape && isFullScreen) {
         setIsFullScreen(false);
       }
     };
 
-    // Initial check
     updateLayout();
-
     const subscription = Dimensions.addEventListener("change", updateLayout);
 
     return () => {
@@ -141,28 +380,23 @@ export default function ReaderScreen({ navigation, route }: Props) {
     };
   }, [isFullScreen]);
 
-  // Reset full screen state when chapter changes
   useEffect(() => {
     setIsFullScreen(false);
   }, [currentChapter]);
 
-  // Toggle full screen mode
   const toggleFullScreen = useCallback(() => {
     setIsFullScreen((prev) => !prev);
   }, []);
 
-  // Handle scroll for full screen functionality
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     scrollY.setValue(offsetY);
 
     if (isLandscape) {
       const scrollDelta = offsetY - lastScrollY;
-
       if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100) {
         setIsFullScreen(true);
       }
-
       setLastScrollY(offsetY);
     }
 
@@ -173,7 +407,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     }
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       isMounted.current = false;
@@ -183,31 +416,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     };
   }, []);
 
-  // Update when route params change
-  useEffect(() => {
-    if (route.params.bookId !== bookId || route.params.chapter !== chapter) {
-      setBookId(route.params.bookId);
-      setChapter(route.params.chapter);
-      setCurrentChapter(route.params.chapter);
-      setBookName(route.params.bookName);
-      setTargetVerse(route.params.verse);
-      setHasScrolledToVerse(false);
-      setVerseMeasurements({});
-      setContentReady(false);
-      setScrollViewReady(false);
-      setChapterContainerY(0);
-      setIsFullScreen(false);
-      measurementCount.current = 0;
-      scrollAttempts.current = 0;
-    }
-  }, [route.params, bookId, chapter]);
-
-  // Load chapter when bibleDB, bookId, or chapter changes
-  useEffect(() => {
-    if (bibleDB) loadChapter();
-  }, [bibleDB, bookId, currentChapter]);
-
-  // Check if all verses have been measured
   useEffect(() => {
     if (
       verses.length > 0 &&
@@ -219,7 +427,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   useEffect(() => {
     return () => {
-      // Cleanup for hot reload
       isMounted.current = false;
     };
   }, []);
@@ -239,7 +446,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       }
 
       scrollAttempts.current++;
-
       const success = scrollToTargetVerse();
 
       if (!success && scrollAttempts.current < 3) {
@@ -265,42 +471,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     hasScrolledToVerse,
     verseMeasurements,
   ]);
-
-  const loadChapter = async () => {
-    if (!bibleDB) return;
-    try {
-      setLoading(true);
-      setHasScrolledToVerse(false);
-      setContentReady(false);
-      setScrollViewReady(false);
-      setVerseMeasurements({});
-      setChapterContainerY(0);
-      setIsFullScreen(false);
-      measurementCount.current = 0;
-      scrollAttempts.current = 0;
-      verseRefs.current = {};
-
-      const bookDetails = await bibleDB.getBook(bookId);
-      setBook(bookDetails);
-      const chapterVerses = await bibleDB.getVerses(bookId, currentChapter);
-      setVerses(chapterVerses);
-      totalVerses.current = chapterVerses.length;
-
-      setTimeout(() => {
-        if (isMounted.current) {
-          setContentReady(true);
-        }
-      }, 200);
-    } catch (error) {
-      console.error("Failed to load chapter:", error);
-      Alert.alert("Error", "Failed to load chapter content");
-    } finally {
-      if (isMounted.current) {
-        setLoading(false);
-        setShowEnd(false);
-      }
-    }
-  };
 
   const measureVersePosition = useCallback(
     (verseNumber: number): Promise<number> => {
@@ -481,7 +651,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const increaseFontSize = () => setFontSize((prev) => Math.min(prev + 1, 24));
   const decreaseFontSize = () => setFontSize((prev) => Math.max(prev - 1, 12));
 
-  // Verse press handler using context
   const handleVersePress = (verse: Verse) => {
     const isHighlighted = highlightedVerses.includes(verse.verse);
 
@@ -532,14 +701,32 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   return (
     <View className="flex-1 bg-white">
-      {/* Header - Conditionally rendered based on full screen mode */}
+      {/* Header */}
       {!isFullScreen && (
         <View className="bg-primary w-screen h-24 flex items-start justify-end readerView">
-          <Text className="text-white ml-6 tracking-wider text-xl">Reader</Text>
+          <View className="flex-row justify-between items-center w-full px-6 pb-2">
+            <Text className="text-white ml-0 tracking-wider text-xl">
+              Reader
+            </Text>
+            <View className="flex-row">
+              <TouchableOpacity
+                onPress={() => setShowNavigation(true)}
+                className="p-2 mr-2"
+              >
+                <Ionicons name="navigate-outline" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowSettings(true)}
+                className="p-2"
+              >
+                <Ionicons name="settings-outline" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       )}
 
-      {/* Chapter Navigation - Conditionally rendered based on full screen mode */}
+      {/* Chapter Navigation */}
       {!isFullScreen && (
         <View className="bg-primary px-4 py-2">
           <View className="flex-row justify-between items-center">
@@ -582,7 +769,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      {/* Font Size Controls - Conditionally rendered based on full screen mode */}
+      {/* Font Size Controls */}
       {!isFullScreen && (
         <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
           <Text className="text-gray-600 text-sm">Font Size</Text>
@@ -604,7 +791,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
             </TouchableOpacity>
           </View>
 
-          {/* Scroll to Verse Button */}
           {targetVerse && !hasScrolledToVerse && (
             <TouchableOpacity
               onPress={async () => {
@@ -621,6 +807,315 @@ export default function ReaderScreen({ navigation, route }: Props) {
           )}
         </View>
       )}
+
+      {/* Settings Modal */}
+      <Modal
+        visible={showSettings}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowSettings(false)}
+      >
+        <TouchableOpacity
+          className="flex-1 bg-black/50 justify-center items-center"
+          activeOpacity={1}
+          onPress={() => setShowSettings(false)}
+        >
+          <View
+            className="bg-white rounded-xl w-11/12 max-w-md max-h-4/5"
+            onStartShouldSetResponder={() => true}
+          >
+            <View className="p-4 border-b border-gray-200">
+              <Text className="text-lg font-bold text-slate-800">Settings</Text>
+            </View>
+
+            <ScrollView className="max-h-96">
+              {/* Font Size Controls */}
+              <View className="p-4 border-b border-gray-100">
+                <Text className="text-base font-semibold text-slate-700 mb-3">
+                  Font Size
+                </Text>
+                <View className="flex-row justify-between items-center">
+                  <TouchableOpacity
+                    onPress={decreaseFontSize}
+                    className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
+                  >
+                    <Text className="text-gray-700 font-bold text-lg">A-</Text>
+                  </TouchableOpacity>
+
+                  <Text className="text-gray-700 text-lg font-medium">
+                    {fontSize}px
+                  </Text>
+
+                  <TouchableOpacity
+                    onPress={increaseFontSize}
+                    className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
+                  >
+                    <Text className="text-gray-700 font-bold text-lg">A+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Bible Version Selection */}
+              <View className="p-4">
+                <Text className="text-base font-semibold text-slate-700 mb-2">
+                  Bible Version
+                </Text>
+                <Text className="text-sm text-slate-500 mb-4">
+                  Choose your preferred Bible translation
+                </Text>
+
+                <View className="rounded-md overflow-hidden border border-gray-200">
+                  {availableVersions.map((version) => {
+                    const isSelected = selectedVersion === version;
+                    const isCurrentlyActive = currentVersion === version;
+
+                    return (
+                      <TouchableOpacity
+                        key={version}
+                        className={`p-4 border-b border-gray-100 ${
+                          isSelected
+                            ? "bg-blue-50 border-l-4 border-blue-500"
+                            : "bg-white"
+                        }`}
+                        onPress={() => handleVersionSelect(version)}
+                      >
+                        <View className="flex-row justify-between items-center">
+                          <View className="flex-1">
+                            <Text
+                              className={`text-base font-semibold ${
+                                isSelected ? "text-blue-800" : "text-slate-800"
+                              }`}
+                            >
+                              {getVersionDisplayName(version)}
+                            </Text>
+                            <Text className="text-sm text-slate-500">
+                              {getVersionDescription(version)}
+                            </Text>
+                            {isCurrentlyActive && !isSelected && (
+                              <Text className="text-xs text-green-600 mt-1">
+                                Currently active
+                              </Text>
+                            )}
+                          </View>
+
+                          <View className="ml-3">
+                            {isSelected && (
+                              <Ionicons
+                                name="checkmark-circle"
+                                size={24}
+                                color="#3b82f6"
+                              />
+                            )}
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Current Version Display */}
+              <View className="p-4 bg-slate-50 border-t border-gray-200">
+                <Text className="text-sm font-medium text-slate-600 mb-1">
+                  Current Version
+                </Text>
+                <Text className="text-base font-semibold text-slate-800">
+                  {getVersionDisplayName(currentVersion)}
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              onPress={() => setShowSettings(false)}
+              className="p-4 border-t border-gray-200 items-center"
+            >
+              <Text className="text-blue-600 font-semibold">Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Navigation Modal */}
+      <Modal
+        visible={showNavigation}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowNavigation(false)}
+      >
+        <View className="flex-1 bg-white">
+          {/* Header */}
+          <View className="bg-primary px-4 py-4">
+            <View className="flex-row justify-between items-center">
+              <TouchableOpacity
+                onPress={() => setShowNavigation(false)}
+                className="p-2"
+              >
+                <Ionicons name="arrow-back" size={24} color="white" />
+              </TouchableOpacity>
+              <Text className="text-white font-bold text-lg">
+                Navigate to...
+              </Text>
+              <View style={{ width: 24 }} />
+            </View>
+          </View>
+
+          <ScrollView className="flex-1 p-4">
+            {isLoadingNavigation && (
+              <View className="absolute top-0 left-0 right-0 bottom-0 bg-white/80 z-10 justify-center items-center">
+                <ActivityIndicator size="large" color="#3B82F6" />
+                <Text className="text-gray-600 mt-2">Loading...</Text>
+              </View>
+            )}
+
+            {/* Current Selection Display */}
+            <View className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
+              <Text className="text-blue-800 font-semibold text-center text-lg">
+                {selectedBook
+                  ? `${selectedBook.long_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
+                  : "Select a book"}
+              </Text>
+              <Text className="text-blue-600 text-sm text-center mt-1">
+                {selectedBook ? `${chapters.length} chapters available` : ""}
+              </Text>
+            </View>
+
+            {/* Book Selection */}
+            <View className="mb-6">
+              <Text className="text-lg font-semibold text-slate-800 mb-3">
+                Select Book
+              </Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                className="mb-3"
+              >
+                <View className="flex-row flex-wrap gap-2">
+                  {books.map((book) => (
+                    <TouchableOpacity
+                      key={book.book_number}
+                      onPress={() => handleBookSelect(book)}
+                      className={`px-4 py-3 rounded-lg border ${
+                        selectedBook?.book_number === book.book_number
+                          ? "bg-blue-500 border-blue-600"
+                          : "bg-white border-gray-300"
+                      }`}
+                    >
+                      <Text
+                        className={`font-medium ${
+                          selectedBook?.book_number === book.book_number
+                            ? "text-white"
+                            : "text-slate-700"
+                        }`}
+                      >
+                        {book.short_name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
+
+            {/* Chapter Selection */}
+            {selectedBook && chapters.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-lg font-semibold text-slate-800 mb-3">
+                  Select Chapter
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  className="mb-3"
+                >
+                  <View className="flex-row flex-wrap gap-2">
+                    {chapters.slice(0, 50).map((chapter) => (
+                      <TouchableOpacity
+                        key={chapter}
+                        onPress={() => handleChapterSelect(chapter)}
+                        className={`w-12 h-12 rounded-lg border items-center justify-center ${
+                          selectedChapter === chapter
+                            ? "bg-blue-500 border-blue-600"
+                            : "bg-white border-gray-300"
+                        }`}
+                      >
+                        <Text
+                          className={`font-medium ${
+                            selectedChapter === chapter
+                              ? "text-white"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          {chapter}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                {chapters.length > 50 && (
+                  <Text className="text-sm text-gray-500 text-center">
+                    {chapters.length - 50} more chapters available
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Verse Selection */}
+            {selectedBook && selectedChapter && versesList.length > 0 && (
+              <View className="mb-6">
+                <Text className="text-lg font-semibold text-slate-800 mb-3">
+                  Select Verse (Optional)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row flex-wrap gap-2">
+                    {versesList.slice(0, 100).map((verse) => (
+                      <TouchableOpacity
+                        key={verse}
+                        onPress={() => handleVerseSelect(verse)}
+                        className={`w-10 h-10 rounded-lg border items-center justify-center ${
+                          selectedVerse === verse
+                            ? "bg-blue-500 border-blue-600"
+                            : "bg-white border-gray-300"
+                        }`}
+                      >
+                        <Text
+                          className={`text-sm font-medium ${
+                            selectedVerse === verse
+                              ? "text-white"
+                              : "text-slate-700"
+                          }`}
+                        >
+                          {verse}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+                {versesList.length > 100 && (
+                  <Text className="text-sm text-gray-500 text-center">
+                    {versesList.length - 100} more verses available
+                  </Text>
+                )}
+              </View>
+            )}
+
+            {/* Action Button */}
+            <TouchableOpacity
+              onPress={handleNavigateToLocation}
+              disabled={!selectedBook || isLoadingNavigation}
+              className={`p-4 rounded-lg mt-4 ${
+                selectedBook && !isLoadingNavigation
+                  ? "bg-blue-500"
+                  : "bg-gray-300"
+              }`}
+            >
+              <Text className="text-white font-semibold text-center text-lg">
+                {selectedBook
+                  ? `Go to ${selectedBook.short_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
+                  : "Select a book to continue"}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Chapter Content */}
       <ScrollView
@@ -657,7 +1152,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </View>
       </ScrollView>
 
-      {/* Quick Navigation Footer - Conditionally rendered based on full screen mode */}
+      {/* Quick Navigation Footer */}
       {!isFullScreen && (
         <View className="flex-row justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-200">
           <TouchableOpacity
@@ -685,7 +1180,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </View>
       )}
 
-      {/* Full screen toggle button (visible in landscape mode) */}
+      {/* Full screen toggle button */}
       {isLandscape && (
         <TouchableOpacity
           onPress={toggleFullScreen}
@@ -695,6 +1190,24 @@ export default function ReaderScreen({ navigation, route }: Props) {
             {isFullScreen ? "◱" : "◲"}
           </Text>
         </TouchableOpacity>
+      )}
+
+      {/* Navigation and Settings buttons for full screen mode */}
+      {isLandscape && isFullScreen && (
+        <>
+          <TouchableOpacity
+            onPress={() => setShowNavigation(true)}
+            className="absolute top-12 left-18 size-12 bg-gray-600/40 rounded-full items-center justify-center z-50"
+          >
+            <Ionicons name="navigate-outline" size={24} color="white" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => setShowSettings(true)}
+            className="absolute top-12 left-32 size-12 bg-gray-600/40 rounded-full items-center justify-center z-50"
+          >
+            <Ionicons name="settings-outline" size={24} color="white" />
+          </TouchableOpacity>
+        </>
       )}
     </View>
   );
