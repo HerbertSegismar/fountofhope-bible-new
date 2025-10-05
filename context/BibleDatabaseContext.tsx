@@ -103,24 +103,66 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     loadVersion();
   }, []);
 
-  // Switch version (opens DB if needed, does not close others)
+  // In BibleDatabaseContext.tsx - Add this method
+  const verifyDatabaseReady = useCallback(
+    async (version: string): Promise<boolean> => {
+      const db = openDatabases.current.get(version);
+      if (!db) return false;
+
+      try {
+        // Try a simple query to verify the database is actually functional
+        await db.getBooks();
+        return true;
+      } catch (error) {
+        console.error(`Database verification failed for ${version}:`, error);
+        return false;
+      }
+    },
+    []
+  );
+
+  // Update switchVersion to include verification
   const switchVersion = useCallback(
     async (newVersion: string) => {
-      if (newVersion === currentVersion) return;
+      if (newVersion === currentVersion || isInitializing) {
+        return;
+      }
 
+      console.log(`Switching to version: ${newVersion}`);
       setIsInitializing(true);
+
       try {
+        // Save to storage first
         await AsyncStorage.setItem(STORAGE_KEY, newVersion);
+
+        // Then initialize the new database
         await initializeDatabase(newVersion);
+
+        // Verify the database is actually functional
+        const isReady = await verifyDatabaseReady(newVersion);
+        if (!isReady) {
+          throw new Error(`Database ${newVersion} failed verification`);
+        }
+
+        // Finally update the current version state
         setCurrentVersion(newVersion);
+
+        console.log(`Successfully switched to: ${newVersion}`);
       } catch (err) {
         console.error("Failed to switch version:", err);
+
+        // Revert to previous version on failure
+        await AsyncStorage.setItem(STORAGE_KEY, currentVersion);
+
+        // Re-initialize previous version
+        await initializeDatabase(currentVersion);
+
         throw err;
       } finally {
         setIsInitializing(false);
       }
     },
-    [currentVersion, initializeDatabase]
+    [currentVersion, isInitializing, initializeDatabase, verifyDatabaseReady]
   );
 
   // Refresh current DB

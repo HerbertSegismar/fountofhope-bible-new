@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -7,52 +7,13 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 const STORAGE_KEY = "selected_bible_version";
 
 const SettingsScreen = () => {
-  const {
-    currentVersion,
-    availableVersions,
-    switchVersion,
-    isInitializing,
-    getDatabase,
-  } = useBibleDatabase();
+  const { currentVersion, availableVersions, switchVersion, isInitializing } =
+    useBibleDatabase();
 
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
+  const [isSwitching, setIsSwitching] = useState(false);
 
-  useEffect(() => {
-    // Load persisted version on mount
-    const loadVersion = async () => {
-      try {
-        const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
-        if (savedVersion && savedVersion !== currentVersion) {
-          setSelectedVersion(savedVersion);
-          getDatabase(savedVersion) || switchVersion(savedVersion);
-        }
-      } catch (err) {
-        console.warn("Failed to load persisted version:", err);
-      }
-    };
-    loadVersion();
-  }, []);
-
-  useEffect(() => {
-    setSelectedVersion(currentVersion);
-  }, [currentVersion]);
-
-  const handleVersionSelect = async (version: string) => {
-    if (version === currentVersion) return;
-
-    setSelectedVersion(version);
-
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, version);
-
-      // Open database if not already open
-      getDatabase(version) || switchVersion(version);
-    } catch (error) {
-      Alert.alert("Error", "Failed to switch Bible version");
-      setSelectedVersion(currentVersion);
-    }
-  };
-
+  // Move these functions to the top to avoid "used before declaration" errors
   const getVersionDisplayName = (version: string) => {
     const versionMap: { [key: string]: string } = {
       "niv11.sqlite3": "NIV (2011)",
@@ -85,6 +46,45 @@ const SettingsScreen = () => {
     return descriptionMap[version] || "Bible translation";
   };
 
+  // Sync with current version from context
+  useEffect(() => {
+    setSelectedVersion(currentVersion);
+  }, [currentVersion]);
+
+  const handleVersionSelect = useCallback(
+    async (version: string) => {
+      if (version === currentVersion || isSwitching) return;
+
+      setSelectedVersion(version);
+      setIsSwitching(true);
+
+      try {
+        await switchVersion(version);
+        // Success - no need for additional verification
+      } catch (error: unknown) {
+        console.error("Version switch failed:", error);
+
+        let errorMessage = "Failed to switch Bible version. Please try again.";
+        if (error instanceof Error) {
+          if (
+            error.message.includes("verification") ||
+            error.message.includes("not available")
+          ) {
+            errorMessage = `The ${getVersionDisplayName(version)} database appears to be corrupted or unavailable. Please try another version.`;
+          }
+        }
+
+        Alert.alert("Error", errorMessage);
+        setSelectedVersion(currentVersion);
+      } finally {
+        setIsSwitching(false);
+      }
+    },
+    [currentVersion, isSwitching, switchVersion]
+  );
+
+  const isLoading = isInitializing || isSwitching;
+
   return (
     <ScrollView className="flex-1 bg-slate-50">
       {/* Bible Version Selection */}
@@ -99,6 +99,8 @@ const SettingsScreen = () => {
         <View className="rounded-md overflow-hidden">
           {availableVersions.map((version) => {
             const isSelected = selectedVersion === version;
+            const isCurrentlyActive = currentVersion === version;
+
             return (
               <TouchableOpacity
                 key={version}
@@ -108,7 +110,7 @@ const SettingsScreen = () => {
                     : "bg-slate-50"
                 }`}
                 onPress={() => handleVersionSelect(version)}
-                disabled={isInitializing}
+                disabled={isLoading}
               >
                 <View className="flex-row justify-between items-center">
                   <View className="flex-1">
@@ -118,12 +120,17 @@ const SettingsScreen = () => {
                     <Text className="text-sm text-slate-500">
                       {getVersionDescription(version)}
                     </Text>
+                    {isCurrentlyActive && !isSelected && (
+                      <Text className="text-xs text-green-600 mt-1">
+                        Currently active
+                      </Text>
+                    )}
                   </View>
 
                   <View className="ml-3">
-                    {isInitializing && isSelected ? (
+                    {isLoading && isSelected ? (
                       <Text className="text-sm italic text-slate-500">
-                        Loading...
+                        Switching...
                       </Text>
                     ) : (
                       isSelected && (
@@ -141,27 +148,25 @@ const SettingsScreen = () => {
           })}
         </View>
 
-        {isInitializing && (
+        {isLoading && (
           <View className="mt-2 items-center">
             <Text className="text-sm italic text-slate-500">
-              Switching version...
+              Switching version... Please wait
             </Text>
           </View>
         )}
       </View>
 
-      {/* About Section */}
+      {/* Current Version Display */}
       <View className="bg-white m-4 p-4 rounded-xl shadow-md">
-        <Text className="text-lg font-bold text-slate-800 mb-2">About</Text>
-        <View className="flex-row justify-between py-2">
-          <Text className="text-base text-slate-500">Current Version</Text>
+        <Text className="text-lg font-bold text-slate-800 mb-2">
+          Current Version
+        </Text>
+        <View className="flex-row justify-between items-center py-2">
+          <Text className="text-base text-slate-600">Active Translation</Text>
           <Text className="text-base font-medium text-slate-800">
             {getVersionDisplayName(currentVersion)}
           </Text>
-        </View>
-        <View className="flex-row justify-between py-2">
-          <Text className="text-base text-slate-500">App Version</Text>
-          <Text className="text-base font-medium text-slate-800">1.0.0</Text>
         </View>
       </View>
     </ScrollView>

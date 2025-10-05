@@ -167,31 +167,19 @@ export default function BookmarksScreen({ navigation }: Props) {
       .join(",");
   };
 
-  // Fixed navigation handler
+  // In BookmarksScreen.tsx - Update the handleBookmarkPress function
   const handleBookmarkPress = useCallback(
     (verse: Verse) => {
       const longName =
         bookLongNames[verse.book_number] || verse.book_name || "Unknown Book";
 
-      const tabNavigator = navigation.getParent();
-      if (tabNavigator) {
-        tabNavigator.navigate("Bible", {
-          screen: "Reader",
-          params: {
-            bookId: verse.book_number,
-            chapter: verse.chapter,
-            bookName: longName,
-            verse: verse.verse,
-          },
-        });
-      } else {
-        navigation.navigate("Reader", {
-          bookId: verse.book_number,
-          chapter: verse.chapter,
-          bookName: longName,
-          verse: verse.verse,
-        });
-      }
+      // Navigate within the Bookmarks stack to avoid conflicts
+      navigation.navigate("Reader", {
+        bookId: verse.book_number,
+        chapter: verse.chapter,
+        bookName: longName,
+        verse: verse.verse,
+      });
     },
     [bookLongNames, navigation]
   );
@@ -220,9 +208,12 @@ export default function BookmarksScreen({ navigation }: Props) {
     loadBookmarks();
   }, [loadBookmarks]);
 
-  const handleGoToBible = useCallback(() => {
-    navigation.navigate("Home");
-  }, [navigation]);
+    const handleGoToBible = useCallback(() => {
+      const tabNavigator = navigation.getParent();
+      if (tabNavigator) {
+        tabNavigator.navigate("Bible");
+      }
+    }, [navigation]);
 
   // FIXED: Load bookmarks on mount only once
   useEffect(() => {

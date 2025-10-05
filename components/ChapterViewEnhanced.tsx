@@ -26,6 +26,7 @@ interface ChapterViewProps {
   highlightVerse?: number;
   highlightedVerses?: Set<number>;
   style?: StyleProp<ViewStyle>;
+  bookId?: number;
   isFullScreen?: boolean;
 }
 

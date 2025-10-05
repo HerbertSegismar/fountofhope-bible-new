@@ -117,7 +117,7 @@ const renderTree = (
     if (node.type === "text") {
       return renderTextWithHighlight(node.content, highlight, `text-${key}`);
     } else if (node.type === "self-closing-tag") {
-      // Handle self-closing tags like <t/>
+
       const content = extractContentFromTag(node.fullTag);
       const isNumber = /^\d+$/.test(content.trim());
       return (
@@ -139,7 +139,7 @@ const renderTree = (
       );
 
       const isNumber =
-        node.tag === "t" &&
+        node.tag === "S" &&
         node.children.length === 1 &&
         node.children[0].type === "text" &&
         /^\d+$/.test(node.children[0].content.trim());
@@ -245,7 +245,6 @@ const getContrastColor = (backgroundColor: string): string => {
   return luminance > 0.5 ? "#505455ff" : "#ffffff";
 };
 
-// Memoized verse text component
 const VerseText = React.memo(
   ({
     verse,
@@ -264,9 +263,16 @@ const VerseText = React.memo(
     isHighlighted?: boolean;
     compact?: boolean;
   }) => {
+    const adjustedFontSize = compact ? fontSize - 2 : fontSize;
+
     const renderedText = useMemo(
-      () => renderVerseTextWithXmlHighlight(verse.text, fontSize, highlight),
-      [verse.text, fontSize, highlight]
+      () =>
+        renderVerseTextWithXmlHighlight(
+          verse.text,
+          adjustedFontSize,
+          highlight
+        ),
+      [verse.text, adjustedFontSize, highlight]
     );
 
     return (
@@ -292,13 +298,15 @@ const VerseText = React.memo(
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                minWidth: compact ? 24 : 28,
-                marginRight: compact ? 4 : 6,
+                minWidth: compact ? 18 : 20,
+                marginRight: compact ? 0 : 2,
               }}
             >
               <Text
                 style={{
-                  fontSize: compact ? fontSize - 6 : fontSize - 4,
+                  fontSize: compact
+                    ? adjustedFontSize - 6
+                    : adjustedFontSize - 4,
                   fontWeight: "600",
                   color: isHighlighted ? "#B8860B" : "#1e40af",
                 }}
@@ -315,15 +323,16 @@ const VerseText = React.memo(
               )}
             </View>
           )}
+          {/* Remove fontSize from parent Text to allow children to control their sizes */}
           <Text
             style={{
               fontSize: compact ? fontSize - 2 : fontSize,
-              lineHeight: compact ? fontSize * 1.2 : fontSize * 1.4,
+              lineHeight: adjustedFontSize * 1.4,
               flexShrink: 1,
               flexWrap: "wrap",
               color: isHighlighted ? "#8B6914" : "#000000",
             }}
-            numberOfLines={compact ? 3 : 0}
+            numberOfLines={compact ? 7 : 0}
             ellipsizeMode="tail"
           >
             {renderedText}

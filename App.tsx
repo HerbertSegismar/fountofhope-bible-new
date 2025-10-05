@@ -5,7 +5,6 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
-import { Platform } from "react-native";
 import "./global.css";
 
 import HomeScreen from "./screens/HomeScreen";
@@ -22,6 +21,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 import { VerseMeasurementsProvider } from "./context/VerseMeasurementsContext";
+import { HighlightsProvider } from "./context/HighlightsContext";
 
 // Param list types
 export type BibleStackParamList = {
@@ -29,7 +29,7 @@ export type BibleStackParamList = {
   BookList: undefined;
   ChapterList: { book: Book };
   VerseList: { book: Book; chapter: number };
-  Reader: { bookId: number; chapter: number; bookName: string };
+  Reader: { bookId: number; chapter: number; bookName: string; verse?: number };
 };
 
 export type SearchStackParamList = {
@@ -38,10 +38,18 @@ export type SearchStackParamList = {
 
 export type BookmarksStackParamList = {
   Bookmarks: undefined;
+  Reader: { bookId: number; chapter: number; bookName: string; verse?: number };
 };
 
 export type SettingsStackParamList = {
   Settings: undefined;
+};
+
+export type RootStackParamList = {
+  Bible: BibleStackParamList;
+  SearchTab: SearchStackParamList;
+  BookmarksTab: BookmarksStackParamList;
+  SettingsTab: SettingsStackParamList;
 };
 
 // Navigators
@@ -49,7 +57,7 @@ const BibleStackNav = createStackNavigator<BibleStackParamList>();
 const SearchStackNav = createStackNavigator<SearchStackParamList>();
 const BookmarksStackNav = createStackNavigator<BookmarksStackParamList>();
 const SettingsStackNav = createStackNavigator<SettingsStackParamList>();
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<RootStackParamList>();
 
 // Shared header theme
 const headerTheme = {
@@ -58,7 +66,7 @@ const headerTheme = {
   headerTintColor: "#fff",
 };
 
-// Bible Stack Navigator (Reader inside here)
+// Bible Stack Navigator
 function BibleStack() {
   return (
     <BibleStackNav.Navigator screenOptions={headerTheme}>
@@ -109,7 +117,7 @@ function SearchStack() {
   );
 }
 
-// Bookmarks Stack
+// Bookmarks Stack - UPDATED to include Reader screen
 function BookmarksStack() {
   return (
     <BookmarksStackNav.Navigator screenOptions={headerTheme}>
@@ -117,6 +125,14 @@ function BookmarksStack() {
         name="Bookmarks"
         component={BookmarksScreen}
         options={{ title: "Saved Bookmarks" }}
+      />
+      <BookmarksStackNav.Screen
+        name="Reader"
+        component={ReaderScreen}
+        options={({ route }) => ({
+          title: `${route.params.bookName} ${route.params.chapter}`,
+          headerShown: false,
+        })}
       />
     </BookmarksStackNav.Navigator>
   );
@@ -195,9 +211,7 @@ function AutoHideStatusBar() {
     <StatusBar
       backgroundColor="#1e40af"
       style="light"
-      // Android only - makes status bar translucent and allows content to draw behind it
       translucent={true}
-      // iOS only - hide status bar completely
       hidden={false}
     />
   );
@@ -207,16 +221,18 @@ function AutoHideStatusBar() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <VerseMeasurementsProvider>
-        <BibleDatabaseProvider>
-          <BookmarksProvider>
-            <NavigationContainer>
-              <AutoHideStatusBar />
-              <AppTabs />
-            </NavigationContainer>
-          </BookmarksProvider>
-        </BibleDatabaseProvider>
-      </VerseMeasurementsProvider>
+      <HighlightsProvider>
+        <VerseMeasurementsProvider>
+          <BibleDatabaseProvider>
+            <BookmarksProvider>
+              <NavigationContainer>
+                <AutoHideStatusBar />
+                <AppTabs />
+              </NavigationContainer>
+            </BookmarksProvider>
+          </BibleDatabaseProvider>
+        </VerseMeasurementsProvider>
+      </HighlightsProvider>
     </SafeAreaProvider>
   );
 }

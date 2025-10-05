@@ -16,16 +16,17 @@ import {
   Alert,
   ScrollView,
   LayoutChangeEvent,
-  findNodeHandle,
-  UIManager,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
+import { useFocusEffect } from "@react-navigation/native";
 import { RootStackParamList, Verse } from "../types";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
+import { useHighlights } from "../context/HighlightsContext";
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -38,7 +39,7 @@ interface Props {
   route: ReaderScreenRouteProp;
 }
 
-const { width, height } = Dimensions.get("window");
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 export default function ReaderScreen({ navigation, route }: Props) {
   // State from route params
@@ -54,15 +55,12 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
   const [showEnd, setShowEnd] = useState(false);
-  const [highlightedVerses, setHighlightedVerses] = useState<Set<number>>(
-    new Set()
-  );
 
-  // NEW: Full screen state for landscape mode
+  // Full screen state for landscape mode
   const [isFullScreen, setIsFullScreen] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(width > height);
+  const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
   const [lastScrollY, setLastScrollY] = useState(0);
-  const [scrollThreshold] = useState(50); // Scroll distance to trigger full screen
+  const [scrollThreshold] = useState(50);
 
   // Scroll and measurement state
   const [hasScrolledToVerse, setHasScrolledToVerse] = useState(false);
@@ -75,6 +73,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { addBookmark } = useContext(BookmarksContext);
+  const { toggleVerseHighlight, getChapterHighlights } = useHighlights();
+
+  // Get highlighted verses for current chapter
+  const highlightedVerses = getChapterHighlights(bookId, currentChapter);
 
   // Refs
   const scrollViewRef = useRef<ScrollView>(null);
@@ -95,11 +97,28 @@ export default function ReaderScreen({ navigation, route }: Props) {
     Math.max(contentHeight - scrollViewHeight, 1)
   );
 
-  // NEW: Handle orientation changes
+  // Update landscape state when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      // Check current orientation when screen comes into focus
+      const { width, height } = Dimensions.get("window");
+      const currentIsLandscape = width > height;
+      setIsLandscape(currentIsLandscape);
+
+      // Auto-exit full screen when returning to portrait
+      if (!currentIsLandscape && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    }, [isFullScreen])
+  );
+
+  // Handle orientation changes with improved logic
   useEffect(() => {
     const updateLayout = () => {
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
       const newIsLandscape = newWidth > newHeight;
+
+      // Always update landscape state
       setIsLandscape(newIsLandscape);
 
       // Auto-exit full screen when rotating to portrait
@@ -108,57 +127,47 @@ export default function ReaderScreen({ navigation, route }: Props) {
       }
     };
 
+    // Initial check
+    updateLayout();
+
     const subscription = Dimensions.addEventListener("change", updateLayout);
-    return () => subscription?.remove();
+
+    return () => {
+      subscription?.remove();
+    };
   }, [isFullScreen]);
 
-  // NEW: Toggle full screen mode
+  // Reset full screen state when chapter changes
+  useEffect(() => {
+    setIsFullScreen(false);
+  }, [currentChapter]);
+
+  // Toggle full screen mode
   const toggleFullScreen = useCallback(() => {
     setIsFullScreen((prev) => !prev);
   }, []);
 
-  // NEW: Handle scroll for full screen functionality with improved logic
+  // Handle scroll for full screen functionality
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offsetY = event.nativeEvent.contentOffset.y;
     scrollY.setValue(offsetY);
 
-    // Full screen logic for landscape mode
     if (isLandscape) {
       const scrollDelta = offsetY - lastScrollY;
 
-      // Only allow entering full screen when scrolling down past threshold
       if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100) {
         setIsFullScreen(true);
       }
-      // IMPORTANT: Remove the automatic exit on scroll up to prevent showing hidden items
-      // The full screen will now only be exited via the toggle button or orientation change
-      // else if (scrollDelta < -scrollThreshold && isFullScreen) {
-      //   setIsFullScreen(false); // REMOVED THIS LINE
-      // }
 
       setLastScrollY(offsetY);
     }
 
-    // Existing scroll logic
     if (offsetY + scrollViewHeight >= contentHeight - 20) {
       setShowEnd(true);
     } else {
       setShowEnd(false);
     }
   };
-
-  // Toggle verse highlight
-  const toggleVerseHighlight = useCallback((verseNumber: number) => {
-    setHighlightedVerses((prev) => {
-      const newHighlights = new Set(prev);
-      if (newHighlights.has(verseNumber)) {
-        newHighlights.delete(verseNumber);
-      } else {
-        newHighlights.add(verseNumber);
-      }
-      return newHighlights;
-    });
-  }, []);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -183,8 +192,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setContentReady(false);
       setScrollViewReady(false);
       setChapterContainerY(0);
-      setHighlightedVerses(new Set());
-      setIsFullScreen(false); // NEW: Reset full screen on chapter change
+      setIsFullScreen(false);
       measurementCount.current = 0;
       scrollAttempts.current = 0;
     }
@@ -201,10 +209,18 @@ export default function ReaderScreen({ navigation, route }: Props) {
       verses.length > 0 &&
       Object.keys(verseMeasurements).length === verses.length
     ) {
+      // Measurements complete
     }
   }, [verseMeasurements, verses.length]);
 
-  // Main scrolling effect - SIMPLIFIED
+  useEffect(() => {
+    return () => {
+      // Cleanup for hot reload
+      isMounted.current = false;
+    };
+  }, []);
+
+  // Main scrolling effect
   useEffect(() => {
     if (!targetVerse || !contentReady || !scrollViewReady || hasScrolledToVerse)
       return;
@@ -213,7 +229,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       if (!isMounted.current) return;
 
       if (scrollAttempts.current >= 3) {
-        // Use fallback method
         scrollToVerseFallback(targetVerse);
         setHasScrolledToVerse(true);
         return;
@@ -224,17 +239,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
       const success = scrollToTargetVerse();
 
       if (!success && scrollAttempts.current < 3) {
-        // Schedule next attempt
         scrollTimeoutRef.current = setTimeout(attemptScroll, 500);
       }
     };
 
-    // Clear any existing timeout
     if (scrollTimeoutRef.current) {
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Start attempts with a delay to ensure layout is complete
     scrollTimeoutRef.current = setTimeout(attemptScroll, 300);
 
     return () => {
@@ -259,8 +271,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setScrollViewReady(false);
       setVerseMeasurements({});
       setChapterContainerY(0);
-      setHighlightedVerses(new Set());
-      setIsFullScreen(false); // NEW: Reset full screen when loading new chapter
+      setIsFullScreen(false);
       measurementCount.current = 0;
       scrollAttempts.current = 0;
       verseRefs.current = {};
@@ -271,7 +282,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setVerses(chapterVerses);
       totalVerses.current = chapterVerses.length;
 
-      // Mark content as ready after a brief delay
       setTimeout(() => {
         if (isMounted.current) {
           setContentReady(true);
@@ -298,7 +308,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
         }
 
         try {
-          // Use measure to get position relative to ScrollView
           verseRef.measure((x, y, width, height, pageX, pageY) => {
             resolve(pageY);
           });
@@ -316,7 +325,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       return false;
     }
 
-    // Method 1: Try to measure the verse position directly
     try {
       const versePosition = await measureVersePosition(targetVerse);
       const verseHeight = verseMeasurements[targetVerse]?.height || 100;
@@ -339,7 +347,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       console.error("Error in direct measurement:", error);
     }
 
-    // Method 2: Use verse index with cumulative height calculation
     return scrollToVerseFallback(targetVerse);
   }, [targetVerse, verseMeasurements, scrollViewHeight, measureVersePosition]);
 
@@ -349,11 +356,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
       const verseIndex = verses.findIndex((v) => v.verse === verseNumber);
       if (verseIndex === -1) return false;
-      // Calculate cumulative height up to this verse
+
       let cumulativeHeight = 0;
       for (let i = 0; i < verseIndex; i++) {
         const verse = verses[i];
-        const verseHeight = verseMeasurements[verse.verse]?.height || 80; // Default height
+        const verseHeight = verseMeasurements[verse.verse]?.height || 80;
         cumulativeHeight += verseHeight;
       }
 
@@ -374,26 +381,22 @@ export default function ReaderScreen({ navigation, route }: Props) {
     [verses, verseMeasurements, scrollViewHeight]
   );
 
-  // UPDATED: Store verse ref and basic measurements
   const handleVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
       const { layout } = event.nativeEvent;
       const { height } = layout;
 
-      // Only update if we have valid measurements
       if (height > 0) {
         setVerseMeasurements((prev) => {
-          // Don't update if we already have this measurement
           if (prev[verseNumber] && prev[verseNumber].height === height) {
             return prev;
           }
 
-          const newMeasurements = { ...prev, [verseNumber]: { y: 0, height } }; // y will be measured separately
+          const newMeasurements = { ...prev, [verseNumber]: { y: 0, height } };
           measurementCount.current = Object.keys(newMeasurements).length;
           return newMeasurements;
         });
 
-        // If this is our target verse and we haven't scrolled yet, try to scroll after a delay
         if (
           verseNumber === targetVerse &&
           !hasScrolledToVerse &&
@@ -422,7 +425,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       if (ref) {
         verseRefs.current[verseNumber] = ref;
       } else {
-        // Optional: Remove the ref when component unmounts
         delete verseRefs.current[verseNumber];
       }
     },
@@ -475,9 +477,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const increaseFontSize = () => setFontSize((prev) => Math.min(prev + 1, 24));
   const decreaseFontSize = () => setFontSize((prev) => Math.max(prev - 1, 12));
 
-  // UPDATED: Verse press handler with highlight option
+  // Verse press handler using context
   const handleVersePress = (verse: Verse) => {
-    const isHighlighted = highlightedVerses.has(verse.verse);
+    const isHighlighted = highlightedVerses.includes(verse.verse);
 
     Alert.alert(
       `${verse.book_name} ${verse.chapter}:${verse.verse}`,
@@ -486,7 +488,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         { text: "Cancel", style: "cancel" },
         {
           text: isHighlighted ? "Remove Highlight" : "Highlight",
-          onPress: () => toggleVerseHighlight(verse.verse),
+          onPress: () => toggleVerseHighlight(verse),
         },
         {
           text: "Bookmark",
@@ -518,20 +520,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   if (!bibleDB || loading) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
-        <Text className="text-lg text-gray-600 mt-4">
-          Loading {bookName} ${currentChapter}
-          {targetVerse && `:${targetVerse}`}...
-        </Text>
-        {currentVersion && (
-          <Text className="text-sm text-gray-500 mt-2">
-            {currentVersion.replace(".sqlite3", "").toUpperCase()}
-          </Text>
-        )}
-        {targetVerse && (
-          <Text className="text-xs text-gray-400 mt-1">
-            Centering verse {targetVerse}
-          </Text>
-        )}
+        <ActivityIndicator size="large" color="#3B82F6" />
       </SafeAreaView>
     );
   }
@@ -634,7 +623,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingBottom: 40,
-          // Add extra padding in full screen mode for better reading experience
           paddingHorizontal: isFullScreen ? 20 : 0,
         }}
         onScroll={handleScroll}
@@ -645,20 +633,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
         <View
           ref={chapterContainerRef}
           onLayout={handleChapterContainerLayout}
-          className={isFullScreen ? "pt-4" : ""} // Add top padding in full screen mode
+          className={isFullScreen ? "pt-4" : ""}
         >
           <ChapterViewEnhanced
             verses={verses}
             bookName={bookName}
             chapterNumber={currentChapter}
+            bookId={bookId}
             showVerseNumbers
             fontSize={fontSize}
             onVersePress={handleVersePress}
             onVerseLayout={handleVerseLayout}
             onVerseRef={handleVerseRef}
             highlightVerse={targetVerse}
-            highlightedVerses={highlightedVerses}
-            // NEW: Pass full screen state to potentially adjust styling
+            highlightedVerses={new Set(highlightedVerses)}
             isFullScreen={isFullScreen}
           />
         </View>
@@ -689,27 +677,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
           >
             <Text className="text-gray-700 text-sm">All Chapters</Text>
           </TouchableOpacity>
-
-          {targetVerse && (
-            <TouchableOpacity
-              onPress={async () => {
-                setHasScrolledToVerse(false);
-                scrollAttempts.current = 0;
-                await scrollToTargetVerse();
-              }}
-              className="bg-blue-500 px-4 py-2 rounded-lg"
-            >
-              <Text className="text-white text-sm">Center {targetVerse}</Text>
-            </TouchableOpacity>
-          )}
         </View>
       )}
 
-      {/* NEW: Full screen toggle button (visible in landscape mode) */}
+      {/* Full screen toggle button (visible in landscape mode) */}
       {isLandscape && (
         <TouchableOpacity
           onPress={toggleFullScreen}
-          className="absolute top-10 right-14 size-12 bg-gray-800/40 bg-opacity-70 rounded-full items-center justify-center z-10"
+          className="absolute top-12 right-18 size-12 bg-gray-600/40 rounded-full items-center justify-center z-50"
         >
           <Text className="text-white text-lg font-bold">
             {isFullScreen ? "◱" : "◲"}
