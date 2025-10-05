@@ -1,10 +1,17 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Dimensions,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
-const STORAGE_KEY = "selected_bible_version";
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 const SettingsScreen = () => {
   const { currentVersion, availableVersions, switchVersion, isInitializing } =
@@ -12,6 +19,7 @@ const SettingsScreen = () => {
 
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
 
   // Move these functions to the top to avoid "used before declaration" errors
   const getVersionDisplayName = (version: string) => {
@@ -45,6 +53,25 @@ const SettingsScreen = () => {
     };
     return descriptionMap[version] || "Bible translation";
   };
+
+  useEffect(() => {
+    const updateLayout = () => {
+      const { width: newWidth, height: newHeight } = Dimensions.get("window");
+      const newIsLandscape = newWidth > newHeight;
+
+      // Always update landscape state
+      setIsLandscape(newIsLandscape);
+    };
+
+    // Initial check
+    updateLayout();
+
+    const subscription = Dimensions.addEventListener("change", updateLayout);
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
 
   // Sync with current version from context
   useEffect(() => {
@@ -86,7 +113,9 @@ const SettingsScreen = () => {
   const isLoading = isInitializing || isSwitching;
 
   return (
-    <ScrollView className="flex-1 bg-slate-50">
+    <ScrollView
+      className={`flex-1 bg-slate-50 ${isLandscape ? "mr-12" : "mr-0"}`}
+    >
       {/* Bible Version Selection */}
       <View className="bg-white m-4 p-4 rounded-xl shadow-md">
         <Text className="text-lg font-bold text-slate-800 mb-1">

@@ -73,7 +73,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { addBookmark } = useContext(BookmarksContext);
-  const { toggleVerseHighlight, getChapterHighlights } = useHighlights();
+  const {
+    toggleVerseHighlight,
+    getChapterHighlights,
+    loading: highlightedVersesLoading,
+  } = useHighlights();
 
   // Get highlighted verses for current chapter
   const highlightedVerses = getChapterHighlights(bookId, currentChapter);
@@ -517,10 +521,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
     return `${bookName} ${currentChapter}`;
   };
 
-  if (!bibleDB || loading) {
+  if (!bibleDB || loading || highlightedVersesLoading) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
         <ActivityIndicator size="large" color="#3B82F6" />
+        <Text className="text-gray-600 mt-2">Loading...</Text>
       </SafeAreaView>
     );
   }
@@ -529,7 +534,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
     <View className="flex-1 bg-white">
       {/* Header - Conditionally rendered based on full screen mode */}
       {!isFullScreen && (
-        <View className="bg-primary w-screen h-24 flex items-start justify-end">
+        <View className="bg-primary w-screen h-24 flex items-start justify-end readerView">
           <Text className="text-white ml-6 tracking-wider text-xl">Reader</Text>
         </View>
       )}

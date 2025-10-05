@@ -5,6 +5,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
+import { useWindowDimensions } from "react-native";
 import "./global.css";
 
 import HomeScreen from "./screens/HomeScreen";
@@ -61,15 +62,27 @@ const Tab = createBottomTabNavigator<RootStackParamList>();
 
 // Shared header theme
 const headerTheme = {
-  headerShown: true,
   headerStyle: { backgroundColor: "#1e40af" },
   headerTintColor: "#fff",
 };
 
+// Hook to determine if device is in Portrait mode
+function usePortraitMode() {
+  const { width, height } = useWindowDimensions();
+  return height > width;
+}
+
 // Bible Stack Navigator
 function BibleStack() {
+  const isPortrait = usePortraitMode();
+
   return (
-    <BibleStackNav.Navigator screenOptions={headerTheme}>
+    <BibleStackNav.Navigator
+      screenOptions={{
+        ...headerTheme,
+        headerShown: isPortrait, // Conditional header based on orientation
+      }}
+    >
       <BibleStackNav.Screen
         name="Home"
         component={HomeScreen}
@@ -97,7 +110,7 @@ function BibleStack() {
         component={ReaderScreen}
         options={({ route }) => ({
           title: `${route.params.bookName} ${route.params.chapter}`,
-          headerShown: false,
+          headerShown: false, // Keep Reader header hidden even in landscape
         })}
       />
     </BibleStackNav.Navigator>
@@ -106,8 +119,15 @@ function BibleStack() {
 
 // Search Stack
 function SearchStack() {
+  const isPortrait = usePortraitMode();
+
   return (
-    <SearchStackNav.Navigator screenOptions={headerTheme}>
+    <SearchStackNav.Navigator
+      screenOptions={{
+        ...headerTheme,
+        headerShown: isPortrait, // Conditional header based on orientation
+      }}
+    >
       <SearchStackNav.Screen
         name="Search"
         component={SearchScreen}
@@ -117,22 +137,21 @@ function SearchStack() {
   );
 }
 
-// Bookmarks Stack - UPDATED to include Reader screen
+// Bookmarks Stack
 function BookmarksStack() {
+  const isPortrait = usePortraitMode();
+
   return (
-    <BookmarksStackNav.Navigator screenOptions={headerTheme}>
+    <BookmarksStackNav.Navigator
+      screenOptions={{
+        ...headerTheme,
+        headerShown: isPortrait, // Conditional header based on orientation
+      }}
+    >
       <BookmarksStackNav.Screen
         name="Bookmarks"
         component={BookmarksScreen}
         options={{ title: "Saved Bookmarks" }}
-      />
-      <BookmarksStackNav.Screen
-        name="Reader"
-        component={ReaderScreen}
-        options={({ route }) => ({
-          title: `${route.params.bookName} ${route.params.chapter}`,
-          headerShown: false,
-        })}
       />
     </BookmarksStackNav.Navigator>
   );
@@ -140,8 +159,15 @@ function BookmarksStack() {
 
 // Settings Stack
 function SettingsStack() {
+  const isPortrait = usePortraitMode();
+
   return (
-    <SettingsStackNav.Navigator screenOptions={headerTheme}>
+    <SettingsStackNav.Navigator
+      screenOptions={{
+        ...headerTheme,
+        headerShown: isPortrait, // Conditional header based on orientation
+      }}
+    >
       <SettingsStackNav.Screen
         name="Settings"
         component={SettingsScreen}
@@ -153,10 +179,14 @@ function SettingsStack() {
 
 // Bottom Tabs
 function AppTabs() {
+
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarStyle: { backgroundColor: "#1e40af" },
+        tabBarStyle: {
+          backgroundColor: "#1e40af",
+          display: "flex",
+        },
         tabBarActiveTintColor: "#f59e0b",
         tabBarInactiveTintColor: "#93c5fd",
         headerShown: false,

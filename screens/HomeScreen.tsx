@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
+  Dimensions,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
@@ -20,6 +21,8 @@ interface Props {
   navigation: HomeScreenNavigationProp;
 }
 
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
 export default function HomeScreen({ navigation }: Props) {
   const { bibleDB, currentVersion, isInitializing } = useBibleDatabase();
 
@@ -27,11 +30,31 @@ export default function HomeScreen({ navigation }: Props) {
   const [bookLongName, setBookLongName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
 
   useEffect(() => {
     if (bibleDB && !isInitializing) loadRandomVerse();
     else setLoading(true);
   }, [bibleDB, currentVersion, isInitializing]);
+
+   useEffect(() => {
+      const updateLayout = () => {
+        const { width: newWidth, height: newHeight } = Dimensions.get("window");
+        const newIsLandscape = newWidth > newHeight;
+  
+        // Always update landscape state
+        setIsLandscape(newIsLandscape);
+      };
+  
+      // Initial check
+      updateLayout();
+  
+      const subscription = Dimensions.addEventListener("change", updateLayout);
+  
+      return () => {
+        subscription?.remove();
+      };
+    }, []);
 
   const getRandomBookChapter = async (): Promise<{
     bookId: number;
@@ -138,16 +161,6 @@ export default function HomeScreen({ navigation }: Props) {
     );
   }
 
-  // Formatted reference for Verse of the Day
-  const formattedReference =
-    verseRange && verseRange.length > 0
-      ? `${bookLongName} ${verseRange[0].chapter}:${verseRange[0].verse}${
-          verseRange.length > 1
-            ? `-${verseRange[verseRange.length - 1].verse}`
-            : ""
-        }`
-      : "";
-
   return (
     <ScrollView
       className="flex-1 bg-gray-50"
@@ -182,32 +195,38 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
           <TouchableOpacity
             onPress={loadRandomVerse}
-            className="bg-blue-500 px-4 py-2 rounded-lg"
+            className={`bg-blue-500 px-4 py-2 rounded-lg ${isLandscape ? "mr-12" : "mr-0"}`}
           >
             <Text className="text-white text-sm font-medium">Refresh</Text>
           </TouchableOpacity>
         </View>
 
-        {verseRange && verseRange.length > 0 && (
-          <VerseViewEnhanced
-            verses={verseRange} // show the full range
-            bookName={bookLongName}
-            chapterNumber={verseRange[0].chapter}
-            fontSize={16}
-            onVersePress={handleVersePress}
-          />
-        )}
+        <View className={`${isLandscape ? "mr-12" : "mr-0"}`}>
+          {verseRange && verseRange.length > 0 && (
+            <VerseViewEnhanced
+              verses={verseRange} // show the full range
+              bookName={bookLongName}
+              chapterNumber={verseRange[0].chapter}
+              fontSize={16}
+              onVersePress={handleVersePress}
+            />
+          )}
+        </View>
       </View>
 
       {/* Daily Inspiration */}
-      <View className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200">
+      <View
+        className={`bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200 ${isLandscape ? "mr-12" : "mr-0"}`}
+      >
         <Text className="text-blue-800 text-sm text-center font-medium">
           📖 Start your day with God's Word
         </Text>
       </View>
 
       {/* Main Actions */}
-      <View className="space-y-4 mb-6 gap-2">
+      <View
+        className={`space-y-4 mb-6 gap-2 ${isLandscape ? "mr-12" : "mr-0"}`}
+      >
         <Button
           title="Read Bible"
           onPress={() => navigation.navigate("BookList")}
@@ -221,7 +240,9 @@ export default function HomeScreen({ navigation }: Props) {
 
       {/* Quick Tips */}
       {verseRange && verseRange.length > 0 && (
-        <View className="bg-white p-4 rounded-lg border border-gray-200">
+        <View
+          className={`bg-white p-4 rounded-lg border border-gray-200 ${isLandscape ? "mr-12" : "mr-0"}`}
+        >
           <Text className="text-gray-600 text-center text-sm">
             ✨ Tap "Refresh" for fresh inspiration anytime
           </Text>

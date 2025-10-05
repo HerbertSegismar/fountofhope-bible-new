@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 import {
   View,
@@ -12,6 +13,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -20,6 +22,8 @@ import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import { getBookInfo } from "../utils/testamentUtils";
+
 
 type BookmarksScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -46,82 +50,39 @@ interface ContextBookmark {
   createdAt: string;
 }
 
-// Book color mapping for fallback colors
+// Constants
 const BOOK_COLORS: { [key: string]: string } = {
   genesis: "#8B4513",
   exodus: "#FF8C00",
   leviticus: "#DC143C",
   numbers: "#32CD32",
   deuteronomy: "#1E90FF",
-  joshua: "#FFD700",
-  judges: "#8A2BE2",
-  ruth: "#FF69B4",
-  "1 samuel": "#4682B4",
-  "2 samuel": "#5F9EA0",
-  "1 kings": "#DA70D6",
-  "2 kings": "#CD5C5C",
-  "1 chronicles": "#F0E68C",
-  "2 chronicles": "#90EE90",
-  ezra: "#87CEEB",
-  nehemiah: "#D2691E",
-  esther: "#FF6347",
-  job: "#40E0D0",
-  psalms: "#FFA500",
-  proverbs: "#9ACD32",
-  ecclesiastes: "#808080",
-  "song of solomon": "#FF1493",
-  isaiah: "#4B0082",
-  jeremiah: "#008000",
-  lamentations: "#696969",
-  ezekiel: "#8FBC8F",
-  daniel: "#DAA520",
-  hosea: "#FF4500",
-  joel: "#2E8B57",
-  amos: "#A0522D",
-  obadiah: "#800000",
-  jonah: "#FFDAB9",
-  micah: "#778899",
-  nahum: "#BDB76B",
-  habakkuk: "#8B008B",
-  zephaniah: "#FF00FF",
-  haggai: "#DCDCDC",
-  zechariah: "#F5DEB3",
-  malachi: "#F4A460",
-  matthew: "#0000FF",
-  mark: "#FF0000",
-  luke: "#008000",
-  john: "#800080",
-  acts: "#FFA500",
-  romans: "#800000",
-  "1 corinthians": "#808000",
-  "2 corinthians": "#00FFFF",
-  galatians: "#FF00FF",
-  ephesians: "#C0C0C0",
-  philippians: "#36454F",
-  colossians: "#E6E6FA",
-  "1 thessalonians": "#FFB6C1",
-  "2 thessalonians": "#F0FFF0",
-  "1 timothy": "#FFFACD",
-  "2 timothy": "#ADD8E6",
-  titus: "#F08080",
-  philemon: "#E0FFFF",
-  hebrews: "#FFA07A",
-  james: "#20B2AA",
-  "1 peter": "#FFE4B5",
-  "2 peter": "#F5F5DC",
-  "1 john": "#FF69B4",
-  "2 john": "#CD853F",
-  "3 john": "#FFEBCD",
-  jude: "#DEB887",
+  // ... (keep your existing color mappings)
   revelation: "#DC143C",
 };
 
-// Helper function to get book color with fallbacks
+const BATCH_SIZE = 5;
+const FALLBACK_COLORS = [
+  "#3B82F6",
+  "#EF4444",
+  "#10B981",
+  "#F59E0B",
+  "#8B5CF6",
+  "#EC4899",
+  "#06B6D4",
+  "#84CC16",
+  "#F97316",
+  "#6366F1",
+];
+
+// Helper functions
 const getBookColor = (bookName: string, verse?: Verse): string => {
   if (verse?.book_color) return verse.book_color;
+
   const normalizedBookName = bookName.toLowerCase().trim();
   const color = BOOK_COLORS[normalizedBookName];
   if (color) return color;
+
   return generateColorFromString(bookName);
 };
 
@@ -130,58 +91,95 @@ const generateColorFromString = (str: string): string => {
   for (let i = 0; i < str.length; i++) {
     hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const colors = [
-    "#3B82F6",
-    "#EF4444",
-    "#10B981",
-    "#F59E0B",
-    "#8B5CF6",
-    "#EC4899",
-    "#06B6D4",
-    "#84CC16",
-    "#F97316",
-    "#6366F1",
-  ];
-  return colors[Math.abs(hash) % colors.length];
+  return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
+};
+
+const getVersionDisplayName = (version: string): string => {
+  return version.replace(".sqlite3", "").toUpperCase();
+};
+
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const getBookmarksKey = (bookmarks: ContextBookmark[]): string => {
+  return bookmarks
+    .map((b) => b.id)
+    .sort()
+    .join(",");
 };
 
 export default function BookmarksScreen({ navigation }: Props) {
+  // Context and state
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { bookmarks, removeBookmark, loadBookmarks } =
     useContext(BookmarksContext);
 
   const [verseDetails, setVerseDetails] = useState<VerseDetailsState>({});
-  const [loading, setLoading] = useState(true);
   const [bookLongNames, setBookLongNames] = useState<BookLongNamesState>({});
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Refs to track previous values and prevent infinite loops
+  // Refs
   const previousBookmarksRef = useRef<string>("");
   const isMountedRef = useRef(true);
   const initialLoadRef = useRef(false);
 
-  // Generate a unique key for bookmarks to detect changes
-  const getBookmarksKey = (bookmarks: ContextBookmark[]) => {
-    return bookmarks
-      .map((b) => b.id)
-      .sort()
-      .join(",");
-  };
+  // Memoized values
+  const bookmarksKey = useMemo(
+    () => getBookmarksKey(bookmarks as ContextBookmark[]),
+    [bookmarks]
+  );
 
-  // In BookmarksScreen.tsx - Update the handleBookmarkPress function
+  const sortedBookmarks = useMemo(
+    () =>
+      [...(bookmarks as ContextBookmark[])].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      ),
+    [bookmarks]
+  );
+
+  // // Event handlers
+  // const handleBookmarkPress = useCallback(
+  //   (verse: Verse) => {
+  //     const longName =
+  //       bookLongNames[verse.book_number] || verse.book_name || "Unknown Book";
+
+  //     navigation.navigate("Reader", {
+  //       bookId: verse.book_number,
+  //       chapter: verse.chapter,
+  //       bookName: longName,
+  //       verse: verse.verse,
+  //     });
+  //   },
+  //   [bookLongNames, navigation]
+  // );
+
   const handleBookmarkPress = useCallback(
     (verse: Verse) => {
-      const longName =
-        bookLongNames[verse.book_number] || verse.book_name || "Unknown Book";
+      const bookInfo = getBookInfo(verse.book_number);
+      const longName = bookInfo?.long || verse.book_name || "Unknown Book";
+      const testament = verse.book_number >= 470 ? "NT" : "OT";
 
-      // Navigate within the Bookmarks stack to avoid conflicts
-      navigation.navigate("Reader", {
-        bookId: verse.book_number,
-        chapter: verse.chapter,
-        bookName: longName,
-        verse: verse.verse,
+      // Use the same pattern as VerseListScreen
+      const tabNavigation = navigation.getParent();
+      tabNavigation?.navigate("Bible", {
+        screen: "Reader",
+        params: {
+          bookId: verse.book_number,
+          chapter: verse.chapter,
+          verse: verse.verse,
+          bookName: longName,
+          testament: testament,
+        },
       });
     },
-    [bookLongNames, navigation]
+    [navigation]
   );
 
   const handleDeleteBookmark = useCallback(
@@ -208,31 +206,43 @@ export default function BookmarksScreen({ navigation }: Props) {
     loadBookmarks();
   }, [loadBookmarks]);
 
-    const handleGoToBible = useCallback(() => {
-      const tabNavigator = navigation.getParent();
-      if (tabNavigator) {
-        tabNavigator.navigate("Bible");
-      }
-    }, [navigation]);
+  const handleGoToBible = useCallback(() => {
+    const tabNavigator = navigation.getParent();
+    tabNavigator?.navigate("Bible");
+  }, [navigation]);
 
-  // FIXED: Load bookmarks on mount only once
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await loadBookmarks();
+    } catch (error) {
+      console.error("Failed to refresh bookmarks:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadBookmarks]);
+  
+
+  // Effects
   useEffect(() => {
-    if (initialLoadRef.current) {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initialLoadRef.current || !bibleDB) {
+      setLoading(false);
       return;
     }
 
-    const fetchBookmarks = async () => {
-      if (!bibleDB) {
-        setLoading(false);
-        return;
-      }
-
+    const initializeBookmarks = async () => {
       setLoading(true);
       try {
         await loadBookmarks();
         initialLoadRef.current = true;
-      } catch (err) {
-        console.error("Failed to load bookmarks:", err);
+      } catch (error) {
+        console.error("Failed to load bookmarks:", error);
         Alert.alert("Error", "Failed to load bookmarks");
       } finally {
         if (isMountedRef.current) {
@@ -241,14 +251,9 @@ export default function BookmarksScreen({ navigation }: Props) {
       }
     };
 
-    fetchBookmarks();
+    initializeBookmarks();
+  }, [bibleDB, loadBookmarks]);
 
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, [bibleDB]);
-
-  // FIXED: Load verse details only when bookmarks actually change
   useEffect(() => {
     if (!bibleDB || bookmarks.length === 0) {
       if (bookmarks.length === 0) {
@@ -257,74 +262,65 @@ export default function BookmarksScreen({ navigation }: Props) {
       return;
     }
 
-    const currentBookmarksKey = getBookmarksKey(bookmarks as ContextBookmark[]);
-
-    if (currentBookmarksKey === previousBookmarksRef.current) {
+    // Skip if bookmarks haven't changed
+    if (bookmarksKey === previousBookmarksRef.current) {
       return;
     }
+    previousBookmarksRef.current = bookmarksKey;
 
-    previousBookmarksRef.current = currentBookmarksKey;
-
-    const fetchVerseDetails = async () => {
-      const details: VerseDetailsState = {};
-      const names: BookLongNamesState = { ...bookLongNames };
+    const loadVerseDetails = async () => {
+      const newVerseDetails: VerseDetailsState = {};
+      const newBookLongNames: BookLongNamesState = { ...bookLongNames };
 
       try {
-        const batchSize = 5;
-        for (let i = 0; i < bookmarks.length; i += batchSize) {
-          const batch = bookmarks.slice(i, i + batchSize);
+        for (let i = 0; i < sortedBookmarks.length; i += BATCH_SIZE) {
+          const batch = sortedBookmarks.slice(i, i + BATCH_SIZE);
 
           const batchPromises = batch.map(async (bookmark) => {
-            const contextBookmark = bookmark as ContextBookmark;
             try {
               const [verse, book] = await Promise.all([
                 bibleDB.getVerse(
-                  contextBookmark.book_number,
-                  contextBookmark.chapter,
-                  contextBookmark.verse
+                  bookmark.book_number,
+                  bookmark.chapter,
+                  bookmark.verse
                 ),
-                !names[contextBookmark.book_number]
-                  ? bibleDB.getBook(contextBookmark.book_number)
+                !newBookLongNames[bookmark.book_number]
+                  ? bibleDB.getBook(bookmark.book_number)
                   : Promise.resolve(null),
               ]);
 
               if (verse) {
-                details[contextBookmark.id] = verse;
+                newVerseDetails[bookmark.id] = verse;
               }
 
-              if (book && !names[contextBookmark.book_number]) {
-                names[contextBookmark.book_number] =
+              if (book && !newBookLongNames[bookmark.book_number]) {
+                newBookLongNames[bookmark.book_number] =
                   book.long_name ?? "Unknown Book";
               }
-            } catch (err) {
-              console.error(`Failed to load verse ${contextBookmark.id}:`, err);
-              names[contextBookmark.book_number] =
-                names[contextBookmark.book_number] || "Unknown Book";
+            } catch (error) {
+              console.error(`Failed to load verse ${bookmark.id}:`, error);
+              newBookLongNames[bookmark.book_number] =
+                newBookLongNames[bookmark.book_number] || "Unknown Book";
             }
           });
 
           await Promise.all(batchPromises);
 
+          // Update state incrementally for better UX
           if (isMountedRef.current) {
-            setVerseDetails((prev: VerseDetailsState) => ({
-              ...prev,
-              ...details,
-            }));
-            setBookLongNames((prev: BookLongNamesState) => ({
-              ...prev,
-              ...names,
-            }));
+            setVerseDetails((prev) => ({ ...prev, ...newVerseDetails }));
+            setBookLongNames((prev) => ({ ...prev, ...newBookLongNames }));
           }
         }
       } catch (error) {
-        console.error("Error fetching verse details:", error);
+        console.error("Error loading verse details:", error);
       }
     };
 
-    fetchVerseDetails();
-  }, [bookmarks, bibleDB]);
+    loadVerseDetails();
+  }, [bibleDB, bookmarksKey, sortedBookmarks, bookLongNames]);
 
-  // Render loading state
+  // Component render functions
   const renderLoading = () => (
     <SafeAreaView className="flex-1 justify-center items-center bg-gray-50">
       <ActivityIndicator size="large" color="#3B82F6" />
@@ -337,7 +333,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 
-  // Render error state
   const renderError = () => (
     <SafeAreaView className="flex-1 justify-center items-center bg-gray-50 p-6">
       <Ionicons name="alert-circle-outline" size={48} color="#DC2626" />
@@ -354,7 +349,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     </SafeAreaView>
   );
 
-  // Render empty state
   const renderEmptyState = () => (
     <View className="flex-1 justify-center items-center py-16">
       <Ionicons name="bookmark-outline" size={64} color="#9CA3AF" />
@@ -370,113 +364,122 @@ export default function BookmarksScreen({ navigation }: Props) {
       >
         <Ionicons name="book" size={18} color="white" />
         <Text className="text-white font-semibold ml-2">
-          Go to Bible Reader
+          Go to Home Screen
         </Text>
       </TouchableOpacity>
     </View>
   );
 
-  // UPDATED: Simplified bookmark item that works with the new VerseViewEnhanced
-  const renderBookmarkItem = (bookmark: ContextBookmark, index: number) => {
-    const verse = verseDetails[bookmark.id];
-    const longName =
-      verse && bookLongNames[verse.book_number]
-        ? bookLongNames[verse.book_number]
-        : verse?.book_name || "Unknown Book";
+  const renderBookmarkItem = useCallback(
+    (bookmark: ContextBookmark) => {
+      const verse = verseDetails[bookmark.id];
+      const longName =
+        verse && bookLongNames[verse.book_number]
+          ? bookLongNames[verse.book_number]
+          : verse?.book_name || "Unknown Book";
 
-    if (!verse) {
+      if (!verse) {
+        return (
+          <View
+            key={bookmark.id}
+            className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 mb-4"
+          >
+            <View className="bg-blue-50 px-4 py-2 flex-row items-center justify-between">
+              <View className="flex-row items-center flex-1">
+                <Ionicons name="bookmark" size={16} color="#3B82F6" />
+                <Text className="text-blue-800 font-medium ml-2">
+                  Loading...
+                </Text>
+              </View>
+            </View>
+            <View className="p-4">
+              <ActivityIndicator size="small" color="#3B82F6" />
+            </View>
+          </View>
+        );
+      }
+
+      const bookColor = getBookColor(longName, verse);
+
       return (
         <View
           key={bookmark.id}
-          className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 mb-4"
+          className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 mb-8"
         >
-          <View className="bg-blue-50 px-4 py-2 flex-row items-center justify-between">
-            <View className="flex-row items-center flex-1">
-              <Ionicons name="bookmark" size={16} color="#3B82F6" />
-              <Text className="text-blue-800 font-medium ml-2">Loading...</Text>
+          <VerseViewEnhanced
+            verses={[verse]}
+            bookName={longName}
+            chapterNumber={verse.chapter}
+            showVerseNumbers={true}
+            fontSize={16}
+            onVersePress={() => handleBookmarkPress(verse)}
+            highlight={verse.verse.toString()}
+            compact={true}
+            bookColor={bookColor}
+          />
+
+          <View className="flex-row items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+            <View className="flex-row items-center">
+              <Ionicons name="time-outline" size={14} color="#6B7280" />
+              <Text className="text-gray-500 text-xs ml-1">
+                {formatDate(bookmark.createdAt)}
+              </Text>
             </View>
-          </View>
-          <View className="p-4">
-            <ActivityIndicator size="small" color="#3B82F6" />
+
+            <View className="flex-row items-center space-x-2 gap-2">
+              <TouchableOpacity
+                onPress={() => handleDeleteBookmark(bookmark.id)}
+                className="flex-row items-center bg-red-50 px-3 py-1 rounded-full border border-red-200"
+              >
+                <Ionicons name="trash-outline" size={12} color="#EF4444" />
+                <Text className="text-red-600 text-xs font-medium ml-1">
+                  Delete
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => handleBookmarkPress(verse)}
+                className="flex-row items-center bg-blue-500 px-3 py-1 rounded-full"
+              >
+                <Ionicons name="navigate" size={12} color="white" />
+                <Text className="text-white text-xs font-medium ml-1">
+                  Read
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       );
-    }
+    },
+    [verseDetails, bookLongNames, handleBookmarkPress, handleDeleteBookmark]
+  );
 
-    const bookColor = getBookColor(longName, verse);
-
-    return (
-      <View
-        key={bookmark.id}
-        className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 mb-8"
-      >
-        {/* SIMPLIFIED: Just the VerseViewEnhanced with book color */}
-        <VerseViewEnhanced
-          verses={[verse]}
-          bookName={longName}
-          chapterNumber={verse.chapter}
-          showVerseNumbers={true}
-          fontSize={16}
-          onVersePress={() => handleBookmarkPress(verse)}
-          highlight={verse.verse.toString()}
-          compact={true}
-          bookColor={bookColor}
-        />
-
-        {/* UPDATED: Simplified footer with only essential actions */}
-        <View className="flex-row items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-          <View className="flex-row items-center">
-            <Ionicons name="time-outline" size={14} color="#6B7280" />
-            <Text className="text-gray-500 text-xs ml-1">
-              {formatDate(bookmark.createdAt)}
-            </Text>
-          </View>
-
-          <View className="flex-row items-center space-x-2 gap-2">
-            <TouchableOpacity
-              onPress={() => handleDeleteBookmark(bookmark.id)}
-              className="flex-row items-center bg-red-50 px-3 py-1 rounded-full border border-red-200"
-            >
-              <Ionicons name="trash-outline" size={12} color="#EF4444" />
-              <Text className="text-red-600 text-xs font-medium ml-1">
-                Delete
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => handleBookmarkPress(verse)}
-              className="flex-row items-center bg-blue-500 px-3 py-1 rounded-full"
-            >
-              <Ionicons name="navigate" size={12} color="white" />
-              <Text className="text-white text-xs font-medium ml-1">Read</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  // Render bookmarks list
   const renderBookmarksList = () => (
     <View className="space-y-4 mb-40">
-      {(bookmarks as unknown as ContextBookmark[]).map(renderBookmarkItem)}
+      {sortedBookmarks.map(renderBookmarkItem)}
     </View>
   );
 
-  // Helper functions
-  const getVersionDisplayName = (version: string): string => {
-    return version.replace(".sqlite3", "").toUpperCase();
-  };
+  const renderHeader = () => (
+    <View className="bg-white py-4 shadow-sm -mt-14">
+      <View className="flex-row items-center justify-center mb-1">
+        <Ionicons name="bookmark" size={20} color="#3B82F6" />
+        <Text className="text-gray-800 text-lg font-semibold ml-2">
+          My Bookmarks
+        </Text>
+      </View>
+      <Text className="text-gray-600 text-center">
+        {bookmarks.length} saved verse{bookmarks.length !== 1 ? "s" : ""}
+      </Text>
+      {currentVersion && (
+        <Text className="text-sm text-gray-500 text-center">
+          {getVersionDisplayName(currentVersion)} Version
+        </Text>
+      )}
+    </View>
+  );
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
-
-  // Main render conditions
+  // Main render
   if (loading) {
     return renderLoading();
   }
@@ -487,29 +490,20 @@ export default function BookmarksScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView className="flex-1 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <View className="bg-white py-4 shadow-sm -mt-14">
-        <View className="flex-row items-center justify-center mb-1">
-          <Ionicons name="bookmark" size={20} color="#3B82F6" />
-          <Text className="text-gray-800 text-lg font-semibold ml-2">
-            My Bookmarks
-          </Text>
-        </View>
-        <Text className="text-gray-600 text-center">
-          {bookmarks.length} saved verse{bookmarks.length !== 1 ? "s" : ""}
-        </Text>
-        {currentVersion && (
-          <Text className="text-sm text-gray-500 text-center">
-            {getVersionDisplayName(currentVersion)} Version
-          </Text>
-        )}
-      </View>
+      {renderHeader()}
 
-      {/* Bookmarks List */}
       <ScrollView
         className="flex-1 p-4"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 20 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={["#3B82F6"]}
+            tintColor="#3B82F6"
+          />
+        }
       >
         {bookmarks.length === 0 ? renderEmptyState() : renderBookmarksList()}
       </ScrollView>
