@@ -29,6 +29,7 @@ import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
+import { getTestament } from "../utils/testamentUtils"; // Import the testament utility
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -49,6 +50,11 @@ interface Book {
   long_name: string;
   book_color?: string;
   testament?: string;
+}
+
+interface ChapterInfo {
+  chapter: number;
+  verseCount: number;
 }
 
 export default function ReaderScreen({ navigation, route }: Props) {
@@ -73,12 +79,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // Navigation modal state
   const [showNavigation, setShowNavigation] = useState(false);
   const [books, setBooks] = useState<Book[]>([]);
-  const [chapters, setChapters] = useState<number[]>([]);
+  const [oldTestament, setOldTestament] = useState<Book[]>([]);
+  const [newTestament, setNewTestament] = useState<Book[]>([]);
+  const [chapters, setChapters] = useState<ChapterInfo[]>([]);
   const [versesList, setVersesList] = useState<number[]>([]);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [selectedChapter, setSelectedChapter] = useState<number>(1);
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(false);
+  const [isLoadingChapters, setIsLoadingChapters] = useState(false);
 
   // Full screen state for landscape mode
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -158,16 +167,54 @@ export default function ReaderScreen({ navigation, route }: Props) {
     return descriptionMap[version] || "Bible translation";
   };
 
+  // Utility to lighten color
+  const lightenColor = (color: string, amount = 0.15) => {
+    if (!color) return undefined;
+    if (color.startsWith("#") && (color.length === 7 || color.length === 4)) {
+      let r, g, b;
+      if (color.length === 7) {
+        r = parseInt(color.slice(1, 3), 16);
+        g = parseInt(color.slice(3, 5), 16);
+        b = parseInt(color.slice(5, 7), 16);
+      } else {
+        r = parseInt(color[1] + color[1], 16);
+        g = parseInt(color[2] + color[2], 16);
+        b = parseInt(color[3] + color[3], 16);
+      }
+      return `rgba(${r}, ${g}, ${b}, ${amount})`;
+    }
+    return color;
+  };
+
   // Navigation functions
   const loadBooks = async () => {
     if (!bibleDB) return;
     try {
       setIsLoadingNavigation(true);
       const bookList = await bibleDB.getBooks();
-      setBooks(bookList);
+
+      // Add testament information to each book
+      const booksWithTestament = bookList.map((book) => ({
+        ...book,
+        testament: getTestament(book.book_number, book.long_name),
+      }));
+
+      setBooks(booksWithTestament);
+
+      // Split books into Old and New Testament
+      const ot = booksWithTestament.filter((book) => book.testament === "OT");
+      const nt = booksWithTestament.filter((book) => book.testament === "NT");
+      setOldTestament(ot);
+      setNewTestament(nt);
+
+      console.log("Loaded books:", booksWithTestament.length);
+      console.log("Old Testament:", ot.length);
+      console.log("New Testament:", nt.length);
 
       // Set current book as selected
-      const currentBook = bookList.find((b) => b.book_number === bookId);
+      const currentBook = booksWithTestament.find(
+        (b) => b.book_number === bookId
+      );
       if (currentBook) {
         setSelectedBook(currentBook);
         setSelectedChapter(currentChapter);
@@ -185,15 +232,33 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const loadChaptersForBook = async (bookId: number) => {
     if (!bibleDB) return;
     try {
+      setIsLoadingChapters(true);
       const chapterCount = await bibleDB.getChapterCount(bookId);
-      const chaptersArray = Array.from(
+
+      // Load verse counts for all chapters in parallel
+      const chapterPromises = Array.from(
         { length: chapterCount },
         (_, i) => i + 1
-      );
-      setChapters(chaptersArray);
+      ).map(async (chapterNum) => {
+        try {
+          const verseCount = await bibleDB.getVerseCount(bookId, chapterNum);
+          return { chapter: chapterNum, verseCount };
+        } catch (error) {
+          console.error(
+            `Failed to load verse count for chapter ${chapterNum}:`,
+            error
+          );
+          return { chapter: chapterNum, verseCount: 0 };
+        }
+      });
+
+      const chapterData = await Promise.all(chapterPromises);
+      setChapters(chapterData);
     } catch (error) {
       console.error("Failed to load chapters:", error);
       setChapters([]);
+    } finally {
+      setIsLoadingChapters(false);
     }
   };
 
@@ -708,12 +773,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
             <Text className="text-white ml-0 tracking-wider text-xl">
               Reader
             </Text>
-            <View className="flex-row">
+            <View
+              className={`flex-row ${isLandscape ? "mr-28 top-2 gap-4" : "mr-0"}`}
+            >
               <TouchableOpacity
                 onPress={() => setShowNavigation(true)}
                 className="p-2 mr-2"
               >
-                <Ionicons name="navigate-outline" size={24} color="white" />
+                <Ionicons name="book-outline" size={24} color="white" />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setShowSettings(true)}
@@ -824,8 +891,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
             className="bg-white rounded-xl w-11/12 max-w-md max-h-4/5"
             onStartShouldSetResponder={() => true}
           >
-            <View className="p-4 border-b border-gray-200">
-              <Text className="text-lg font-bold text-slate-800">Settings</Text>
+            <View className="p-4 border-b border-gray-200 bg-blue-500">
+              <Text className="text-lg font-bold text-white">Settings</Text>
             </View>
 
             <ScrollView className="max-h-96">
@@ -915,11 +982,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
               </View>
 
               {/* Current Version Display */}
-              <View className="p-4 bg-slate-50 border-t border-gray-200">
-                <Text className="text-sm font-medium text-slate-600 mb-1">
+              <View className="p-4 bg-blue-100 border-t border-blue-200">
+                <Text className="text-sm font-medium text-blue-500 mb-1">
                   Current Version
                 </Text>
-                <Text className="text-base font-semibold text-slate-800">
+                <Text className="text-base font-semibold text-blue-500">
                   {getVersionDisplayName(currentVersion)}
                 </Text>
               </View>
@@ -963,56 +1030,121 @@ export default function ReaderScreen({ navigation, route }: Props) {
             {isLoadingNavigation && (
               <View className="absolute top-0 left-0 right-0 bottom-0 bg-white/80 z-10 justify-center items-center">
                 <ActivityIndicator size="large" color="#3B82F6" />
-                <Text className="text-gray-600 mt-2">Loading...</Text>
+                <Text className="text-gray-600 mt-2">Loading books...</Text>
               </View>
             )}
-
-            {/* Current Selection Display */}
-            <View className="bg-blue-50 rounded-lg p-4 mb-4 border border-blue-200">
-              <Text className="text-blue-800 font-semibold text-center text-lg">
-                {selectedBook
-                  ? `${selectedBook.long_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
-                  : "Select a book"}
-              </Text>
-              <Text className="text-blue-600 text-sm text-center mt-1">
-                {selectedBook ? `${chapters.length} chapters available` : ""}
-              </Text>
-            </View>
 
             {/* Book Selection */}
             <View className="mb-6">
               <Text className="text-lg font-semibold text-slate-800 mb-3">
                 Select Book
               </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                className="mb-3"
-              >
-                <View className="flex-row flex-wrap gap-2">
-                  {books.map((book) => (
-                    <TouchableOpacity
-                      key={book.book_number}
-                      onPress={() => handleBookSelect(book)}
-                      className={`px-4 py-3 rounded-lg border ${
-                        selectedBook?.book_number === book.book_number
-                          ? "bg-blue-500 border-blue-600"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      <Text
-                        className={`font-medium ${
-                          selectedBook?.book_number === book.book_number
-                            ? "text-white"
-                            : "text-slate-700"
-                        }`}
+
+              {/* Old Testament */}
+              {oldTestament.length > 0 && (
+                <View className="mb-6">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <Text className="text-xl font-bold text-primary">
+                      Old Testament
+                    </Text>
+                    <Text className="text-sm text-gray-500">
+                      {oldTestament.length} books
+                    </Text>
+                  </View>
+                  <View className="flex-row flex-wrap justify-between">
+                    {oldTestament.map((book) => (
+                      <TouchableOpacity
+                        key={book.book_number}
+                        onPress={() => handleBookSelect(book)}
+                        className="p-3 rounded-lg shadow-sm mb-3 border-l-4"
+                        style={{
+                          width: "15%",
+                          borderLeftColor: book.book_color || "#DC2626",
+                          backgroundColor:
+                            lightenColor(book.book_color || "#DC2626", 0.15) ||
+                            "#fff",
+                        }}
                       >
-                        {book.short_name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          className="font-semibold text-center text-xs"
+                          style={{ color: "#1F2937" }}
+                          numberOfLines={2}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.8}
+                        >
+                          {book.short_name}
+                        </Text>
+                        <Text
+                          className="text-xs text-gray-500 text-center mt-1"
+                          numberOfLines={1}
+                        >
+                          {book.long_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
-              </ScrollView>
+              )}
+
+              {/* New Testament */}
+              {newTestament.length > 0 && (
+                <View className="mb-6">
+                  <View className="flex-row items-center justify-between mb-3">
+                    <Text className="text-xl font-bold text-primary">
+                      New Testament
+                    </Text>
+                    <Text className="text-sm text-gray-500">
+                      {newTestament.length} books
+                    </Text>
+                  </View>
+                  <View className="flex-row flex-wrap justify-between">
+                    {newTestament.map((book) => (
+                      <TouchableOpacity
+                        key={book.book_number}
+                        onPress={() => handleBookSelect(book)}
+                        className="p-3 rounded-lg shadow-sm mb-3 border-l-4"
+                        style={{
+                          width: "15%",
+                          borderLeftColor: book.book_color || "#059669",
+                          backgroundColor:
+                            lightenColor(book.book_color || "#059669", 0.15) ||
+                            "#fff",
+                        }}
+                      >
+                        <Text
+                          className="font-semibold text-center text-xs"
+                          style={{ color: "#1F2937" }}
+                          numberOfLines={2}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.8}
+                        >
+                          {book.short_name}
+                        </Text>
+                        <Text
+                          className="text-xs text-gray-500 text-center mt-1"
+                          numberOfLines={1}
+                        >
+                          {book.long_name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Current Selection Display */}
+            <View className="bg-blue-100 rounded-lg p-4 mb-4 border border-blue-200">
+              <Text className="text-blue-800 font-semibold text-center text-lg">
+                {selectedBook
+                  ? `${selectedBook.long_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
+                  : "Select a book"}
+              </Text>
+              <Text className="text-blue-600 text-sm text-center mt-1">
+                {selectedBook
+                  ? `${chapters.length} ${chapters.length > 1 ? "chapters available" : "chapter available"}`
+                  : ""}
+              </Text>
             </View>
 
             {/* Chapter Selection */}
@@ -1021,39 +1153,48 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 <Text className="text-lg font-semibold text-slate-800 mb-3">
                   Select Chapter
                 </Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  className="mb-3"
-                >
-                  <View className="flex-row flex-wrap gap-2">
-                    {chapters.slice(0, 50).map((chapter) => (
+                {isLoadingChapters ? (
+                  <View className="flex-row justify-center py-4">
+                    <ActivityIndicator size="small" color="#3B82F6" />
+                  </View>
+                ) : (
+                  <View className="flex-row flex-wrap gap-3 justify-center">
+                    {chapters.map((chapterInfo) => (
                       <TouchableOpacity
-                        key={chapter}
-                        onPress={() => handleChapterSelect(chapter)}
-                        className={`w-12 h-12 rounded-lg border items-center justify-center ${
-                          selectedChapter === chapter
+                        key={chapterInfo.chapter}
+                        onPress={() => handleChapterSelect(chapterInfo.chapter)}
+                        className={`rounded-lg border items-center justify-center ${
+                          selectedChapter === chapterInfo.chapter
                             ? "bg-blue-500 border-blue-600"
                             : "bg-white border-gray-300"
                         }`}
+                        style={{
+                          width: 60,
+                          height: 60,
+                        }}
                       >
                         <Text
-                          className={`font-medium ${
-                            selectedChapter === chapter
+                          className={`font-bold text-lg ${
+                            selectedChapter === chapterInfo.chapter
                               ? "text-white"
                               : "text-slate-700"
                           }`}
                         >
-                          {chapter}
+                          {chapterInfo.chapter}
+                        </Text>
+                        <Text
+                          className={`text-xs ${
+                            selectedChapter === chapterInfo.chapter
+                              ? "text-blue-100"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          {chapterInfo.verseCount} v
+                          {chapterInfo.verseCount !== 1 ? "s" : ""}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-                </ScrollView>
-                {chapters.length > 50 && (
-                  <Text className="text-sm text-gray-500 text-center">
-                    {chapters.length - 50} more chapters available
-                  </Text>
                 )}
               </View>
             )}
@@ -1062,38 +1203,31 @@ export default function ReaderScreen({ navigation, route }: Props) {
             {selectedBook && selectedChapter && versesList.length > 0 && (
               <View className="mb-6">
                 <Text className="text-lg font-semibold text-slate-800 mb-3">
-                  Select Verse (Optional)
+                  Select Verse
                 </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row flex-wrap gap-2">
-                    {versesList.slice(0, 100).map((verse) => (
-                      <TouchableOpacity
-                        key={verse}
-                        onPress={() => handleVerseSelect(verse)}
-                        className={`w-10 h-10 rounded-lg border items-center justify-center ${
+                <View className="flex-row flex-wrap gap-2">
+                  {versesList.map((verse) => (
+                    <TouchableOpacity
+                      key={verse}
+                      onPress={() => handleVerseSelect(verse)}
+                      className={`w-10 h-10 rounded-lg border items-center justify-center ${
+                        selectedVerse === verse
+                          ? "bg-blue-500 border-blue-600"
+                          : "bg-white border-gray-300"
+                      }`}
+                    >
+                      <Text
+                        className={`text-sm font-medium ${
                           selectedVerse === verse
-                            ? "bg-blue-500 border-blue-600"
-                            : "bg-white border-gray-300"
+                            ? "text-white"
+                            : "text-slate-700"
                         }`}
                       >
-                        <Text
-                          className={`text-sm font-medium ${
-                            selectedVerse === verse
-                              ? "text-white"
-                              : "text-slate-700"
-                          }`}
-                        >
-                          {verse}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
-                {versesList.length > 100 && (
-                  <Text className="text-sm text-gray-500 text-center">
-                    {versesList.length - 100} more verses available
-                  </Text>
-                )}
+                        {verse}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
             )}
 
@@ -1101,7 +1235,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
             <TouchableOpacity
               onPress={handleNavigateToLocation}
               disabled={!selectedBook || isLoadingNavigation}
-              className={`p-4 rounded-lg mt-4 ${
+              className={`p-4 rounded-lg mt-4 mb-10 ${
                 selectedBook && !isLoadingNavigation
                   ? "bg-blue-500"
                   : "bg-gray-300"
@@ -1109,7 +1243,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
             >
               <Text className="text-white font-semibold text-center text-lg">
                 {selectedBook
-                  ? `Go to ${selectedBook.short_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
+                  ? `Go to ${selectedBook.long_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
                   : "Select a book to continue"}
               </Text>
             </TouchableOpacity>
@@ -1184,30 +1318,12 @@ export default function ReaderScreen({ navigation, route }: Props) {
       {isLandscape && (
         <TouchableOpacity
           onPress={toggleFullScreen}
-          className="absolute top-12 right-18 size-12 bg-gray-600/40 rounded-full items-center justify-center z-50"
+          className="absolute top-12 right-18 size-12 bg-gray-600/50 rounded-full items-center justify-center z-50"
         >
-          <Text className="text-white text-lg font-bold">
+          <Text className="text-white text-4xl font-bold">
             {isFullScreen ? "◱" : "◲"}
           </Text>
         </TouchableOpacity>
-      )}
-
-      {/* Navigation and Settings buttons for full screen mode */}
-      {isLandscape && isFullScreen && (
-        <>
-          <TouchableOpacity
-            onPress={() => setShowNavigation(true)}
-            className="absolute top-12 left-18 size-12 bg-gray-600/40 rounded-full items-center justify-center z-50"
-          >
-            <Ionicons name="navigate-outline" size={24} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setShowSettings(true)}
-            className="absolute top-12 left-32 size-12 bg-gray-600/40 rounded-full items-center justify-center z-50"
-          >
-            <Ionicons name="settings-outline" size={24} color="white" />
-          </TouchableOpacity>
-        </>
       )}
     </View>
   );
