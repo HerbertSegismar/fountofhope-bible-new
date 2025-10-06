@@ -21,7 +21,6 @@ const SettingsScreen = () => {
   const [isSwitching, setIsSwitching] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
 
-  // Move these functions to the top to avoid "used before declaration" errors
   const getVersionDisplayName = (version: string) => {
     const versionMap: { [key: string]: string } = {
       "niv11.sqlite3": "NIV (2011)",
