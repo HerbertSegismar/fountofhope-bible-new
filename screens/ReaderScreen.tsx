@@ -128,6 +128,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [selectedVerse, setSelectedVerse] = useState<number | null>(
     targetVerse || null
   );
+  const [hasTappedChapter, setHasTappedChapter] = useState(false);
 
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(false);
   const [isLoadingChapters, setIsLoadingChapters] = useState(false);
@@ -148,6 +149,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [chapterContainerY, setChapterContainerY] = useState(0);
   const [contentHeight, setContentHeight] = useState(1);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
+
+  // Auto-scroll state for navigation modal
+  const [shouldScrollToChapters, setShouldScrollToChapters] = useState(false);
+  const [shouldScrollToVerses, setShouldScrollToVerses] = useState(false);
 
   // Context and refs
   const { bibleDB, currentVersion, availableVersions, switchVersion } =
@@ -174,10 +179,65 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const isMounted = useRef(true);
   const verseRefs = useRef<Record<number, View | undefined>>({});
 
+  // Navigation modal refs
+  const modalScrollViewRef = useRef<ScrollView>(null);
+  const chaptersSectionRef = useRef<View>(null);
+  const versesSectionRef = useRef<View>(null);
+
   const progress = Animated.divide(
     scrollY,
     Math.max(contentHeight - scrollViewHeight, 1)
   );
+
+  // Auto-scroll functions for navigation modal
+  const scrollToChaptersSection = useCallback(() => {
+    if (modalScrollViewRef.current && chaptersSectionRef.current) {
+      setTimeout(() => {
+        chaptersSectionRef.current?.measure(
+          (x, y, width, height, pageX, pageY) => {
+            if (modalScrollViewRef.current) {
+              modalScrollViewRef.current.scrollTo({
+                y: pageY - 100, // Adjust offset as needed
+                animated: true,
+              });
+            }
+          }
+        );
+      }, 100);
+    }
+  }, []);
+
+  const scrollToVersesSection = useCallback(() => {
+    if (modalScrollViewRef.current && versesSectionRef.current) {
+      setTimeout(() => {
+        versesSectionRef.current?.measure(
+          (x, y, width, height, pageX, pageY) => {
+            if (modalScrollViewRef.current) {
+              modalScrollViewRef.current.scrollTo({
+                y: pageY - 80, // Adjust offset as needed
+                animated: true,
+              });
+            }
+          }
+        );
+      }, 100);
+    }
+  }, []);
+
+  // Auto-scroll effects
+  useEffect(() => {
+    if (shouldScrollToChapters && !isLoadingNavigation) {
+      scrollToChaptersSection();
+      setShouldScrollToChapters(false);
+    }
+  }, [shouldScrollToChapters, isLoadingNavigation, scrollToChaptersSection]);
+
+  useEffect(() => {
+    if (shouldScrollToVerses && !isLoadingNavigation) {
+      scrollToVersesSection();
+      setShouldScrollToVerses(false);
+    }
+  }, [shouldScrollToVerses, isLoadingNavigation, scrollToVersesSection]);
 
   // Reset modal state to current route values
   const resetModalState = useCallback(() => {
@@ -189,17 +249,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setSelectedVerse(targetVerse || null);
     }
   }, [books, bookId, chapter, targetVerse]);
-
-  // NEW: Reset modal state but keep verse selection cleared
-  const resetModalStateWithoutVerse = useCallback(() => {
-    // Find current book in loaded books
-    const currentBook = books.find((b) => b.book_number === bookId);
-    if (currentBook) {
-      setSelectedBook(currentBook);
-      setSelectedChapter(chapter);
-      setSelectedVerse(null); // Always reset verse to null when opening modal
-    }
-  }, [books, bookId, chapter]);
 
   // Load books and initialize modal state
   const loadBooks = useCallback(async () => {
@@ -221,14 +270,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setOldTestament(ot);
       setNewTestament(nt);
 
-      // Initialize modal state with current location but reset verse selection
+      // Initialize modal state with current location
       const currentBook = booksWithTestament.find(
         (b) => b.book_number === bookId
       );
       if (currentBook) {
         setSelectedBook(currentBook);
         setSelectedChapter(chapter);
-        setSelectedVerse(null); // Reset verse selection when loading books
+        setSelectedVerse(targetVerse || null);
         await loadChaptersForBook(currentBook.book_number);
         await loadVersesForChapter(currentBook.book_number, chapter);
       }
@@ -238,7 +287,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
     } finally {
       setIsLoadingNavigation(false);
     }
-  }, [bibleDB, bookId, chapter]);
+  }, [bibleDB, bookId, chapter, targetVerse]);
 
   const loadChaptersForBook = useCallback(
     async (bookId: number) => {
@@ -296,12 +345,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
     async (book: Book) => {
       setSelectedBook(book);
       setSelectedChapter(1);
-      setSelectedVerse(null); // Reset verse when changing book
+      setSelectedVerse(null);
       setIsLoadingNavigation(true);
+      setHasTappedChapter(false);
 
       try {
         await loadChaptersForBook(book.book_number);
         await loadVersesForChapter(book.book_number, 1);
+        // Set flag to trigger scrolling after content is loaded
+        setShouldScrollToChapters(true);
       } finally {
         setIsLoadingNavigation(false);
       }
@@ -312,12 +364,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const handleChapterSelect = useCallback(
     async (chapterNum: number) => {
       setSelectedChapter(chapterNum);
-      setSelectedVerse(null); // Reset verse when changing chapter
+      setSelectedVerse(null);
       setIsLoadingNavigation(true);
+      setHasTappedChapter(true);
 
       try {
         if (selectedBook) {
           await loadVersesForChapter(selectedBook.book_number, chapterNum);
+          // Set flag to trigger scrolling to verses after content is loaded
+          setShouldScrollToVerses(true);
         }
       } finally {
         setIsLoadingNavigation(false);
@@ -335,7 +390,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       if (selectedBook) {
         // Close modal first
         setShowNavigation(false);
-
         // Navigate immediately
         navigation.navigate("Reader", {
           bookId: selectedBook.book_number,
@@ -425,7 +479,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
     }
   }, [bibleDB, bookId, chapter]);
 
-  // Chapter navigation using navigation like VerseListScreen
+  // Chapter navigation using navigation like VerseListScreen does
   const goToPreviousChapter = useCallback(() => {
     if (chapter > 1) {
       // Use navigation to update route
@@ -736,22 +790,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
     resetModalState();
   }, [bookId, chapter, targetVerse, resetModalState]);
 
-  // NEW: Load books and reset modal (without verse) when navigation modal opens
+  // Load books and reset modal when navigation modal opens
   useEffect(() => {
     if (showNavigation) {
       if (books.length === 0 && bibleDB) {
         loadBooks();
       } else {
-        resetModalStateWithoutVerse(); // Reset verse selection when modal opens
+        resetModalState();
       }
     }
-  }, [
-    showNavigation,
-    books.length,
-    bibleDB,
-    loadBooks,
-    resetModalStateWithoutVerse,
-  ]);
+  }, [showNavigation, books.length, bibleDB, loadBooks, resetModalState]);
 
   // Scroll to verse effect
   useEffect(() => {
@@ -849,7 +897,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
               className={`flex-row ${isLandscape ? "mr-28 top-2 gap-4" : "mr-0"}`}
             >
               <TouchableOpacity
-                onPress={() => setShowNavigation(true)}
+                onPress={() => {
+                  setShowNavigation(true);
+                  setHasTappedChapter(false);
+                }}
                 className="p-2 mr-2"
                 testID="navigation-button"
               >
@@ -1072,7 +1123,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       </Modal>
 
-      {/* Navigation Modal - UPDATED: Reset verse selection when opening */}
+      {/* Navigation Modal - UPDATED: Auto-scroll and auto-navigation */}
       <Modal
         visible={showNavigation}
         transparent={true}
@@ -1084,7 +1135,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
           <View className="bg-primary px-4 py-4">
             <View className="flex-row justify-between items-center">
               <TouchableOpacity
-                onPress={() => setShowNavigation(false)}
+                onPress={() => {
+                  setShowNavigation(false);
+                }}
                 className="p-2"
               >
                 <Ionicons name="arrow-back" size={24} color="white" />
@@ -1096,7 +1149,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
             </View>
           </View>
 
-          <ScrollView className="flex-1 p-4">
+          <ScrollView
+            ref={modalScrollViewRef}
+            className="flex-1 p-4"
+            showsVerticalScrollIndicator={true}
+          >
             {isLoadingNavigation && (
               <View className="absolute top-0 left-0 right-0 bottom-0 bg-white/80 z-10 justify-center items-center">
                 <ActivityIndicator size="large" color="#3B82F6" />
@@ -1192,7 +1249,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
             </View>
 
             {/* Current Selection Display */}
-            <View className="bg-blue-100 rounded-lg p-4 mb-4 border border-blue-200">
+            <View className="bg-blue-100 rounded-lg p-2 mb-4 border border-blue-200">
               <Text className="text-blue-800 font-semibold text-center text-lg">
                 {selectedBook
                   ? `${selectedBook.long_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
@@ -1203,16 +1260,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
                   ? `${chapters.length} ${chapters.length > 1 ? "chapters available" : "chapter available"}`
                   : ""}
               </Text>
-              {selectedVerse && (
-                <Text className="text-green-600 text-sm text-center mt-2 font-medium">
-                  ✓ Verse {selectedVerse} selected - will navigate when tapped
-                </Text>
-              )}
             </View>
 
-            {/* Chapter Selection */}
+            {/* Chapter Selection - UPDATED: Added ref for auto-scroll */}
             {selectedBook && chapters.length > 0 && (
-              <View className="mb-6">
+              <View ref={chaptersSectionRef} className="mb-6">
                 <Text className="text-lg font-semibold text-slate-800 mb-3">
                   Select Chapter
                 </Text>
@@ -1221,7 +1273,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                     <ActivityIndicator size="small" color="#3B82F6" />
                   </View>
                 ) : (
-                  <View className="flex-row flex-wrap gap-3 justify-center">
+                  <View className="flex-row flex-wrap gap-2 justify-center">
                     {chapters.map((chapterInfo) => (
                       <TouchableOpacity
                         key={chapterInfo.chapter}
@@ -1232,15 +1284,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
                             : "bg-white border-gray-300"
                         }`}
                         style={{
-                          width: 60,
-                          height: 60,
+                          width: 40,
+                          height: 40,
                         }}
                       >
                         <Text
-                          className={`font-bold text-lg ${
+                          className={`font-bold text-sm ${
                             selectedChapter === chapterInfo.chapter
                               ? "text-white"
-                              : "text-slate-700"
+                              : "text-blue-500"
                           }`}
                         >
                           {chapterInfo.chapter}
@@ -1262,64 +1314,75 @@ export default function ReaderScreen({ navigation, route }: Props) {
               </View>
             )}
 
-            {/* Verse Selection - Auto-navigation on selection */}
-            {selectedBook && selectedChapter && versesList.length > 0 && (
+            {!hasTappedChapter && (
               <View className="mb-6">
-                <Text className="text-lg font-semibold text-slate-800 mb-3">
-                  Select Verse {selectedVerse && `- Selected: ${selectedVerse}`}
-                </Text>
                 <Text className="text-sm text-slate-500 mb-3">
-                  {selectedVerse
-                    ? `Tap verse ${selectedVerse} again to navigate to ${selectedBook.long_name} ${selectedChapter}:${selectedVerse}`
-                    : "Tap any verse to navigate directly"}
+                  Tap any chapter to reveal verse selection
                 </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {versesList.map((verse) => (
-                    <TouchableOpacity
-                      key={verse}
-                      onPress={() => handleVerseSelect(verse)}
-                      className={`w-10 h-10 rounded-lg border items-center justify-center ${
-                        selectedVerse === verse
-                          ? "bg-green-500 border-green-600"
-                          : "bg-white border-gray-300"
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${
-                          selectedVerse === verse
-                            ? "text-white"
-                            : "text-slate-700"
-                        }`}
-                      >
-                        {verse}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
               </View>
             )}
 
-            {/* Action Button - Only show for chapter-level navigation */}
-            {!selectedVerse && (
-              <TouchableOpacity
-                onPress={handleNavigateToLocation}
-                disabled={!selectedBook || isLoadingNavigation}
-                className={`p-4 rounded-lg mt-4 mb-10 ${
-                  selectedBook && !isLoadingNavigation
-                    ? "bg-blue-500"
-                    : "bg-gray-300"
-                }`}
-              >
-                <Text className="text-white font-semibold text-center text-lg">
-                  {selectedBook
-                    ? `Go to ${selectedBook.long_name} ${selectedChapter}`
-                    : "Select a book to continue"}
-                </Text>
-                <Text className="text-blue-100 text-sm text-center mt-1">
-                  Navigate to chapter {selectedChapter}
-                </Text>
-              </TouchableOpacity>
-            )}
+            {/* Verse Selection - UPDATED: Added ref for auto-scroll and auto-navigation */}
+            {hasTappedChapter &&
+              selectedBook &&
+              selectedChapter &&
+              versesList.length > 0 && (
+                <View ref={versesSectionRef} className="mb-6">
+                  <Text className="text-lg font-semibold text-slate-800 mb-3">
+                    Select Verse{" "}
+                    {selectedVerse && `- Selected: ${selectedVerse}`}
+                  </Text>
+                  <Text className="text-sm text-slate-500 mb-3">
+                    {selectedVerse
+                      ? `Will navigate to ${selectedBook.long_name} ${selectedChapter}:${selectedVerse}`
+                      : "Tap any verse to navigate directly"}
+                  </Text>
+                  <View className="flex-row flex-wrap gap-1">
+                    {hasTappedChapter &&
+                      versesList.map((verse) => (
+                        <TouchableOpacity
+                          key={verse}
+                          onPress={() => handleVerseSelect(verse)}
+                          className={`size-10 rounded-lg border items-center justify-center ${
+                            selectedVerse === verse
+                              ? "bg-green-500 border-green-600"
+                              : "bg-white border-gray-300"
+                          }`}
+                        >
+                          <Text
+                            className={`text-sm font-medium ${
+                              selectedVerse === verse
+                                ? "text-white"
+                                : "text-slate-700"
+                            }`}
+                          >
+                            {verse}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                </View>
+              )}
+
+            {/* Action Button - UPDATED: Only show for chapter-level navigation */}
+            <TouchableOpacity
+              onPress={handleNavigateToLocation}
+              disabled={!selectedBook || isLoadingNavigation}
+              className={`p-4 rounded-lg mt-4 mb-10 ${
+                selectedBook && !isLoadingNavigation
+                  ? "bg-blue-500"
+                  : "bg-gray-300"
+              }`}
+            >
+              <Text className="text-white font-semibold text-center text-lg">
+                {selectedBook
+                  ? `Go to ${selectedBook.long_name} ${selectedChapter}`
+                  : "Select a book to continue"}
+              </Text>
+              <Text className="text-blue-100 text-sm text-center mt-1">
+                Navigate to chapter {selectedChapter}
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
