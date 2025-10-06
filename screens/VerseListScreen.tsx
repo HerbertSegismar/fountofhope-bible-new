@@ -27,7 +27,7 @@ interface Props {
 }
 
 const { width } = Dimensions.get("window");
-const VERSES_PER_ROW = 6;
+const VERSES_PER_ROW = 8;
 const VERSE_SIZE = (width - 32 - (VERSES_PER_ROW - 1) * 8) / VERSES_PER_ROW;
 
 export default function VerseListScreen({ navigation, route }: Props) {
@@ -202,13 +202,13 @@ export default function VerseListScreen({ navigation, route }: Props) {
       <SafeAreaView className="p-4">
         {/* Header */}
         <View
-          className="bg-white rounded-lg p-6 mb-6 shadow-sm border-l-4"
+          className="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 -mt-10"
           style={{ borderLeftColor: book.book_color || "#3B82F6" }}
         >
-          <Text className="text-2xl font-bold text-primary mb-2 text-center">
+          <Text className="text-2xl font-bold text-primary -mb-6 text-center">
             {book.long_name}
           </Text>
-          <Text className="text-xl text-gray-600 text-center">
+          <Text className="text-base text-gray-600 text-center">
             Chapter {chapter}
           </Text>
           <Text className="text-sm text-gray-500 text-center mt-1">
@@ -229,11 +229,8 @@ export default function VerseListScreen({ navigation, route }: Props) {
         {/* Verse Selection Grid */}
         {verses.length > 0 ? (
           <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-4 text-center">
+            <Text className="text-lg font-semibold text-gray-700 mb-2 text-center">
               Select a Verse to Read
-            </Text>
-            <Text className="text-sm text-gray-500 text-center mb-4">
-              Tap any verse to start reading from that verse
             </Text>
 
             <View className="flex-row flex-wrap gap-2 justify-center">
@@ -351,13 +348,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
               onPress={() => navigation.navigate("ChapterList", { book })}
             >
               <Text className="text-gray-700 text-sm">All Chapters</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-white px-3 py-2 rounded border border-gray-300"
-              onPress={loadChapterData}
-            >
-              <Text className="text-gray-700 text-sm">Refresh</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

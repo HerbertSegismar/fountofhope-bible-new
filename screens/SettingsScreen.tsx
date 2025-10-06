@@ -6,10 +6,12 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { VersionSelector } from "../components/VersionSelector";
+import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -20,38 +22,6 @@ const SettingsScreen = () => {
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
-
-  const getVersionDisplayName = (version: string) => {
-    const versionMap: { [key: string]: string } = {
-      "niv11.sqlite3": "NIV (2011)",
-      "csb17.sqlite3": "CSB (2017)",
-      "ylt.sqlite3": "Young's Literal Translation",
-      "nlt15.sqlite3": "NLT (2015)",
-      "nkjv.sqlite3": "NKJV",
-      "nasb.sqlite3": "NASB",
-      "logos.sqlite3": "Logos Edition",
-      "kj2.sqlite3": "King James II",
-      "esv.sqlite3": "ESV",
-      "esvgsb.sqlite3": "ESV Gospel Study Bible",
-    };
-    return versionMap[version] || version;
-  };
-
-  const getVersionDescription = (version: string) => {
-    const descriptionMap: { [key: string]: string } = {
-      "niv11.sqlite3": "New International Version",
-      "csb17.sqlite3": "Christian Standard Bible",
-      "ylt.sqlite3": "Young's Literal Translation",
-      "nlt15.sqlite3": "New Living Translation",
-      "nkjv.sqlite3": "New King James Version",
-      "nasb.sqlite3": "New American Standard Bible",
-      "logos.sqlite3": "Logos Bible",
-      "kj2.sqlite3": "King James 2",
-      "esv.sqlite3": "English Standard Version",
-      "esvgsb.sqlite3": "ESV Global Study Bible",
-    };
-    return descriptionMap[version] || "Bible translation";
-  };
 
   useEffect(() => {
     const updateLayout = () => {
@@ -124,65 +94,26 @@ const SettingsScreen = () => {
           Choose your preferred Bible translation
         </Text>
 
-        <View className="rounded-md overflow-hidden">
-          {availableVersions.map((version) => {
-            const isSelected = selectedVersion === version;
-            const isCurrentlyActive = currentVersion === version;
-
-            return (
-              <TouchableOpacity
-                key={version}
-                className={`p-4 border-b border-slate-200 ${
-                  isSelected
-                    ? "bg-blue-50 border-l-4 border-blue-800"
-                    : "bg-slate-50"
-                }`}
-                onPress={() => handleVersionSelect(version)}
-                disabled={isLoading}
-              >
-                <View className="flex-row justify-between items-center">
-                  <View className="flex-1">
-                    <Text className="text-base font-semibold text-slate-800">
-                      {getVersionDisplayName(version)}
-                    </Text>
-                    <Text className="text-sm text-slate-500">
-                      {getVersionDescription(version)}
-                    </Text>
-                    {isCurrentlyActive && !isSelected && (
-                      <Text className="text-xs text-green-600 mt-1">
-                        Currently active
-                      </Text>
-                    )}
-                  </View>
-
-                  <View className="ml-3">
-                    {isLoading && isSelected ? (
-                      <Text className="text-sm italic text-slate-500">
-                        Switching...
-                      </Text>
-                    ) : (
-                      isSelected && (
-                        <Ionicons
-                          name="checkmark-circle"
-                          size={24}
-                          color="#1e40af"
-                        />
-                      )
-                    )}
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
         {isLoading && (
-          <View className="mt-2 items-center">
-            <Text className="text-sm italic text-slate-500">
+          <View className="mb-4 items-center">
+            <ActivityIndicator size="small" color="#3B82F6" />
+            <Text className="text-sm italic text-slate-500 mt-2">
               Switching version... Please wait
             </Text>
           </View>
         )}
+
+        <VersionSelector
+          currentVersion={currentVersion}
+          selectedVersion={selectedVersion}
+          availableVersions={availableVersions}
+          onVersionSelect={handleVersionSelect}
+          title=""
+          description=""
+          showCurrentVersion={false}
+          showActiveIndicator={true}
+          disabled={isLoading}
+        />
       </View>
 
       {/* Current Version Display */}

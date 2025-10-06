@@ -26,10 +26,12 @@ import { RouteProp, useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { RootStackParamList, Verse } from "../types";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
+import { VersionSelector } from "../components/VersionSelector";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
 import { getTestament } from "../utils/testamentUtils";
+import { lightenColor } from "../utils/colorUtils"; // Extract this too if needed
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -56,51 +58,6 @@ interface ChapterInfo {
   chapter: number;
   verseCount: number;
 }
-
-// Constants and utilities
-const VERSION_DISPLAY_NAMES: Record<string, string> = {
-  "niv11.sqlite3": "NIV (2011)",
-  "csb17.sqlite3": "CSB (2017)",
-  "ylt.sqlite3": "Young's Literal Translation",
-  "nlt15.sqlite3": "NLT (2015)",
-  "nkjv.sqlite3": "NKJV",
-  "nasb.sqlite3": "NASB",
-  "logos.sqlite3": "Logos Edition",
-  "kj2.sqlite3": "King James II",
-  "esv.sqlite3": "ESV",
-  "esvgsb.sqlite3": "ESV Gospel Study Bible",
-};
-
-const VERSION_DESCRIPTIONS: Record<string, string> = {
-  "niv11.sqlite3": "New International Version",
-  "csb17.sqlite3": "Christian Standard Bible",
-  "ylt.sqlite3": "Young's Literal Translation",
-  "nlt15.sqlite3": "New Living Translation",
-  "nkjv.sqlite3": "New King James Version",
-  "nasb.sqlite3": "New American Standard Bible",
-  "logos.sqlite3": "Logos Bible",
-  "kj2.sqlite3": "King James 2",
-  "esv.sqlite3": "English Standard Version",
-  "esvgsb.sqlite3": "ESV Global Study Bible",
-};
-
-const lightenColor = (color: string, amount = 0.15): string | undefined => {
-  if (!color) return undefined;
-  if (color.startsWith("#") && (color.length === 7 || color.length === 4)) {
-    let r, g, b;
-    if (color.length === 7) {
-      r = parseInt(color.slice(1, 3), 16);
-      g = parseInt(color.slice(3, 5), 16);
-      b = parseInt(color.slice(5, 7), 16);
-    } else {
-      r = parseInt(color[1] + color[1], 16);
-      g = parseInt(color[2] + color[2], 16);
-      b = parseInt(color[3] + color[3], 16);
-    }
-    return `rgba(${r}, ${g}, ${b}, ${amount})`;
-  }
-  return color;
-};
 
 export default function ReaderScreen({ navigation, route }: Props) {
   // Use route params directly as source of truth
@@ -940,7 +897,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
               </Text>
             </View>
 
-            <TouchableOpacity onPress={goToNextChapter} className="p-2">
+            <TouchableOpacity
+              onPress={goToNextChapter}
+              className={`p-2 ${isLandscape ? "mr-12" : "mr-0"}`}
+            >
               <Text className="text-white font-semibold text-sm">Next →</Text>
             </TouchableOpacity>
           </View>
@@ -965,7 +925,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
       {!isFullScreen && (
         <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
           <Text className="text-gray-600 text-sm">Font Size</Text>
-          <View className="flex-row items-center space-x-3">
+          <View
+            className={`flex-row items-center space-x-3 ${isLandscape ? "mr-12 gap-4" : "mr-0 gap-2"}`}
+          >
             <TouchableOpacity
               onPress={decreaseFontSize}
               className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
@@ -1018,7 +980,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
               <Text className="text-lg font-bold text-white">Settings</Text>
             </View>
 
-            <ScrollView className="max-h-96">
+            <ScrollView className="max-h-96 m-4">
               {/* Font Size Controls */}
               <View className="p-4 border-b border-gray-100">
                 <Text className="text-base font-semibold text-slate-700 mb-3">
@@ -1043,74 +1005,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 </View>
               </View>
 
-              {/* Bible Version Selection */}
-              <View className="p-4">
-                <Text className="text-base font-semibold text-slate-700 mb-2">
-                  Bible Version
-                </Text>
-                <Text className="text-sm text-slate-500 mb-4">
-                  Choose your preferred Bible translation
-                </Text>
-
-                <View className="rounded-md overflow-hidden border border-gray-200">
-                  {availableVersions.map((version) => {
-                    const isSelected = currentVersion === version;
-
-                    return (
-                      <TouchableOpacity
-                        key={version}
-                        className={`p-4 border-b border-gray-100 ${
-                          isSelected
-                            ? "bg-blue-50 border-l-4 border-blue-500"
-                            : "bg-white"
-                        }`}
-                        onPress={() => handleVersionSelect(version)}
-                      >
-                        <View className="flex-row justify-between items-center">
-                          <View className="flex-1">
-                            <Text
-                              className={`text-base font-semibold ${
-                                isSelected ? "text-blue-800" : "text-slate-800"
-                              }`}
-                            >
-                              {VERSION_DISPLAY_NAMES[version] || version}
-                            </Text>
-                            <Text className="text-sm text-slate-500">
-                              {VERSION_DESCRIPTIONS[version] ||
-                                "Bible translation"}
-                            </Text>
-                            {isSelected && (
-                              <Text className="text-xs text-green-600 mt-1">
-                                Currently active
-                              </Text>
-                            )}
-                          </View>
-
-                          <View className="ml-3">
-                            {isSelected && (
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={24}
-                                color="#3b82f6"
-                              />
-                            )}
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-
-              {/* Current Version Display */}
-              <View className="p-4 bg-blue-100 border-t border-blue-200">
-                <Text className="text-sm font-medium text-blue-500 mb-1">
-                  Current Version
-                </Text>
-                <Text className="text-base font-semibold text-blue-500">
-                  {VERSION_DISPLAY_NAMES[currentVersion] || currentVersion}
-                </Text>
-              </View>
+              {/* Bible Version Selection - USING SHARED COMPONENT */}
+              <VersionSelector
+                currentVersion={currentVersion}
+                availableVersions={availableVersions}
+                onVersionSelect={handleVersionSelect}
+                title="Bible Version"
+                description="Choose your preferred Bible translation"
+                showCurrentVersion={true}
+              />
             </ScrollView>
 
             <TouchableOpacity
@@ -1443,7 +1346,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 book: book || { book_number: bookId, long_name: bookName },
               })
             }
-            className="bg-white px-4 py-2 rounded-lg border border-gray-300"
+            className={`bg-white px-4 py-2 rounded-lg border border-gray-300 ${isLandscape ? "mr-12" : "mr-0"}`}
           >
             <Text className="text-gray-700 text-sm">All Chapters</Text>
           </TouchableOpacity>

@@ -23,6 +23,7 @@ import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 import { VerseMeasurementsProvider } from "./context/VerseMeasurementsContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
+import { ThemeProvider } from "./context/ThemeContext";
 
 // Param list types
 export type BibleStackParamList = {
@@ -254,12 +255,14 @@ export default function App() {
       <HighlightsProvider>
         <VerseMeasurementsProvider>
           <BibleDatabaseProvider>
-            <BookmarksProvider>
-              <NavigationContainer>
-                <AutoHideStatusBar />
-                <AppTabs />
-              </NavigationContainer>
-            </BookmarksProvider>
+            <ThemeProvider>
+              <BookmarksProvider>
+                <NavigationContainer>
+                  <AutoHideStatusBar />
+                  <AppTabs />
+                </NavigationContainer>
+              </BookmarksProvider>
+            </ThemeProvider>
           </BibleDatabaseProvider>
         </VerseMeasurementsProvider>
       </HighlightsProvider>

@@ -14,6 +14,8 @@ import { Button } from "../components/Button";
 import { BibleDatabaseError, Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
+// import MatrixRN from "../components/MatrixRN";
+// import MatrixGPT from "../components/MatrixGPT";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -248,6 +250,10 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
         </View>
       )}
+
+      {/* <View>
+        <MatrixRN/>
+      </View> */}
     </ScrollView>
   );
 }
