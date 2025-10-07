@@ -8,7 +8,6 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { VersionSelector } from "../components/VersionSelector";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";

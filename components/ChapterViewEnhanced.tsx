@@ -10,6 +10,7 @@ import {
   LayoutChangeEvent,
   DimensionValue,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
@@ -25,6 +26,7 @@ interface ChapterViewProps {
   onVerseRef?: (verseNumber: number, ref: View | null) => void;
   highlightVerse?: number;
   highlightedVerses?: Set<number>;
+  bookmarkedVerses?: Set<number>;
   style?: StyleProp<ViewStyle>;
   bookId?: number;
   isFullScreen?: boolean;
@@ -36,14 +38,70 @@ interface VerseTextElement {
   isNumber?: boolean;
 }
 
+// Constants for better maintainability
+const COLORS = {
+  primary: "#3B82F6",
+  secondary: "#1E40AF",
+  accent: "#FF6B6B",
+  background: {
+    target: "#FFF9E6",
+    highlight: "#EFF6FF",
+    default: "#FFFFFF",
+  },
+  border: {
+    target: "#FFD700",
+    highlight: "#3B82F6",
+    default: "#E5E7EB",
+  },
+  text: {
+    primary: "#1F2937",
+    secondary: "#374151",
+    verseNumber: "#1E40AF",
+    target: "#DC2626",
+  },
+} as const;
+
+const STYLES = {
+  container: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 12,
+    minHeight: 400,
+    alignSelf: "stretch" as const,
+    width: "100%" as DimensionValue,
+  },
+  header: {
+    fontSize: 20,
+    fontWeight: "700" as const,
+    textAlign: "center" as const,
+    marginBottom: 16,
+    color: "#0F172A",
+  },
+  verse: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+    padding: 4,
+    borderRadius: 8,
+  },
+  verseNumber: {
+    width: 20,
+    marginRight: 2,
+    textAlign: "left" as const,
+    includeFontPadding: false,
+  },
+  verseText: {
+    textAlign: "left" as const,
+    flex: 1,
+    minWidth: 0,
+  },
+} as const;
+
 // Parse verse text and extract XML tags
 const parseVerseText = (text: string): VerseTextElement[] => {
   if (!text) return [];
 
   const elements: VerseTextElement[] = [];
-  let currentText = text;
   let lastIndex = 0;
-
   const regex = /<([^>]+)>([^<]*)<\/\1>|<([^>]+)\/>/g;
   let match;
 
@@ -103,7 +161,7 @@ const renderVerseText = (
             fontSize: element.isNumber
               ? baseFontSize * 0.5
               : baseFontSize * 0.95,
-            color: "#ff5722",
+            color: COLORS.accent,
           }}
         >
           {element.content}
@@ -125,7 +183,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   onVerseRef,
   highlightVerse,
   highlightedVerses = new Set(),
+  bookmarkedVerses = new Set(),
   style,
+  isFullScreen,
 }) => {
   const { currentVersion } = useBibleDatabase();
 
@@ -149,7 +209,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     onVerseLayout?.(verseNumber, event);
   };
 
-  // Handle verse ref callback with null check
   const handleVerseRef = (verseNumber: number, ref: View | null) => {
     if (ref) {
       onVerseRef?.(verseNumber, ref);
@@ -160,127 +219,99 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     onVersePress?.(verse);
   };
 
-  // Base style for verse numbers with proper typing
-  const getBaseVerseNumberStyle = (): TextStyle => ({
-    width: 20,
-    marginRight: 2,
-    fontSize: Math.max(12, fontSize - 2),
-    textAlign: "left" as const,
-    includeFontPadding: false,
-  });
-
-  // UPDATED: Enhanced getVerseStyle to handle highlighted verses
+  // Enhanced getVerseStyle to handle highlighted and bookmarked verses
   const getVerseStyle = (verseNumber: number): ViewStyle => {
-    const baseStyle: ViewStyle = {
-      flexDirection: "row" as const,
-      alignItems: "flex-start" as const,
-      padding: 4,
-      borderRadius: 8,
-    };
-
+    const baseStyle: ViewStyle = STYLES.verse;
     const isHighlighted = highlightedVerses.has(verseNumber);
     const isTargetVerse = highlightVerse === verseNumber;
 
     if (isTargetVerse && isHighlighted) {
-      // Combined style for both target and highlighted
       return {
         ...baseStyle,
-        backgroundColor: "#fff9e6", // Target verse background
+        backgroundColor: COLORS.background.target,
         borderLeftWidth: 4,
-        borderLeftColor: "#ffd700", // Target verse border
+        borderLeftColor: COLORS.border.target,
         borderRightWidth: 4,
-        borderRightColor: "#3b82f6", // Highlight border
+        borderRightColor: COLORS.border.highlight,
       };
     } else if (isTargetVerse) {
-      // Only target verse
       return {
         ...baseStyle,
-        backgroundColor: "#fff9e6",
+        backgroundColor: COLORS.background.target,
         borderLeftWidth: 4,
-        borderLeftColor: "#ffd700",
+        borderLeftColor: COLORS.border.target,
       };
     } else if (isHighlighted) {
-      // Only highlighted verse
       return {
         ...baseStyle,
-        backgroundColor: "#eff6ff", // Light blue background for highlights
+        backgroundColor: COLORS.background.highlight,
         borderLeftWidth: 4,
-        borderLeftColor: "#3b82f6", // Blue border for highlights
+        borderLeftColor: COLORS.border.highlight,
       };
     }
 
     return baseStyle;
   };
 
-  // UPDATED: Enhanced verse number style for highlighted verses with proper typing
+  // Enhanced verse number style
   const getVerseNumberStyle = (verseNumber: number): TextStyle => {
-    const baseStyle = getBaseVerseNumberStyle();
+    const baseStyle: TextStyle = {
+      ...STYLES.verseNumber,
+      fontSize: Math.max(12, fontSize - 2),
+    };
+
     const isHighlighted = highlightedVerses.has(verseNumber);
     const isTargetVerse = highlightVerse === verseNumber;
 
-    if (isTargetVerse && isHighlighted) {
+    if (isTargetVerse) {
       return {
         ...baseStyle,
-        color: "#dc2626", // Red for target verse
-        fontWeight: "bold" as const,
-      };
-    } else if (isTargetVerse) {
-      return {
-        ...baseStyle,
-        color: "#dc2626", // Red for target verse
-        fontWeight: "bold" as const,
+        color: COLORS.text.target,
+        fontWeight: "bold",
       };
     } else if (isHighlighted) {
       return {
         ...baseStyle,
-        color: "#1e40af", // Blue for highlighted verses
-        fontWeight: "bold" as const,
+        color: COLORS.secondary,
+        fontWeight: "bold",
       };
     } else {
       return {
         ...baseStyle,
-        color: "#1e40af", // Default blue
-        fontWeight: "normal" as const,
+        color: COLORS.text.verseNumber,
+        fontWeight: "normal",
       };
     }
   };
 
-  // Base style for verse text with proper typing
-  const getBaseVerseTextStyle = (): TextStyle => ({
-    fontSize,
-    lineHeight: fontSize * 1.6,
-    textAlign: "left" as const,
-  });
-
-  // UPDATED: Enhanced verse text style for highlighted verses with proper typing
+  // Enhanced verse text style
   const getVerseTextStyle = (verseNumber: number): TextStyle => {
-    const baseStyle = getBaseVerseTextStyle();
+    const baseStyle: TextStyle = {
+      ...STYLES.verseText,
+      fontSize,
+      lineHeight: fontSize * 1.6,
+    };
+
     const isHighlighted = highlightedVerses.has(verseNumber);
     const isTargetVerse = highlightVerse === verseNumber;
 
-    if (isTargetVerse && isHighlighted) {
+    if (isTargetVerse) {
       return {
         ...baseStyle,
-        color: "#1f2937", // Dark gray for target verse
-        fontWeight: "600" as const,
-      };
-    } else if (isTargetVerse) {
-      return {
-        ...baseStyle,
-        color: "#1f2937", // Dark gray for target verse
-        fontWeight: "600" as const,
+        color: COLORS.text.primary,
+        fontWeight: "600",
       };
     } else if (isHighlighted) {
       return {
         ...baseStyle,
-        color: "#1e40af", // Blue text for highlighted verses
-        fontWeight: "500" as const,
+        color: COLORS.secondary,
+        fontWeight: "500",
       };
     } else {
       return {
         ...baseStyle,
-        color: "#374151", // Default gray
-        fontWeight: "normal" as const,
+        color: COLORS.text.secondary,
+        fontWeight: "normal",
       };
     }
   };
@@ -300,10 +331,27 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           <Text style={getVerseNumberStyle(verse.verse)}>{verse.verse}</Text>
         )}
 
-        <View style={{ flex: 1, minWidth: 0 }}>
+        <View
+          style={{
+            flex: 1,
+            minWidth: 0,
+            flexDirection: "row",
+            alignItems: "flex-start",
+          }}
+        >
           <Text style={getVerseTextStyle(verse.verse)}>
             {renderVerseText(verse.elements, fontSize)}
           </Text>
+
+          {/* Bookmark Icon */}
+          {bookmarkedVerses.has(verse.verse) && (
+            <Ionicons
+              name="bookmark"
+              size={16}
+              color={COLORS.primary}
+              style={{ marginLeft: 8, marginTop: 2 }}
+            />
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -315,9 +363,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         <View style={{ padding: 20 }}>
           <Text
             style={{
-              color: "#6b7280",
-              textAlign: "center" as const,
-              fontSize: fontSize,
+              color: "#6B7280",
+              textAlign: "center",
+              fontSize,
               lineHeight: fontSize * 1.6,
             }}
           >
@@ -330,7 +378,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     return <View style={{ gap: 4 }}>{verseElements.map(renderVerseItem)}</View>;
   };
 
-  // UPDATED: Enhanced header to show highlight count
   const getHeaderTitle = () => {
     let title = `${bookName} ${chapterNumber}`;
     if (highlightVerse) {
@@ -339,35 +386,24 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     return title;
   };
 
-  // Fixed container style with proper typing
-  const containerStyle: ViewStyle = {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 12,
-    minHeight: 400,
-    alignSelf: "stretch" as const,
-    width: "100%" as DimensionValue,
-  };
-
-  // Apply border color if available
-  const containerWithBorder = verses[0]?.book_color
+  // Container style with book color border
+  const containerStyle: ViewStyle = verses[0]?.book_color
     ? {
-        ...containerStyle,
+        ...STYLES.container,
         borderLeftWidth: 4,
         borderLeftColor: verses[0].book_color,
       }
+    : STYLES.container;
+
+  // Adjust padding for full screen mode
+  const adjustedStyle = isFullScreen
+    ? { ...containerStyle, paddingHorizontal: 8 }
     : containerStyle;
 
   const chapterContent = (
-    <View style={[containerWithBorder, style]}>
+    <View style={[adjustedStyle, style]}>
       <Text
-        style={{
-          fontSize: 20,
-          fontWeight: "700" as const,
-          textAlign: "center" as const,
-          marginBottom: 16,
-          color: "#0f172a",
-        }}
+        style={STYLES.header}
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.8}
@@ -382,19 +418,21 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           marginTop: 16,
           paddingTop: 12,
           borderTopWidth: 1,
-          borderTopColor: "#e5e7eb",
+          borderTopColor: "#E5E7EB",
         }}
       >
         <Text
           style={{
-            textAlign: "center" as const,
-            color: "#6b7280",
+            textAlign: "center",
+            color: "#6B7280",
             fontSize: 12,
           }}
         >
           {verseElements.length} verse{verseElements.length !== 1 ? "s" : ""}
           {highlightedVerses.size > 0 &&
             ` • ${highlightedVerses.size} highlighted`}
+          {bookmarkedVerses.size > 0 &&
+            ` • ${bookmarkedVerses.size} bookmarked`}
           {currentVersion && (
             <> • {currentVersion.replace(".sqlite3", "").toUpperCase()}</>
           )}

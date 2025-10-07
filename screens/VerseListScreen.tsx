@@ -202,10 +202,10 @@ export default function VerseListScreen({ navigation, route }: Props) {
       <SafeAreaView className="p-4">
         {/* Header */}
         <View
-          className="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 -mt-10"
+          className="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 -mt-10 h-30"
           style={{ borderLeftColor: book.book_color || "#3B82F6" }}
         >
-          <Text className="text-2xl font-bold text-primary -mb-6 text-center">
+          <Text className="text-2xl font-bold text-primary text-center">
             {book.long_name}
           </Text>
           <Text className="text-base text-gray-600 text-center">

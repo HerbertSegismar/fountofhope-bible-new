@@ -31,7 +31,7 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
 import { getTestament } from "../utils/testamentUtils";
-import { lightenColor } from "../utils/colorUtils"; // Extract this too if needed
+import { lightenColor } from "../utils/colorUtils";
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -69,6 +69,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
   const [showEnd, setShowEnd] = useState(false);
+  const { addBookmark, bookmarks } = useContext(BookmarksContext);
 
   // Settings and navigation state
   const [showSettings, setShowSettings] = useState(false);
@@ -114,12 +115,19 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // Context and refs
   const { bibleDB, currentVersion, availableVersions, switchVersion } =
     useBibleDatabase();
-  const { addBookmark } = useContext(BookmarksContext);
   const {
     toggleVerseHighlight,
     getChapterHighlights,
     loading: highlightedVersesLoading,
   } = useHighlights();
+
+  const bookmarkedVerses = useMemo(() => {
+    const chapterBookmarks = bookmarks.filter(
+      (bookmark) =>
+        bookmark.book_number === bookId && bookmark.chapter === chapter
+    );
+    return new Set(chapterBookmarks.map((bookmark) => bookmark.verse));
+  }, [bookmarks, bookId, chapter]);
 
   const highlightedVerses = useMemo(
     () => getChapterHighlights(bookId, chapter),
@@ -379,25 +387,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     });
   }, [selectedBook, selectedChapter, selectedVerse, navigation]);
 
-  const handleVersionSelect = useCallback(
-    async (version: string) => {
-      if (version === currentVersion) return;
-
-      try {
-        await switchVersion(version);
-        setShowSettings(false);
-        await loadChapter();
-      } catch (error) {
-        console.error("Version switch failed:", error);
-        Alert.alert(
-          "Error",
-          "Failed to switch Bible version. Please try again."
-        );
-      }
-    },
-    [currentVersion, switchVersion]
-  );
-
   // Load chapter data
   const loadChapter = useCallback(async () => {
     if (!bibleDB) return;
@@ -435,6 +424,32 @@ export default function ReaderScreen({ navigation, route }: Props) {
       }
     }
   }, [bibleDB, bookId, chapter]);
+
+  const handleVersionSelect = useCallback(
+    async (version: string) => {
+      if (version === currentVersion) {
+        return;
+      }
+
+      try {
+        // Close modal first to prevent state conflicts
+        setShowSettings(false);
+
+        // Switch version and wait for completion
+        await switchVersion(version);
+
+      } catch (error) {
+        console.error("Version switch failed:", error);
+        Alert.alert(
+          "Error",
+          "Failed to switch Bible version. Please try again."
+        );
+        // Ensure we reset loading state on error
+        setLoading(false);
+      }
+    },
+    [currentVersion, switchVersion ]
+  );
 
   // Chapter navigation using navigation like VerseListScreen does
   const goToPreviousChapter = useCallback(() => {
@@ -740,7 +755,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
     if (bibleDB) {
       loadChapter();
     }
-  }, [bibleDB, bookId, chapter, loadChapter]);
+  }, [bibleDB, bookId, chapter, currentVersion]);
 
   // Reset modal state when route params change
   useEffect(() => {
@@ -857,6 +872,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 onPress={() => {
                   setShowNavigation(true);
                   setHasTappedChapter(false);
+                  loadBooks();
                 }}
                 className="p-2 mr-2"
                 testID="navigation-button"
@@ -965,7 +981,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
         visible={showSettings}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowSettings(false)}
+        onRequestClose={() => {
+          setTimeout(() => setShowSettings(false), 100);
+        }}
       >
         <TouchableOpacity
           className="flex-1 bg-black/50 justify-center items-center"
@@ -1320,6 +1338,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
             onVerseRef={handleVerseRef}
             highlightVerse={targetVerse}
             highlightedVerses={new Set(highlightedVerses)}
+            bookmarkedVerses={bookmarkedVerses}
             isFullScreen={isFullScreen}
           />
         </View>

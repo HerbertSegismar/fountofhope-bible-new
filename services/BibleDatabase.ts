@@ -545,6 +545,10 @@ class BibleDatabase {
         return require("../assets/esv.sqlite3");
       case "esvgsb.sqlite3":
         return require("../assets/esvgsb.sqlite3");
+      case "iesvth.sqlite3":
+        return require("../assets/iesvth.sqlite3");
+      case "rv1895.sqlite3":
+        return require("../assets/rv1895.sqlite3");
       default:
         throw new Error(`Database ${this.dbName} not found in assets`);
     }
