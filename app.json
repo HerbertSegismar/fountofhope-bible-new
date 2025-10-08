@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Fount of Hope Bible",
-    "slug": "fountofhope-bible",
+    "slug": "fount-of-hope-bible",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/fountofhope-512x512.png",
@@ -50,8 +50,9 @@
     },
     "extra": {
       "eas": {
-        "projectId": "64ac7b76-ad33-46ee-8fe5-584bb3befcd1"
+        "projectId": "8655600c-f728-4a18-b204-41aeff1a964c"
       }
-    }
+    },
+    "owner": "fount-of-hope"
   }
 }
