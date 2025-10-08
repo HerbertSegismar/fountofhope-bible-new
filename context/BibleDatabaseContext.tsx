@@ -52,6 +52,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     "esvgsb.sqlite3",
     "iesvth.sqlite3",
     "rv1895.sqlite3",
+    "cebB.sqlite3",
+    "hilab82.sqlite3",
+    "mbb05.sqlite3",
+    "tagab01.sqlite3",
+    "tagmb12.sqlite3",
   ];
 
   // Keep all open databases for lightning-fast switching

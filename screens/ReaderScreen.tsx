@@ -110,7 +110,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   // Auto-scroll state for navigation modal
   const [shouldScrollToChapters, setShouldScrollToChapters] = useState(false);
-  const [shouldScrollToVerses, setShouldScrollToVerses] = useState(false);
 
   // Context and refs
   const { bibleDB, currentVersion, availableVersions, switchVersion } =
@@ -172,23 +171,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
     }
   }, []);
 
-  const scrollToVersesSection = useCallback(() => {
-    if (modalScrollViewRef.current && versesSectionRef.current) {
-      setTimeout(() => {
-        versesSectionRef.current?.measure(
-          (x, y, width, height, pageX, pageY) => {
-            if (modalScrollViewRef.current) {
-              modalScrollViewRef.current.scrollTo({
-                y: pageY - 80, // Adjust offset as needed
-                animated: true,
-              });
-            }
-          }
-        );
-      }, 100);
-    }
-  }, []);
-
   // Auto-scroll effects
   useEffect(() => {
     if (shouldScrollToChapters && !isLoadingNavigation) {
@@ -196,13 +178,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       setShouldScrollToChapters(false);
     }
   }, [shouldScrollToChapters, isLoadingNavigation, scrollToChaptersSection]);
-
-  useEffect(() => {
-    if (shouldScrollToVerses && !isLoadingNavigation) {
-      scrollToVersesSection();
-      setShouldScrollToVerses(false);
-    }
-  }, [shouldScrollToVerses, isLoadingNavigation, scrollToVersesSection]);
 
   // Reset modal state to current route values
   const resetModalState = useCallback(() => {
@@ -336,8 +311,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
       try {
         if (selectedBook) {
           await loadVersesForChapter(selectedBook.book_number, chapterNum);
-          // Set flag to trigger scrolling to verses after content is loaded
-          setShouldScrollToVerses(true);
         }
       } finally {
         setIsLoadingNavigation(false);
@@ -863,7 +836,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         <View className="bg-primary w-screen h-24 flex items-start justify-end readerView">
           <View className="flex-row justify-between items-center w-full px-6 pb-2">
             <Text className="text-white ml-0 tracking-wider text-xl">
-              Reader
+              Bible Reader
             </Text>
             <View
               className={`flex-row ${isLandscape ? "mr-28 top-2 gap-4" : "mr-0"}`}
@@ -991,7 +964,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           onPress={() => setShowSettings(false)}
         >
           <View
-            className="bg-white rounded-xl w-11/12 max-w-md max-h-4/5"
+            className={`bg-white rounded-xl w-11/12 max-w-md max-h-4/5 ${isLandscape? "mt-28" : ""}`}
             onStartShouldSetResponder={() => true}
           >
             <View className="p-4 border-b border-gray-200 bg-blue-500">
@@ -1051,7 +1024,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
         animationType="slide"
         onRequestClose={() => setShowNavigation(false)}
       >
-        <View className="flex-1 bg-white">
+        <SafeAreaView className="flex-1 bg-white">
           {/* Header */}
           <View className="bg-primary px-4 py-4">
             <View className="flex-row justify-between items-center">
@@ -1238,7 +1211,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
             {!hasTappedChapter && (
               <View className="mb-6">
                 <Text className="text-sm text-slate-500 mb-3">
-                  Tap any chapter to reveal verse selection
+                  Choose a chapter to reveal verse selection
                 </Text>
               </View>
             )}
@@ -1256,7 +1229,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                   <Text className="text-sm text-slate-500 mb-3">
                     {selectedVerse
                       ? `Will navigate to ${selectedBook.long_name} ${selectedChapter}:${selectedVerse}`
-                      : "Tap any verse to navigate directly"}
+                      : "Choose any verse to navigate directly"}
                   </Text>
                   <View className="flex-row flex-wrap gap-1">
                     {hasTappedChapter &&
@@ -1264,19 +1237,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
                         <TouchableOpacity
                           key={verse}
                           onPress={() => handleVerseSelect(verse)}
-                          className={`size-10 rounded-lg border items-center justify-center ${
-                            selectedVerse === verse
-                              ? "bg-green-500 border-green-600"
-                              : "bg-white border-gray-300"
-                          }`}
+                          className="size-10 rounded-lg border items-center justify-center bg-white border-blue-500"
                         >
-                          <Text
-                            className={`text-sm font-medium ${
-                              selectedVerse === verse
-                                ? "text-white"
-                                : "text-slate-700"
-                            }`}
-                          >
+                          <Text className="text-sm font-medium text-slate-700">
                             {verse}
                           </Text>
                         </TouchableOpacity>
@@ -1289,7 +1252,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
             <TouchableOpacity
               onPress={handleNavigateToLocation}
               disabled={!selectedBook || isLoadingNavigation}
-              className={`p-4 rounded-lg mt-4 mb-10 ${
+              className={`p-4 rounded-lg mt-4 mb-20 ${
                 selectedBook && !isLoadingNavigation
                   ? "bg-blue-500"
                   : "bg-gray-300"
@@ -1305,7 +1268,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
               </Text>
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </SafeAreaView>
       </Modal>
 
       {/* Chapter Content */}

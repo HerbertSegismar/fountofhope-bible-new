@@ -7,12 +7,17 @@ export const VERSION_DISPLAY_NAMES: Record<string, string> = {
   "nlt15.sqlite3": "NLT (2015)",
   "nkjv.sqlite3": "NKJV",
   "nasb.sqlite3": "NASB",
-  "logos.sqlite3": "Logos Edition",
-  "kj2.sqlite3": "King James II",
+  "logos.sqlite3": "Logos",
+  "kj2.sqlite3": "KJ2",
   "esv.sqlite3": "ESV",
-  "esvgsb.sqlite3": "ESV Global Study Bible",
-  "iesvth.sqlite3": "English-Greek Interliniar NT",
-  "rv1895.sqlite3": "RV1895 with Apocrypa",
+  "esvgsb.sqlite3": "ESVGSB",
+  "iesvth.sqlite3": "IESV NT",
+  "rv1895.sqlite3": "RV1895",
+  "cebB.sqlite3": "CEBB",
+  "mbb05.sqlite3": "MBB05",
+  "tagab01.sqlite3": "TAGAB01",
+  "tagmb12.sqlite3": "TAGMB12",
+  "hilab82.sqlite3": "HILAB82"
 };
 
 export const VERSION_DESCRIPTIONS: Record<string, string> = {
@@ -28,6 +33,11 @@ export const VERSION_DESCRIPTIONS: Record<string, string> = {
   "esvgsb.sqlite3": "ESV Global Study Bible",
   "iesvth.sqlite3": "The Interliniar English-Greek NT",
   "rv1895.sqlite3": "Revised Version with Apocrypha",
+  "cebB.sqlite3": "Cebuano Bible",
+  "mbb05.sqlite3": "Magandang Balita Biblia 2005",
+  "tagab01.sqlite3": "Tagalog Biblia 2001",
+  "tagmb12.sqlite3": "Tagalog Magandang Balita 2012",
+  "hilab82.sqlite3": "Hiligaynon Ang Biblia 1982",
 };
 
 export const getVersionDisplayName = (version: string): string => {

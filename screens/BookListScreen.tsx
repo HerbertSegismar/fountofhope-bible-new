@@ -11,9 +11,10 @@ import {
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
-import { Book } from "../services/BibleDatabase"; // Updated import path
+import { Book } from "../services/BibleDatabase";
 import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
-import { useBibleDatabase } from "../context/BibleDatabaseContext"; // Import the context
+import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { lightenColor } from "../utils/colorUtils";
 
 type BookListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -25,26 +26,7 @@ interface Props {
 }
 
 const { width } = Dimensions.get("window");
-const BOOK_CARD_WIDTH = (width - 48) / 3; // 3 columns with padding
-
-// Utility to lighten color by converting hex to rgba with alpha
-const lightenColor = (color: string, amount = 0.15) => {
-  if (!color) return undefined;
-  if (color.startsWith("#") && (color.length === 7 || color.length === 4)) {
-    let r, g, b;
-    if (color.length === 7) {
-      r = parseInt(color.slice(1, 3), 16);
-      g = parseInt(color.slice(3, 5), 16);
-      b = parseInt(color.slice(5, 7), 16);
-    } else {
-      r = parseInt(color[1] + color[1], 16);
-      g = parseInt(color[2] + color[2], 16);
-      b = parseInt(color[3] + color[3], 16);
-    }
-    return `rgba(${r}, ${g}, ${b}, ${amount})`;
-  }
-  return color; // fallback if not hex format
-};
+const BOOK_CARD_WIDTH = (width - 48) / 6;
 
 export default function BookListScreen({ navigation }: Props) {
   const [books, setBooks] = useState<Book[]>([]);
@@ -142,12 +124,6 @@ export default function BookListScreen({ navigation }: Props) {
           minimumFontScale={0.8}
         >
           {book.short_name}
-        </Text>
-        <Text
-          className="text-xs text-gray-500 text-center mt-1"
-          numberOfLines={1}
-        >
-          {book.long_name}
         </Text>
       </TouchableOpacity>
     );
