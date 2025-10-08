@@ -203,15 +203,16 @@ class BibleDatabase {
     }, `getBookFromAll(${bookNumber})`);
   }
 
+  // In services/BibleDatabase.ts - Updated getVerses method (remove unused version param)
   async getVerses(bookNumber: number, chapter: number): Promise<Verse[]> {
     return this.withRetry(async () => {
       await this.ensureInitialized();
       return await this.db!.getAllAsync<Verse>(
         `SELECT v.*, b.short_name as book_name, b.book_color 
-         FROM verses v 
-         JOIN books b ON v.book_number = b.book_number 
-         WHERE v.book_number = ? AND v.chapter = ? 
-         ORDER BY v.verse`,
+       FROM verses v 
+       JOIN books b ON v.book_number = b.book_number 
+       WHERE v.book_number = ? AND v.chapter = ? 
+       ORDER BY v.verse`,
         [bookNumber, chapter]
       );
     }, `getVerses(${bookNumber}, ${chapter})`);

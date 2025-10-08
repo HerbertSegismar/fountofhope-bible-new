@@ -90,7 +90,7 @@ interface ThemeProviderProps {
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>("light");
-  const [colorScheme, setColorScheme] = useState<ColorScheme>("purple");
+  const [colorScheme, setColorScheme] = useState<ColorScheme>("green");
   const [isReady, setIsReady] = useState(false);
 
   // Load saved values from AsyncStorage

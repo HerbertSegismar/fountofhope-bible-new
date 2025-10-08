@@ -1,9 +1,13 @@
-// components/MatrixRN.tsx
-import React, { useEffect, useState } from "react";
-import { View, Text, Dimensions, StyleSheet, Animated } from "react-native";
+import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  Animated,
+  Easing,
+} from "react-native";
 import { useTheme } from "../context/ThemeContext";
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 const JesusAttributes = [
   "Jesus Christ",
@@ -143,209 +147,331 @@ const JesusAttributes = [
   "Yahweh Shammah",
   "Yahweh Sabaoth",
 ];
-const MatrixRN = () => {
-  const { theme, colorScheme } = useTheme();
-  const [drops, setDrops] = useState<
-    {
-      id: string;
-      text: string;
-      position: Animated.Value;
-      opacity: Animated.Value;
-      left: number;
-    }[]
-  >([]);
 
-  const getMatrixColor = () => {
+const height = 512;
+const fontSize = 14;
+const trailLength = 15;
+
+interface Drop {
+  id: string;
+  headAnim: Animated.Value;
+  trailChars: string[];
+  x: number;
+}
+
+interface Overlay {
+  id: string;
+  text: string;
+  left: number;
+  top: number;
+  fontSize: number;
+  color: string;
+  fadeAnim: Animated.Value;
+  positionAnim: Animated.Value;
+}
+
+const MatrixNative = () => {
+  const { theme } = useTheme();
+  const [overlays, setOverlays] = useState<Overlay[]>([]);
+  const dropsRef = useRef<Drop[]>([]);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const getMatrixColor = useCallback(() => {
     if (theme === "dark") {
-      switch (colorScheme) {
-        case "green":
-          return "#1ad73dff";
-        case "red":
-          return "#EF4444";
-        case "yellow":
-          return "#F59E0B";
-        default:
-          return "#8B5CF6";
-      }
+      return "#1ad73dff";
     } else {
-      switch (colorScheme) {
-        case "green":
-          return "#15c641ff";
-        case "red":
-          return "#cb2929ff";
-        case "yellow":
-          return "#D97706";
-        default:
-          return "#7C3AED";
-      }
+      return "#15c641ff";
     }
+  }, [theme]);
+
+  const matrixChars =
+    "アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ~!@#$%^&*()_-+=ᜀᜁᜂᜃᜄᜅᜆᜇᜈᜉᜊᜋᜌᜎᜏᜐᜑ";
+
+  useEffect(() => {
+    if (containerWidth === 0) return;
+
+    const numColumns = Math.floor(containerWidth / fontSize);
+    const newDrops: Drop[] = [];
+
+    for (let i = 0; i < numColumns; i++) {
+      const id = `drop-${i}`;
+      const headAnim = new Animated.Value(0);
+      const trailChars = Array.from({ length: trailLength }, () =>
+        matrixChars.charAt(Math.floor(Math.random() * matrixChars.length))
+      );
+      newDrops.push({ id, headAnim, trailChars, x: i * fontSize });
+    }
+
+    // Stop previous animations
+    dropsRef.current.forEach((drop) => drop.headAnim.stopAnimation());
+    dropsRef.current = newDrops;
+
+    // Start animations
+    newDrops.forEach((drop) => startDropAnimation(drop.headAnim));
+
+    return () => {
+      newDrops.forEach((drop) => drop.headAnim.stopAnimation());
+    };
+  }, [containerWidth]);
+
+  const startDropAnimation = (anim: Animated.Value) => {
+    const duration = 2000 + Math.random() * 3000; // Slightly adjusted for smoother feel
+    const totalHeight = height + trailLength * fontSize;
+
+    Animated.timing(anim, {
+      toValue: totalHeight,
+      duration,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    }).start(() => {
+      anim.setValue(0);
+      const gapDelay = 500 + Math.random() * 2000; // Approximate web's probabilistic gap
+      setTimeout(() => {
+        startDropAnimation(anim);
+      }, gapDelay);
+    });
+  };
+
+  const showRandomAttribute = () => {
+    if (containerWidth === 0) return;
+    const randomAttribute =
+      JesusAttributes[Math.floor(Math.random() * JesusAttributes.length)];
+    const color = getMatrixColor();
+    const fs = Math.random() * 18 + 10;
+    const estimatedWidth = randomAttribute.length * (fs / 2.5);
+    let left = Math.random() * 0.8 * containerWidth;
+    left = Math.min(left, containerWidth - estimatedWidth);
+    const top = Math.random() * 0.8 * height;
+
+    const fadeAnim = new Animated.Value(0);
+    const positionAnim = new Animated.Value(20);
+
+    const newOverlay: Overlay = {
+      id: `${Date.now()}-${Math.random()}`,
+      text: randomAttribute,
+      left,
+      top,
+      fontSize: fs,
+      color,
+      fadeAnim,
+      positionAnim,
+    };
+
+    setOverlays((prev) => [...prev, newOverlay]);
+
+    // Animate in
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }),
+      Animated.timing(positionAnim, {
+        toValue: 0,
+        duration: 500,
+        easing: Easing.ease,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Animate out after 2s
+    const stayTimeout = setTimeout(() => {
+      overlayTimeoutRef.current = null;
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 1500,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(positionAnim, {
+          toValue: -20,
+          duration: 1500,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) {
+          setOverlays((prev) => prev.filter((o) => o.id !== newOverlay.id));
+          showRandomAttribute();
+        }
+      });
+    }, 2000);
+
+    overlayTimeoutRef.current = stayTimeout;
   };
 
   useEffect(() => {
-    // Create initial drops
-    const initialDrops = Array.from({ length: 15 }, (_, i) => ({
-      id: `drop-${i}`,
-      text: JesusAttributes[Math.floor(Math.random() * JesusAttributes.length)],
-      position: new Animated.Value(-100),
-      opacity: new Animated.Value(0),
-      left: Math.random() * (screenWidth - 150),
-    }));
+    if (containerWidth === 0) return;
 
-    setDrops(initialDrops);
+    if (overlayTimeoutRef.current) {
+      clearTimeout(overlayTimeoutRef.current);
+      overlayTimeoutRef.current = null;
+    }
 
-    // Animate drops
-    const animations = initialDrops.map((drop, index) => {
-      const delay = index * 300 + Math.random() * 1000;
+    setOverlays([]);
 
-      return Animated.sequence([
-        Animated.delay(delay),
-        Animated.parallel([
-          Animated.timing(drop.position, {
-            toValue: 400,
-            duration: 3000 + Math.random() * 2000,
-            useNativeDriver: true,
-          }),
-          Animated.sequence([
-            Animated.timing(drop.opacity, {
-              toValue: 1,
-              duration: 500,
-              useNativeDriver: true,
-            }),
-            Animated.delay(2000),
-            Animated.timing(drop.opacity, {
-              toValue: 0,
-              duration: 500,
-              useNativeDriver: true,
-            }),
-          ]),
-        ]),
-      ]);
-    });
-
-    Animated.parallel(animations).start();
-
-    // Continuous rain effect
-    const interval = setInterval(() => {
-      const newDrop = {
-        id: `drop-${Date.now()}-${Math.random()}`,
-        text: JesusAttributes[
-          Math.floor(Math.random() * JesusAttributes.length)
-        ],
-        position: new Animated.Value(-50),
-        opacity: new Animated.Value(0),
-        left: Math.random() * (screenWidth - 150),
-      };
-
-      setDrops((prev) => [...prev.slice(-20), newDrop]); // Keep only last 20 drops
-
-      Animated.sequence([
-        Animated.delay(100),
-        Animated.parallel([
-          Animated.timing(newDrop.position, {
-            toValue: 400,
-            duration: 4000 + Math.random() * 2000,
-            useNativeDriver: true,
-          }),
-          Animated.sequence([
-            Animated.timing(newDrop.opacity, {
-              toValue: 1,
-              duration: 800,
-              useNativeDriver: true,
-            }),
-            Animated.delay(1500),
-            Animated.timing(newDrop.opacity, {
-              toValue: 0,
-              duration: 800,
-              useNativeDriver: true,
-            }),
-          ]),
-        ]),
-      ]).start();
-    }, 800);
+    showRandomAttribute();
 
     return () => {
-      clearInterval(interval);
-      // Clean up animations
-      drops.forEach((drop) => {
-        drop.position.stopAnimation();
-        drop.opacity.stopAnimation();
+      if (overlayTimeoutRef.current) {
+        clearTimeout(overlayTimeoutRef.current);
+        overlayTimeoutRef.current = null;
+      }
+    };
+  }, [containerWidth]);
+
+  useEffect(() => {
+    return () => {
+      overlays.forEach((overlay) => {
+        overlay.fadeAnim.stopAnimation();
+        overlay.positionAnim.stopAnimation();
       });
     };
-  }, []);
+  }, [overlays]);
+
+  const renderDrops = () => {
+    const elements: JSX.Element[] = [];
+    const currentDrops = dropsRef.current;
+    const matrixColor = getMatrixColor();
+    const shadowColor = `${matrixColor.slice(0, 7)}80`;
+
+    currentDrops.forEach((drop) => {
+      for (let j = 0; j < trailLength; j++) {
+        const offset = -j * fontSize;
+        const trailAnim = drop.headAnim.interpolate({
+          inputRange: [0, height + trailLength * fontSize],
+          outputRange: [offset, height + trailLength * fontSize + offset],
+        });
+        const opacity = j === 0 ? 1 : Math.max(0, 1 - (j / trailLength) * 1.2);
+        const char = drop.trailChars[j];
+
+        elements.push(
+          <Animated.View
+            key={`${drop.id}-trail-${j}`}
+            style={[
+              styles.drop,
+              {
+                left: drop.x,
+                transform: [{ translateY: trailAnim }],
+                opacity,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.char,
+                { color: matrixColor },
+                {
+                  textShadowColor: shadowColor,
+                  textShadowOffset: { width: 0, height: 0 },
+                  textShadowRadius: 2,
+                },
+              ]}
+            >
+              {char}
+            </Text>
+          </Animated.View>
+        );
+      }
+    });
+    return elements;
+  };
+
+  const renderOverlays = () => {
+    return overlays.map((overlay) => (
+      <Animated.View
+        key={overlay.id}
+        style={[
+          styles.overlayText,
+          {
+            left: overlay.left,
+            top: overlay.top,
+            opacity: overlay.fadeAnim,
+            transform: [{ translateY: overlay.positionAnim }],
+          },
+        ]}
+      >
+        <Text
+          style={[
+            styles.text,
+            { color: overlay.color, fontSize: overlay.fontSize },
+          ]}
+        >
+          {overlay.text}
+        </Text>
+      </Animated.View>
+    ));
+  };
 
   const matrixColor = getMatrixColor();
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
+    <View style={styles.outerContainer}>
+      <Text style={[styles.title, { color: matrixColor }]}>
         Names & Attributes of the Lord Jesus Christ
       </Text>
-      <View style={styles.matrixContainer}>
-        <View style={[styles.background, { backgroundColor: "#000000" }]} />
-
-        {/* Raining text drops */}
-        {drops.map((drop) => (
-          <Animated.Text
-            key={drop.id}
-            style={[
-              styles.dropText,
-              {
-                color: matrixColor,
-                left: drop.left,
-                transform: [{ translateY: drop.position }],
-                opacity: drop.opacity,
-                fontSize: 12 + Math.random() * 8,
-              },
-            ]}
-          >
-            {drop.text}
-          </Animated.Text>
-        ))}
+      <View
+        onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
+        style={styles.container}
+      >
+        {renderDrops()}
+        <View style={styles.overlayContainer}>{renderOverlays()}</View>
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  outerContainer: {
     backgroundColor: "black",
     borderRadius: 16,
     marginTop: 32,
-    padding: 8,
-    marginHorizontal: 8,
+    marginBottom: 24,
   },
   title: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 16,
-    fontWeight: "600",
     padding: 8,
-    marginBottom: 8,
+    fontSize: 12,
+    textAlign: "center",
   },
-  matrixContainer: {
-    position: "relative",
-    height: 300,
+  container: {
     width: "100%",
+    height,
+    backgroundColor: "black",
     overflow: "hidden",
-    borderRadius: 16,
-    marginBottom: 8,
-    backgroundColor: "#000000",
   },
-  background: {
+  drop: {
+    position: "absolute",
+    top: 0,
+    width: fontSize,
+    height: fontSize,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  char: {
+    fontSize,
+    fontFamily: "monospace",
+    includeFontPadding: false,
+  },
+  overlayContainer: {
     position: "absolute",
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
+    width: "100%",
+    height: "100%",
+    pointerEvents: "none",
   },
-  dropText: {
+  overlayText: {
     position: "absolute",
-    fontWeight: "300",
-    fontFamily: "System",
-    textShadowColor: "rgba(0, 255, 0, 0.8)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    zIndex: 10,
+  },
+  text: {
+    fontWeight: "200",
+    fontFamily: "Oswald", // Assume loaded; fallback to system
+    includeFontPadding: false,
   },
 });
 
-export default MatrixRN;
+export default MatrixNative;

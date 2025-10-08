@@ -32,6 +32,7 @@ import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
 import { getTestament } from "../utils/testamentUtils";
 import { lightenColor } from "../utils/colorUtils";
+import { BibleDatabase } from "../services/BibleDatabase";
 
 type ReaderScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -59,13 +60,35 @@ interface ChapterInfo {
   verseCount: number;
 }
 
+const dbToDisplayName: Record<string, string> = {
+  "esv.sqlite3": "ESV",
+  "esvgsb.sqlite3": "ESVGSB",
+  "iesvth.sqlite3": "IESVTH",
+  "rv1895.sqlite3": "RV1895",
+  "cebB.sqlite3": "CEB",
+  "hilab82.sqlite3": "HILAB",
+  "tagab01.sqlite3": "TAGAB",
+  "tagmb12.sqlite3": "TAGMB",
+  "mbb05.sqlite3": "MBB",
+  "niv11.sqlite3": "NIV",
+  "csb17.sqlite3": "CSB",
+  "ylt.sqlite3": "YLT",
+  "nlt15.sqlite3": "NLT",
+  "nkjv.sqlite3": "NKJV",
+  "nasb.sqlite3": "NASB",
+  "logos.sqlite3": "LOGOS",
+  "kj2.sqlite3": "KJ2",
+};
+
 export default function ReaderScreen({ navigation, route }: Props) {
   // Use route params directly as source of truth
   const { bookId, chapter, bookName, verse: targetVerse } = route.params;
 
   // Component state
   const [verses, setVerses] = useState<Verse[]>([]);
+  const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [secondaryLoading, setSecondaryLoading] = useState(false);
   const [book, setBook] = useState<any>(null);
   const [fontSize, setFontSize] = useState(16);
   const [showEnd, setShowEnd] = useState(false);
@@ -79,6 +102,13 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [newTestament, setNewTestament] = useState<Book[]>([]);
   const [chapters, setChapters] = useState<ChapterInfo[]>([]);
   const [versesList, setVersesList] = useState<number[]>([]);
+
+  // Multi-version state
+  const [showMultiVersion, setShowMultiVersion] = useState(false);
+  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
+  const [secondaryBibleDB, setSecondaryBibleDB] =
+    useState<BibleDatabase | null>(null);
+  const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
 
   // Navigation modal state - initialize with current route values
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -94,7 +124,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // UI state
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
-  const [lastScrollY, setLastScrollY] = useState(0);
+  const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
 
   // Scroll and measurement state
@@ -102,10 +132,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const [verseMeasurements, setVerseMeasurements] = useState<
     Record<number, { y: number; height: number }>
   >({});
+  const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<
+    Record<number, { y: number; height: number }>
+  >({});
   const [contentReady, setContentReady] = useState(false);
   const [scrollViewReady, setScrollViewReady] = useState(false);
   const [chapterContainerY, setChapterContainerY] = useState(0);
   const [contentHeight, setContentHeight] = useState(1);
+  const [secondaryContentHeight, setSecondaryContentHeight] = useState(1);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
 
   // Auto-scroll state for navigation modal
@@ -134,6 +168,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
   );
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const secondaryScrollViewRef = useRef<ScrollView>(null);
   const chapterContainerRef = useRef<View>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const measurementCount = useRef(0);
@@ -142,6 +177,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMounted = useRef(true);
   const verseRefs = useRef<Record<number, View | undefined>>({});
+  const secondaryVerseRefs = useRef<Record<number, View | undefined>>({});
+  const isSyncing = useRef(false);
 
   // Navigation modal refs
   const modalScrollViewRef = useRef<ScrollView>(null);
@@ -398,6 +435,12 @@ export default function ReaderScreen({ navigation, route }: Props) {
     }
   }, [bibleDB, bookId, chapter]);
 
+  // Create ref for loadChapter to avoid dependency issues
+  const loadChapterRef = useRef(loadChapter);
+  useEffect(() => {
+    loadChapterRef.current = loadChapter;
+  }, [loadChapter]);
+
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion) {
@@ -405,24 +448,127 @@ export default function ReaderScreen({ navigation, route }: Props) {
       }
 
       try {
+        setIsSwitchingVersion(true);
         // Close modal first to prevent state conflicts
         setShowSettings(false);
 
         // Switch version and wait for completion
         await switchVersion(version);
-
       } catch (error) {
         console.error("Version switch failed:", error);
         Alert.alert(
           "Error",
           "Failed to switch Bible version. Please try again."
         );
-        // Ensure we reset loading state on error
-        setLoading(false);
+      } finally {
+        setIsSwitchingVersion(false);
       }
     },
-    [currentVersion, switchVersion ]
+    [currentVersion, switchVersion]
   );
+
+  // Toggle multi-version display
+  const toggleMultiVersion = useCallback(async () => {
+    if (!showMultiVersion) {
+      // Enable multi-version - set a default secondary version if none selected
+      if (!secondaryVersion) {
+        // Choose a different version than current
+        const otherVersions = availableVersions.filter(
+          (v) => v !== currentVersion
+        );
+        if (otherVersions.length > 0) {
+          setSecondaryVersion(otherVersions[0]);
+        } else {
+          Alert.alert("Info", "No other Bible versions available");
+          return;
+        }
+      }
+      setShowMultiVersion(true);
+    } else {
+      // Disable multi-version
+      setShowMultiVersion(false);
+      setSecondaryVerses([]);
+    }
+  }, [showMultiVersion, secondaryVersion, availableVersions, currentVersion]);
+
+  // Handle secondary version selection
+  const handleSecondaryVersionSelect = useCallback(
+    async (version: string) => {
+      if (version === currentVersion) {
+        Alert.alert(
+          "Error",
+          "Secondary version cannot be the same as primary version"
+        );
+        return;
+      }
+
+      // Close previous secondary DB if exists
+      if (secondaryBibleDB) {
+        await secondaryBibleDB.close();
+        setSecondaryBibleDB(null);
+      }
+
+      setSecondaryVersion(version);
+    },
+    [currentVersion, secondaryBibleDB]
+  );
+
+  // Load secondary verses effect
+  useEffect(() => {
+    const loadSecondary = async () => {
+      if (!showMultiVersion || !secondaryVersion || !bibleDB) return;
+
+      setSecondaryLoading(true);
+      try {
+        let secondaryChapterVerses: Verse[] = [];
+
+        const dbName = secondaryVersion;
+        let dbInstance: BibleDatabase | null = secondaryBibleDB;
+
+        if (!dbInstance) {
+          const tempDB = new BibleDatabase(dbName);
+          await tempDB.init();
+          setSecondaryBibleDB(tempDB);
+          dbInstance = tempDB;
+        }
+
+        if (secondaryVersion === currentVersion) {
+          secondaryChapterVerses = verses;
+        } else {
+          if (!dbInstance) {
+            throw new Error("Failed to initialize secondary database");
+          }
+          secondaryChapterVerses = await dbInstance.getVerses(bookId, chapter);
+        }
+
+        setSecondaryVerses(secondaryChapterVerses);
+      } catch (error) {
+        console.error("Failed to load secondary version:", error);
+        setSecondaryVerses([]);
+      } finally {
+        setSecondaryLoading(false);
+      }
+    };
+
+    loadSecondary();
+  }, [
+    showMultiVersion,
+    secondaryVersion,
+    currentVersion,
+    bookId,
+    chapter,
+    verses,
+    secondaryBibleDB,
+    bibleDB,
+  ]);
+
+  // Cleanup secondary DB when disabling multi-version
+  useEffect(() => {
+    if (!showMultiVersion && secondaryBibleDB) {
+      secondaryBibleDB.close();
+      setSecondaryBibleDB(null);
+    }
+  }, [showMultiVersion, secondaryBibleDB]);
 
   // Chapter navigation using navigation like VerseListScreen does
   const goToPreviousChapter = useCallback(() => {
@@ -440,8 +586,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
     if (!bibleDB) return;
 
     try {
-      const nextChapterVerses = await bibleDB.getVerses(bookId, chapter + 1);
-      if (nextChapterVerses.length > 0) {
+      // Check if next chapter exists by getting verse count
+      const verseCount = await bibleDB.getVerseCount(bookId, chapter + 1);
+      if (verseCount > 0) {
         // Use navigation to update route
         navigation.navigate("Reader", {
           ...route.params,
@@ -586,6 +733,23 @@ export default function ReaderScreen({ navigation, route }: Props) {
     ]
   );
 
+  const handleSecondaryVerseLayout = useCallback(
+    (verseNumber: number, event: LayoutChangeEvent) => {
+      const { layout } = event.nativeEvent;
+      const { height } = layout;
+
+      if (height > 0) {
+        setSecondaryVerseMeasurements((prev) => {
+          if (prev[verseNumber] && prev[verseNumber].height === height) {
+            return prev;
+          }
+          return { ...prev, [verseNumber]: { y: 0, height } };
+        });
+      }
+    },
+    []
+  );
+
   const handleVerseRef = useCallback(
     (verseNumber: number, ref: View | null) => {
       if (ref) {
@@ -597,9 +761,27 @@ export default function ReaderScreen({ navigation, route }: Props) {
     []
   );
 
+  const handleSecondaryVerseRef = useCallback(
+    (verseNumber: number, ref: View | null) => {
+      if (ref) {
+        secondaryVerseRefs.current[verseNumber] = ref;
+      } else {
+        delete secondaryVerseRefs.current[verseNumber];
+      }
+    },
+    []
+  );
+
   const handleContentSizeChange = useCallback((w: number, h: number) => {
     setContentHeight(h);
   }, []);
+
+  const handleSecondaryContentSizeChange = useCallback(
+    (w: number, h: number) => {
+      setSecondaryContentHeight(h);
+    },
+    []
+  );
 
   const handleScrollViewLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
@@ -621,26 +803,85 @@ export default function ReaderScreen({ navigation, route }: Props) {
       scrollY.setValue(offsetY);
 
       if (isLandscape) {
-        const scrollDelta = offsetY - lastScrollY;
+        const scrollDelta = offsetY - lastScrollYRef.current;
         if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100) {
           setIsFullScreen(true);
         }
-        setLastScrollY(offsetY);
+        lastScrollYRef.current = offsetY;
       }
 
-      if (offsetY + scrollViewHeight >= contentHeight - 20) {
-        setShowEnd(true);
-      } else {
-        setShowEnd(false);
+      // Sync secondary scroll view if in multi-version mode
+      if (
+        showMultiVersion &&
+        secondaryScrollViewRef.current &&
+        !isSyncing.current
+      ) {
+        isSyncing.current = true;
+        const viewHeight = scrollViewHeight;
+        const maxPrimary = Math.max(contentHeight - viewHeight, 0);
+        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 0);
+        const progress = maxPrimary > 0 ? offsetY / maxPrimary : 0;
+        const targetY = progress * maxSecondary;
+        secondaryScrollViewRef.current.scrollTo({
+          y: targetY,
+          animated: false,
+        });
+        requestAnimationFrame(() => {
+          isSyncing.current = false;
+        });
       }
     },
     [
       isLandscape,
-      lastScrollY,
       scrollThreshold,
       isFullScreen,
       scrollViewHeight,
       contentHeight,
+      showMultiVersion,
+      secondaryContentHeight,
+    ]
+  );
+
+  const handleSecondaryScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const secondaryOffsetY = event.nativeEvent.contentOffset.y;
+
+      // Sync primary scroll view
+      if (showMultiVersion && scrollViewRef.current && !isSyncing.current) {
+        isSyncing.current = true;
+        const viewHeight = scrollViewHeight;
+        const maxPrimary = Math.max(contentHeight - viewHeight, 0);
+        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 0);
+        const progress = maxSecondary > 0 ? secondaryOffsetY / maxSecondary : 0;
+        const targetY = progress * maxPrimary;
+        scrollViewRef.current.scrollTo({
+          y: targetY,
+          animated: false,
+        });
+        scrollY.setValue(targetY);
+
+        // Handle full screen trigger
+        if (isLandscape) {
+          const scrollDelta = targetY - lastScrollYRef.current;
+          if (scrollDelta > scrollThreshold && !isFullScreen && targetY > 100) {
+            setIsFullScreen(true);
+          }
+          lastScrollYRef.current = targetY;
+        }
+
+        requestAnimationFrame(() => {
+          isSyncing.current = false;
+        });
+      }
+    },
+    [
+      showMultiVersion,
+      scrollViewHeight,
+      contentHeight,
+      secondaryContentHeight,
+      isLandscape,
+      scrollThreshold,
+      isFullScreen,
     ]
   );
 
@@ -706,11 +947,21 @@ export default function ReaderScreen({ navigation, route }: Props) {
   }, []);
 
   const getHeaderTitle = useCallback(() => {
-    if (targetVerse) {
-      return `${bookName} ${chapter}:${targetVerse}`;
+    const baseTitle = targetVerse
+      ? `${bookName} ${chapter}:${targetVerse}`
+      : `${bookName} ${chapter}`;
+
+    // Add version info when not in multi-version mode
+    if (!showMultiVersion) {
+      const displayVersion = dbToDisplayName[currentVersion] || currentVersion;
+      return `${baseTitle} (${displayVersion})`;
     }
-    return `${bookName} ${chapter}`;
-  }, [bookName, chapter, targetVerse]);
+    return baseTitle;
+  }, [bookName, chapter, targetVerse, showMultiVersion, currentVersion]);
+
+  const getDisplayVersion = useCallback((version: string | null) => {
+    return version ? dbToDisplayName[version] || version : "";
+  }, []);
 
   // Effects
   useEffect(() => {
@@ -720,13 +971,19 @@ export default function ReaderScreen({ navigation, route }: Props) {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
+      // Clean up when component unmounts
+      setSecondaryVerses([]);
+      setSecondaryVerseMeasurements({});
+      if (secondaryBibleDB) {
+        secondaryBibleDB.close();
+      }
     };
   }, []);
 
   // Load chapter when route params change
   useEffect(() => {
     if (bibleDB) {
-      loadChapter();
+      loadChapterRef.current();
     }
   }, [bibleDB, bookId, chapter, currentVersion]);
 
@@ -745,6 +1002,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
       }
     }
   }, [showNavigation, books.length, bibleDB, loadBooks, resetModalState]);
+
+  // Reset secondary data when multi-version is disabled
+  useEffect(() => {
+    if (!showMultiVersion) {
+      setSecondaryVerses([]);
+      setSecondaryVerseMeasurements({});
+    }
+  }, [showMultiVersion]);
 
   // Scroll to verse effect
   useEffect(() => {
@@ -788,6 +1053,29 @@ export default function ReaderScreen({ navigation, route }: Props) {
     scrollToVerseFallback,
   ]);
 
+  // Listen to scrollY for showEnd and other global updates
+  useEffect(() => {
+    const listener = scrollY.addListener(({ value }) => {
+      // Update showEnd
+      if (value + scrollViewHeight >= contentHeight - 20) {
+        setShowEnd(true);
+      } else {
+        setShowEnd(false);
+      }
+
+      // Full screen trigger (fallback, but primarily handled in handlers)
+      if (isLandscape) {
+        const scrollDelta = value - lastScrollYRef.current;
+        if (scrollDelta > scrollThreshold && !isFullScreen && value > 100) {
+          setIsFullScreen(true);
+        }
+        lastScrollYRef.current = value;
+      }
+    });
+
+    return () => scrollY.removeListener(listener);
+  }, [scrollViewHeight, contentHeight, isLandscape, scrollThreshold]);
+
   // Layout effects
   useFocusEffect(
     useCallback(() => {
@@ -820,11 +1108,147 @@ export default function ReaderScreen({ navigation, route }: Props) {
     };
   }, [isFullScreen]);
 
-  if (!bibleDB || loading || highlightedVersesLoading) {
+  // Render multi-version layout
+  const renderMultiVersionContent = () => {
+    if (!showMultiVersion) {
+      return (
+        <ScrollView
+          ref={scrollViewRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingBottom: 40,
+            paddingHorizontal: isFullScreen ? 20 : 0,
+          }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          onContentSizeChange={handleContentSizeChange}
+          onLayout={handleScrollViewLayout}
+        >
+          <View
+            ref={chapterContainerRef}
+            onLayout={handleChapterContainerLayout}
+            className={isFullScreen ? "pt-4" : ""}
+          >
+            <ChapterViewEnhanced
+              verses={verses}
+              bookName={bookName}
+              chapterNumber={chapter}
+              bookId={bookId}
+              showVerseNumbers
+              fontSize={fontSize}
+              onVersePress={handleVersePress}
+              onVerseLayout={handleVerseLayout}
+              onVerseRef={handleVerseRef}
+              highlightVerse={targetVerse}
+              highlightedVerses={new Set(highlightedVerses)}
+              bookmarkedVerses={bookmarkedVerses}
+              isFullScreen={isFullScreen}
+            />
+          </View>
+        </ScrollView>
+      );
+    }
+
+    const primaryDisplay = getDisplayVersion(currentVersion);
+    const secondaryDisplay = getDisplayVersion(secondaryVersion);
+
+    // Multi-version layout - side by side for both orientations
+    return (
+      <View className="flex-1 flex-row">
+        {/* Primary Version */}
+        <View className="flex-1 border-r border-gray-200">
+          <View className="bg-gray-50 py-2 px-4 border-b border-gray-200">
+            <Text className="text-sm font-semibold text-gray-700">
+              {primaryDisplay}
+            </Text>
+          </View>
+          <ScrollView
+            ref={scrollViewRef}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 40 }}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            onContentSizeChange={handleContentSizeChange}
+            onLayout={handleScrollViewLayout}
+          >
+            <ChapterViewEnhanced
+              verses={verses}
+              bookName={bookName}
+              chapterNumber={chapter}
+              bookId={bookId}
+              showVerseNumbers
+              fontSize={fontSize}
+              onVersePress={handleVersePress}
+              onVerseLayout={handleVerseLayout}
+              onVerseRef={handleVerseRef}
+              highlightVerse={targetVerse}
+              highlightedVerses={new Set(highlightedVerses)}
+              bookmarkedVerses={bookmarkedVerses}
+              isFullScreen={isFullScreen}
+            />
+          </ScrollView>
+        </View>
+
+        {/* Secondary Version */}
+        <View className="flex-1">
+          <View className="bg-gray-50 py-2 px-4 border-b border-gray-200">
+            <Text className="text-sm font-semibold text-gray-700">
+              {secondaryDisplay}
+            </Text>
+          </View>
+          {secondaryLoading ? (
+            <View className="flex-1 justify-center items-center">
+              <ActivityIndicator size="small" color="#3B82F6" />
+              <Text className="text-gray-500 mt-2">Loading version...</Text>
+            </View>
+          ) : secondaryVerses.length === 0 ? (
+            <View className="flex-1 justify-center items-center">
+              <Text className="text-gray-500 text-center">
+                Unable to load {secondaryDisplay} version
+              </Text>
+              <Text className="text-gray-400 text-sm text-center mt-1">
+                This version may not be available
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              ref={secondaryScrollViewRef}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              onScroll={handleSecondaryScroll}
+              scrollEventThrottle={16}
+              onContentSizeChange={handleSecondaryContentSizeChange}
+              onLayout={handleScrollViewLayout}
+            >
+              <ChapterViewEnhanced
+                verses={secondaryVerses}
+                bookName={bookName}
+                chapterNumber={chapter}
+                bookId={bookId}
+                showVerseNumbers
+                fontSize={fontSize}
+                onVersePress={handleVersePress}
+                onVerseLayout={handleSecondaryVerseLayout}
+                onVerseRef={handleSecondaryVerseRef}
+                highlightVerse={targetVerse}
+                highlightedVerses={new Set(highlightedVerses)}
+                bookmarkedVerses={bookmarkedVerses}
+                isFullScreen={isFullScreen}
+              />
+            </ScrollView>
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  if (!bibleDB || loading || highlightedVersesLoading || isSwitchingVersion) {
     return (
       <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-gray-600 mt-2">Loading...</Text>
+        <Text className="text-gray-600 mt-2">
+          {isSwitchingVersion ? "Switching version..." : "Loading..."}
+        </Text>
       </SafeAreaView>
     );
   }
@@ -851,6 +1275,17 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 testID="navigation-button"
               >
                 <Ionicons name="book-outline" size={24} color="white" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={toggleMultiVersion}
+                className={`p-2 mr-2 ${showMultiVersion ? "bg-white/20 rounded" : ""}`}
+                testID="multi-version-button"
+              >
+                <Ionicons
+                  name={showMultiVersion ? "copy" : "copy-outline"}
+                  size={24}
+                  color={showMultiVersion ? "#FBBF24" : "white"}
+                />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setShowSettings(true)}
@@ -964,7 +1399,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           onPress={() => setShowSettings(false)}
         >
           <View
-            className={`bg-white rounded-xl w-11/12 max-w-md max-h-4/5 ${isLandscape? "mt-28" : ""}`}
+            className={`bg-white rounded-xl w-11/12 max-w-md max-h-4/5 ${isLandscape ? "mt-28" : ""}`}
             onStartShouldSetResponder={() => true}
           >
             <View className="p-4 border-b border-gray-200 bg-blue-500">
@@ -996,15 +1431,53 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 </View>
               </View>
 
+              {/* Multi-Version Toggle */}
+              <View className="p-4 border-b border-gray-100">
+                <Text className="text-base font-semibold text-slate-700 mb-3">
+                  Multi-Version Display
+                </Text>
+                <View className="flex-row justify-between items-center">
+                  <Text className="text-gray-600 flex-1">
+                    Show two Bible versions side by side
+                  </Text>
+                  <TouchableOpacity
+                    onPress={toggleMultiVersion}
+                    className={`w-12 h-6 rounded-full justify-center ${
+                      showMultiVersion ? "bg-blue-500" : "bg-gray-300"
+                    }`}
+                  >
+                    <View
+                      className={`w-5 h-5 rounded-full bg-white absolute ${
+                        showMultiVersion ? "right-1" : "left-1"
+                      }`}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {/* Bible Version Selection - USING SHARED COMPONENT */}
               <VersionSelector
                 currentVersion={currentVersion}
                 availableVersions={availableVersions}
                 onVersionSelect={handleVersionSelect}
-                title="Bible Version"
+                title="Primary Bible Version"
                 description="Choose your preferred Bible translation"
                 showCurrentVersion={true}
               />
+
+              {/* Secondary Bible Version Selection */}
+              {showMultiVersion && (
+                <VersionSelector
+                  currentVersion={secondaryVersion || ""}
+                  availableVersions={availableVersions.filter(
+                    (v) => v !== currentVersion
+                  )}
+                  onVersionSelect={handleSecondaryVersionSelect}
+                  title="Secondary Bible Version"
+                  description="Choose a different translation for comparison"
+                  showCurrentVersion={true}
+                />
+              )}
             </ScrollView>
 
             <TouchableOpacity
@@ -1272,40 +1745,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
       </Modal>
 
       {/* Chapter Content */}
-      <ScrollView
-        ref={scrollViewRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 40,
-          paddingHorizontal: isFullScreen ? 20 : 0,
-        }}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-        onContentSizeChange={handleContentSizeChange}
-        onLayout={handleScrollViewLayout}
-      >
-        <View
-          ref={chapterContainerRef}
-          onLayout={handleChapterContainerLayout}
-          className={isFullScreen ? "pt-4" : ""}
-        >
-          <ChapterViewEnhanced
-            verses={verses}
-            bookName={bookName}
-            chapterNumber={chapter}
-            bookId={bookId}
-            showVerseNumbers
-            fontSize={fontSize}
-            onVersePress={handleVersePress}
-            onVerseLayout={handleVerseLayout}
-            onVerseRef={handleVerseRef}
-            highlightVerse={targetVerse}
-            highlightedVerses={new Set(highlightedVerses)}
-            bookmarkedVerses={bookmarkedVerses}
-            isFullScreen={isFullScreen}
-          />
-        </View>
-      </ScrollView>
+      {renderMultiVersionContent()}
 
       {/* Quick Navigation Footer */}
       {!isFullScreen && (
