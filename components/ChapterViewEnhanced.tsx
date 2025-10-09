@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
-import { useBibleDatabase } from "../context/BibleDatabaseContext";
 
 interface ChapterViewProps {
   verses: Verse[];
@@ -30,6 +29,7 @@ interface ChapterViewProps {
   style?: StyleProp<ViewStyle>;
   bookId?: number;
   isFullScreen?: boolean;
+  displayVersion?: string;
 }
 
 interface VerseTextElement {
@@ -186,9 +186,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   bookmarkedVerses = new Set(),
   style,
   isFullScreen,
+  displayVersion,
 }) => {
-  const { currentVersion } = useBibleDatabase();
-
   // Sort verses by verse number
   const sortedVerses = React.useMemo(
     () => [...verses].sort((a, b) => a.verse - b.verse),
@@ -433,9 +432,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
             ` • ${highlightedVerses.size} highlighted`}
           {bookmarkedVerses.size > 0 &&
             ` • ${bookmarkedVerses.size} bookmarked`}
-          {currentVersion && (
-            <> • {currentVersion.replace(".sqlite3", "").toUpperCase()}</>
-          )}
+          {displayVersion && <> • {displayVersion}</>}
         </Text>
       </View>
     </View>

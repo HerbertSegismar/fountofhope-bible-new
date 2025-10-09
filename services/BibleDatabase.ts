@@ -1,4 +1,3 @@
-// services/BibleDatabase.ts
 import {
   documentDirectory,
   getInfoAsync,
@@ -16,7 +15,7 @@ import {
   DatabaseInfo,
   DatabaseMigration,
   DatabaseStats,
-  SearchOptions
+  SearchOptions,
 } from "../types";
 
 class BibleDatabaseError extends Error {
@@ -64,7 +63,6 @@ class BibleDatabase {
 
   // ==================== PUBLIC METHODS ====================
 
-  // services/BibleDatabase.ts
   async searchVerses(query: string, options?: SearchOptions): Promise<Verse[]> {
     if (!this.db) {
       throw new Error("Database not initialized");
@@ -370,6 +368,7 @@ class BibleDatabase {
 
   // ==================== PRIVATE METHODS ====================
 
+  // REFACTORED: Enhanced with detailed logging
   private async initializeDatabase(): Promise<void> {
     try {
       await this.setupDatabase();
@@ -379,6 +378,12 @@ class BibleDatabase {
       this.isInitialized = true;
       console.log(`Bible database ${this.dbName} initialized ✅`);
     } catch (error) {
+      // Enhanced logging for debugging (remove in production if needed)
+      console.error(`Detailed init failure for ${this.dbName}:`, {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        operation: "initializeDatabase",
+      });
       this.initializationPromise = null;
       throw new BibleDatabaseError(
         "Failed to initialize database",
@@ -388,11 +393,30 @@ class BibleDatabase {
     }
   }
 
+  // REFACTORED: Added file validation to avoid stale/empty files
   private async setupDatabase(): Promise<void> {
     try {
       const fileInfo = await getInfoAsync(this.dbPath);
-      if (!fileInfo.exists) await this.copyDatabaseFromAssets();
+      if (!fileInfo.exists) {
+        console.log(`Copying ${this.dbName} from assets...`);
+        await this.copyDatabaseFromAssets();
+      } else {
+        // Quick validation: Ensure file isn't empty/stale (optional safeguard)
+        if (fileInfo.size === 0 || fileInfo.modificationTime === undefined) {
+          console.warn(`Invalid cached file for ${this.dbName}, recopying...`);
+          await this.copyDatabaseFromAssets();
+        } else {
+          console.log(
+            `Using existing ${this.dbName} (size: ${fileInfo.size} bytes)`
+          );
+        }
+      }
     } catch (error) {
+      // Enhanced logging
+      console.error(`Setup failure for ${this.dbName}:`, {
+        error: error instanceof Error ? error.message : error,
+        operation: "setupDatabase",
+      });
       throw new BibleDatabaseError(
         "Failed to setup database",
         error,
@@ -405,7 +429,13 @@ class BibleDatabase {
     try {
       await this.ensureDirectoryExists();
       await this.copyDatabaseFileFromBundle();
+      console.log(`Copied ${this.dbName} successfully`);
     } catch (error) {
+      // Enhanced logging
+      console.error(`Copy failure for ${this.dbName}:`, {
+        error: error instanceof Error ? error.message : error,
+        operation: "copyDatabaseFromAssets",
+      });
       throw new BibleDatabaseError(
         "Failed to copy database from assets",
         error,
@@ -414,17 +444,31 @@ class BibleDatabase {
     }
   }
 
+  // REFACTORED: Removed unnecessary downloadAsync() for bundled assets
   private async copyDatabaseFileFromBundle(): Promise<void> {
     try {
       const asset = Asset.fromModule(this.getDatabaseAsset());
-      await asset.downloadAsync();
 
-      if (asset.localUri) {
-        await copyAsync({ from: asset.localUri, to: this.dbPath });
-      } else {
-        throw new Error("Could not load database asset");
+      // FIXED: Remove downloadAsync() - unnecessary for bundled assets.
+      // localUri is immediately available for require()'d files.
+      // If this were a remote asset, you'd check !asset.localUri && call downloadAsync().
+
+      if (!asset.localUri) {
+        throw new Error(
+          `No localUri available for bundled asset ${this.dbName}`
+        );
       }
+
+      await copyAsync({
+        from: asset.localUri,
+        to: this.dbPath,
+      });
     } catch (error) {
+      // Enhanced logging
+      console.error(`Bundle copy failure for ${this.dbName}:`, {
+        error: error instanceof Error ? error.message : error,
+        operation: "copyDatabaseFileFromBundle",
+      });
       throw new BibleDatabaseError(
         "Failed to copy database file from bundle",
         error,

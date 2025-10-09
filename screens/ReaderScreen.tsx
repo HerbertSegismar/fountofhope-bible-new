@@ -106,9 +106,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // Multi-version state
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
-  const [secondaryBibleDB, setSecondaryBibleDB] =
-    useState<BibleDatabase | null>(null);
   const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
+  // REFACTORED: Added failure tracking to prevent loops on bad versions
+  const [secondaryFailureCount, setSecondaryFailureCount] = useState(0);
+  const secondaryDBCache = useRef<Record<string, BibleDatabase>>({});
 
   // Navigation modal state - initialize with current route values
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -130,12 +131,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
   // Scroll and measurement state
   const [hasScrolledToVerse, setHasScrolledToVerse] = useState(false);
   const [verseMeasurements, setVerseMeasurements] = useState<
-    Record<number, { y: number; height: number }>
+    Record<number, number>
   >({});
   const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<
-    Record<number, { y: number; height: number }>
+    Record<number, number>
   >({});
-  const [contentReady, setContentReady] = useState(false);
   const [scrollViewReady, setScrollViewReady] = useState(false);
   const [chapterContainerY, setChapterContainerY] = useState(0);
   const [contentHeight, setContentHeight] = useState(1);
@@ -154,6 +154,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
     loading: highlightedVersesLoading,
   } = useHighlights();
 
+  const defaultVerseHeight = 80;
+
   const bookmarkedVerses = useMemo(() => {
     const chapterBookmarks = bookmarks.filter(
       (bookmark) =>
@@ -171,13 +173,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
   const secondaryScrollViewRef = useRef<ScrollView>(null);
   const chapterContainerRef = useRef<View>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const measurementCount = useRef(0);
-  const totalVerses = useRef(0);
-  const scrollAttempts = useRef(0);
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMounted = useRef(true);
-  const verseRefs = useRef<Record<number, View | undefined>>({});
-  const secondaryVerseRefs = useRef<Record<number, View | undefined>>({});
   const isSyncing = useRef(false);
 
   // Navigation modal refs
@@ -397,42 +394,56 @@ export default function ReaderScreen({ navigation, route }: Props) {
     });
   }, [selectedBook, selectedChapter, selectedVerse, navigation]);
 
-  // Load chapter data
+  // Load chapter data with retry logic for intermittent DB errors
   const loadChapter = useCallback(async () => {
     if (!bibleDB) return;
 
-    try {
-      setLoading(true);
-      setHasScrolledToVerse(false);
-      setContentReady(false);
-      setScrollViewReady(false);
-      setVerseMeasurements({});
-      setChapterContainerY(0);
-      setIsFullScreen(false);
-      measurementCount.current = 0;
-      scrollAttempts.current = 0;
-      verseRefs.current = {};
+    const maxRetries = 3;
+    let lastError: unknown;
 
-      const bookDetails = await bibleDB.getBook(bookId);
-      setBook(bookDetails);
-      const chapterVerses = await bibleDB.getVerses(bookId, chapter);
-      setVerses(chapterVerses);
-      totalVerses.current = chapterVerses.length;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        setLoading(true);
+        setHasScrolledToVerse(false);
+        setScrollViewReady(false);
+        setVerseMeasurements({});
+        setChapterContainerY(0);
+        setIsFullScreen(false);
+        scrollTimeoutRef.current = null;
 
-      setTimeout(() => {
+        const bookDetails = await bibleDB.getBook(bookId);
+        setBook(bookDetails);
+        const chapterVerses = await bibleDB.getVerses(bookId, chapter);
+        setVerses(chapterVerses);
+
+        // Success - set loading false and exit
         if (isMounted.current) {
-          setContentReady(true);
+          setLoading(false);
+          setShowEnd(false);
         }
-      }, 200);
-    } catch (error) {
-      console.error("Failed to load chapter:", error);
-      Alert.alert("Error", "Failed to load chapter content");
-    } finally {
-      if (isMounted.current) {
-        setLoading(false);
-        setShowEnd(false);
+        return; // Exit on success
+      } catch (error) {
+        lastError = error;
+        console.error(`Chapter load attempt ${attempt + 1} failed:`, error);
+
+        if (attempt < maxRetries - 1) {
+          // Exponential backoff delay
+          const delay = 500 * Math.pow(2, attempt);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
       }
     }
+
+    // All retries exhausted
+    console.error("All chapter load attempts failed:", lastError);
+    if (isMounted.current) {
+      setLoading(false);
+      setShowEnd(false);
+    }
+    Alert.alert(
+      "Error",
+      `Failed to load chapter content after ${maxRetries} attempts. Please try refreshing or switching versions.`
+    );
   }, [bibleDB, bookId, chapter]);
 
   // Create ref for loadChapter to avoid dependency issues
@@ -467,8 +478,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
     [currentVersion, switchVersion]
   );
 
-  // Toggle multi-version display
+  // REFACTORED: Reset failure count on toggle
   const toggleMultiVersion = useCallback(async () => {
+    setSecondaryFailureCount(0); // Reset on toggle
     if (!showMultiVersion) {
       // Enable multi-version - set a default secondary version if none selected
       if (!secondaryVersion) {
@@ -502,18 +514,37 @@ export default function ReaderScreen({ navigation, route }: Props) {
         return;
       }
 
-      // Close previous secondary DB if exists
-      if (secondaryBibleDB) {
-        await secondaryBibleDB.close();
-        setSecondaryBibleDB(null);
-      }
-
       setSecondaryVersion(version);
     },
-    [currentVersion, secondaryBibleDB]
+    [currentVersion]
   );
 
-  // Load secondary verses effect
+  // Load secondary verses with retry logic
+  const loadSecondaryVerses = useCallback(
+    async (dbInstance: BibleDatabase, retryCount = 0) => {
+      const maxRetries = 3;
+      if (retryCount >= maxRetries) {
+        throw new Error(`Failed after ${maxRetries} retries`);
+      }
+
+      try {
+        return await dbInstance.getVerses(bookId, chapter);
+      } catch (error) {
+        console.error(
+          `Secondary load attempt ${retryCount + 1} failed:`,
+          error
+        );
+        if (retryCount < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+          return loadSecondaryVerses(dbInstance, retryCount + 1);
+        }
+        throw error;
+      }
+    },
+    [bookId, chapter]
+  );
+
+  // REFACTORED: Enhanced loadSecondary effect with failure tracking
   useEffect(() => {
     const loadSecondary = async () => {
       if (!showMultiVersion || !secondaryVersion || !bibleDB) return;
@@ -523,13 +554,12 @@ export default function ReaderScreen({ navigation, route }: Props) {
         let secondaryChapterVerses: Verse[] = [];
 
         const dbName = secondaryVersion;
-        let dbInstance: BibleDatabase | null = secondaryBibleDB;
+        let dbInstance = secondaryDBCache.current[dbName];
 
         if (!dbInstance) {
-          const tempDB = new BibleDatabase(dbName);
-          await tempDB.init();
-          setSecondaryBibleDB(tempDB);
-          dbInstance = tempDB;
+          dbInstance = new BibleDatabase(dbName);
+          await dbInstance.init();
+          secondaryDBCache.current[dbName] = dbInstance;
         }
 
         if (secondaryVersion === currentVersion) {
@@ -538,12 +568,27 @@ export default function ReaderScreen({ navigation, route }: Props) {
           if (!dbInstance) {
             throw new Error("Failed to initialize secondary database");
           }
-          secondaryChapterVerses = await dbInstance.getVerses(bookId, chapter);
+          secondaryChapterVerses = await loadSecondaryVerses(dbInstance);
         }
 
+        // Reset failure count on success
+        setSecondaryFailureCount(0);
         setSecondaryVerses(secondaryChapterVerses);
       } catch (error) {
         console.error("Failed to load secondary version:", error);
+
+        // Track failures; disable multi-version after 3 attempts to prevent loops
+        const newFailureCount = secondaryFailureCount + 1;
+        setSecondaryFailureCount(newFailureCount);
+        if (newFailureCount >= 3) {
+          Alert.alert(
+            "Version Load Error",
+            `Failed to load ${getDisplayVersion(secondaryVersion)}. Disabling multi-version. Try a different version.`
+          );
+          setShowMultiVersion(false);
+          setSecondaryVersion(null);
+        }
+
         setSecondaryVerses([]);
       } finally {
         setSecondaryLoading(false);
@@ -558,17 +603,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
     bookId,
     chapter,
     verses,
-    secondaryBibleDB,
     bibleDB,
+    loadSecondaryVerses,
+    secondaryFailureCount, // Add this to re-trigger on failure reset
   ]);
 
   // Cleanup secondary DB when disabling multi-version
   useEffect(() => {
-    if (!showMultiVersion && secondaryBibleDB) {
-      secondaryBibleDB.close();
-      setSecondaryBibleDB(null);
+    if (!showMultiVersion && Object.keys(secondaryDBCache.current).length > 0) {
+      Object.values(secondaryDBCache.current).forEach((db) => {
+        db.close().catch(console.error);
+      });
+      secondaryDBCache.current = {};
     }
-  }, [showMultiVersion, secondaryBibleDB]);
+  }, [showMultiVersion]);
 
   // Chapter navigation using navigation like VerseListScreen does
   const goToPreviousChapter = useCallback(() => {
@@ -604,169 +652,63 @@ export default function ReaderScreen({ navigation, route }: Props) {
   }, [bibleDB, bookId, chapter, navigation, route.params]);
 
   // Scroll functions
-  const measureVersePosition = useCallback(
-    (verseNumber: number): Promise<number> => {
-      return new Promise((resolve) => {
-        const verseRef = verseRefs.current[verseNumber];
-        if (!verseRef || !scrollViewRef.current) {
-          resolve(0);
-          return;
-        }
+  const scrollToTargetVerse = useCallback((): boolean => {
+    if (!targetVerse || verses.length === 0) return false;
 
-        try {
-          verseRef.measure((x, y, width, height, pageX, pageY) => {
-            resolve(pageY);
-          });
-        } catch (error) {
-          console.error(`Error measuring verse ${verseNumber}:`, error);
-          resolve(0);
-        }
-      });
-    },
-    []
-  );
+    const verseIndex = verses.findIndex((v) => v.verse === targetVerse);
+    if (verseIndex === -1) return false;
 
-  const scrollToVerseFallback = useCallback(
-    (verseNumber: number): boolean => {
-      if (!scrollViewRef.current) return false;
+    let cumulative = 0;
+    for (let i = 0; i < verseIndex; i++) {
+      const verseNum = verses[i].verse;
+      cumulative += verseMeasurements[verseNum] || defaultVerseHeight;
+    }
 
-      const verseIndex = verses.findIndex((v) => v.verse === verseNumber);
-      if (verseIndex === -1) return false;
+    const verseHeight = verseMeasurements[targetVerse] || defaultVerseHeight;
+    const scrollPosition = Math.max(
+      0,
+      cumulative - scrollViewHeight / 2 + verseHeight / 2
+    );
 
-      let cumulativeHeight = 0;
-      for (let i = 0; i < verseIndex; i++) {
-        const verse = verses[i];
-        const verseHeight = verseMeasurements[verse.verse]?.height || 80;
-        cumulativeHeight += verseHeight;
-      }
-
-      const currentVerseHeight = verseMeasurements[verseNumber]?.height || 80;
-      const scrollPosition = Math.max(
-        0,
-        cumulativeHeight - scrollViewHeight / 2 + currentVerseHeight / 2
-      );
-
+    if (scrollViewRef.current) {
       scrollViewRef.current.scrollTo({
         y: scrollPosition,
         animated: true,
       });
-
-      setHasScrolledToVerse(true);
-      return true;
-    },
-    [verses, verseMeasurements, scrollViewHeight]
-  );
-
-  const scrollToTargetVerse = useCallback(async (): Promise<boolean> => {
-    if (!scrollViewRef.current || !targetVerse) {
-      return false;
     }
 
-    try {
-      const versePosition = await measureVersePosition(targetVerse);
-      const verseHeight = verseMeasurements[targetVerse]?.height || 100;
-
-      if (versePosition > 0 && scrollViewHeight > 0) {
-        const scrollPosition = Math.max(
-          0,
-          versePosition - scrollViewHeight / 2 + verseHeight / 2
-        );
-
-        scrollViewRef.current.scrollTo({
-          y: scrollPosition,
-          animated: true,
-        });
-
-        setHasScrolledToVerse(true);
-        return true;
-      }
-    } catch (error) {
-      console.error("Error in direct measurement:", error);
-    }
-
-    return scrollToVerseFallback(targetVerse);
-  }, [
-    targetVerse,
-    verseMeasurements,
-    scrollViewHeight,
-    measureVersePosition,
-    scrollToVerseFallback,
-  ]);
+    setHasScrolledToVerse(true);
+    return true;
+  }, [verses, verseMeasurements, scrollViewHeight, targetVerse]);
 
   // Layout handlers
   const handleVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
-      const { layout } = event.nativeEvent;
-      const { height } = layout;
+      const { height } = event.nativeEvent.layout;
 
       if (height > 0) {
         setVerseMeasurements((prev) => {
-          if (prev[verseNumber] && prev[verseNumber].height === height) {
+          if (prev[verseNumber] === height) {
             return prev;
           }
-
-          const newMeasurements = { ...prev, [verseNumber]: { y: 0, height } };
-          measurementCount.current = Object.keys(newMeasurements).length;
-          return newMeasurements;
+          return { ...prev, [verseNumber]: height };
         });
-
-        if (
-          verseNumber === targetVerse &&
-          !hasScrolledToVerse &&
-          contentReady &&
-          scrollViewReady
-        ) {
-          setTimeout(() => {
-            if (isMounted.current && !hasScrolledToVerse) {
-              scrollToTargetVerse();
-            }
-          }, 200);
-        }
       }
     },
-    [
-      targetVerse,
-      hasScrolledToVerse,
-      contentReady,
-      scrollViewReady,
-      scrollToTargetVerse,
-    ]
+    []
   );
 
   const handleSecondaryVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
-      const { layout } = event.nativeEvent;
-      const { height } = layout;
+      const { height } = event.nativeEvent.layout;
 
       if (height > 0) {
         setSecondaryVerseMeasurements((prev) => {
-          if (prev[verseNumber] && prev[verseNumber].height === height) {
+          if (prev[verseNumber] === height) {
             return prev;
           }
-          return { ...prev, [verseNumber]: { y: 0, height } };
+          return { ...prev, [verseNumber]: height };
         });
-      }
-    },
-    []
-  );
-
-  const handleVerseRef = useCallback(
-    (verseNumber: number, ref: View | null) => {
-      if (ref) {
-        verseRefs.current[verseNumber] = ref;
-      } else {
-        delete verseRefs.current[verseNumber];
-      }
-    },
-    []
-  );
-
-  const handleSecondaryVerseRef = useCallback(
-    (verseNumber: number, ref: View | null) => {
-      if (ref) {
-        secondaryVerseRefs.current[verseNumber] = ref;
-      } else {
-        delete secondaryVerseRefs.current[verseNumber];
       }
     },
     []
@@ -817,15 +759,56 @@ export default function ReaderScreen({ navigation, route }: Props) {
         !isSyncing.current
       ) {
         isSyncing.current = true;
+
         const viewHeight = scrollViewHeight;
-        const maxPrimary = Math.max(contentHeight - viewHeight, 0);
+        let targetY = 0;
         const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 0);
-        const progress = maxPrimary > 0 ? offsetY / maxPrimary : 0;
-        const targetY = progress * maxSecondary;
-        secondaryScrollViewRef.current.scrollTo({
+
+        // Find verse index in primary
+        let cumulative = 0;
+        let verseIndex = -1;
+        for (let i = 0; i < verses.length; i++) {
+          const verseNum = verses[i].verse;
+          const height = verseMeasurements[verseNum] || defaultVerseHeight;
+          if (offsetY < cumulative + height) {
+            verseIndex = i;
+            break;
+          }
+          cumulative += height;
+        }
+
+        if (verseIndex !== -1) {
+          const startY = cumulative;
+          const verseNum = verses[verseIndex].verse;
+          const secIndex = secondaryVerses.findIndex(
+            (v) => v.verse === verseNum
+          );
+          if (secIndex !== -1) {
+            let secCumulative = 0;
+            for (let j = 0; j < secIndex; j++) {
+              const sVerseNum = secondaryVerses[j].verse;
+              secCumulative +=
+                secondaryVerseMeasurements[sVerseNum] || defaultVerseHeight;
+            }
+            const secStartY = secCumulative;
+            targetY = secStartY - startY + offsetY;
+          } else {
+            // Fallback to progress
+            const maxPrimary = Math.max(contentHeight - viewHeight, 0);
+            const progress = maxPrimary > 0 ? offsetY / maxPrimary : 0;
+            targetY = progress * maxSecondary;
+          }
+        } else {
+          // At end
+          targetY = maxSecondary;
+        }
+
+        targetY = Math.max(0, Math.min(targetY, maxSecondary));
+        secondaryScrollViewRef.current!.scrollTo({
           y: targetY,
           animated: false,
         });
+
         requestAnimationFrame(() => {
           isSyncing.current = false;
         });
@@ -839,6 +822,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
       contentHeight,
       showMultiVersion,
       secondaryContentHeight,
+      verses,
+      verseMeasurements,
+      secondaryVerses,
+      secondaryVerseMeasurements,
     ]
   );
 
@@ -849,12 +836,55 @@ export default function ReaderScreen({ navigation, route }: Props) {
       // Sync primary scroll view
       if (showMultiVersion && scrollViewRef.current && !isSyncing.current) {
         isSyncing.current = true;
+
         const viewHeight = scrollViewHeight;
+        let targetY = 0;
         const maxPrimary = Math.max(contentHeight - viewHeight, 0);
-        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 0);
-        const progress = maxSecondary > 0 ? secondaryOffsetY / maxSecondary : 0;
-        const targetY = progress * maxPrimary;
-        scrollViewRef.current.scrollTo({
+
+        // Find verse index in secondary
+        let cumulative = 0;
+        let verseIndex = -1;
+        for (let i = 0; i < secondaryVerses.length; i++) {
+          const verseNum = secondaryVerses[i].verse;
+          const height =
+            secondaryVerseMeasurements[verseNum] || defaultVerseHeight;
+          if (secondaryOffsetY < cumulative + height) {
+            verseIndex = i;
+            break;
+          }
+          cumulative += height;
+        }
+
+        if (verseIndex !== -1) {
+          const startY = cumulative;
+          const verseNum = secondaryVerses[verseIndex].verse;
+          const priIndex = verses.findIndex((v) => v.verse === verseNum);
+          if (priIndex !== -1) {
+            let priCumulative = 0;
+            for (let j = 0; j < priIndex; j++) {
+              const pVerseNum = verses[j].verse;
+              priCumulative +=
+                verseMeasurements[pVerseNum] || defaultVerseHeight;
+            }
+            const priStartY = priCumulative;
+            targetY = priStartY - startY + secondaryOffsetY;
+          } else {
+            // Fallback to progress
+            const maxSecondary = Math.max(
+              secondaryContentHeight - viewHeight,
+              0
+            );
+            const progress =
+              maxSecondary > 0 ? secondaryOffsetY / maxSecondary : 0;
+            targetY = progress * maxPrimary;
+          }
+        } else {
+          // At end
+          targetY = maxPrimary;
+        }
+
+        targetY = Math.max(0, Math.min(targetY, maxPrimary));
+        scrollViewRef.current!.scrollTo({
           y: targetY,
           animated: false,
         });
@@ -882,6 +912,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
       isLandscape,
       scrollThreshold,
       isFullScreen,
+      secondaryVerses,
+      secondaryVerseMeasurements,
+      verses,
+      verseMeasurements,
     ]
   );
 
@@ -953,14 +987,17 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
     // Add version info when not in multi-version mode
     if (!showMultiVersion) {
-      const displayVersion = dbToDisplayName[currentVersion] || currentVersion;
+      const displayVersion = getDisplayVersion(currentVersion);
       return `${baseTitle} (${displayVersion})`;
     }
     return baseTitle;
   }, [bookName, chapter, targetVerse, showMultiVersion, currentVersion]);
 
   const getDisplayVersion = useCallback((version: string | null) => {
-    return version ? dbToDisplayName[version] || version : "";
+    if (!version) return "";
+    return (
+      dbToDisplayName[version] || version.replace(".sqlite3", "").toUpperCase()
+    );
   }, []);
 
   // Effects
@@ -974,9 +1011,10 @@ export default function ReaderScreen({ navigation, route }: Props) {
       // Clean up when component unmounts
       setSecondaryVerses([]);
       setSecondaryVerseMeasurements({});
-      if (secondaryBibleDB) {
-        secondaryBibleDB.close();
-      }
+      Object.values(secondaryDBCache.current).forEach((db) => {
+        db.close().catch(console.error);
+      });
+      secondaryDBCache.current = {};
     };
   }, []);
 
@@ -1011,46 +1049,117 @@ export default function ReaderScreen({ navigation, route }: Props) {
     }
   }, [showMultiVersion]);
 
-  // Scroll to verse effect
+  // Scroll to verse effect - wait for measurements
   useEffect(() => {
-    if (!targetVerse || !contentReady || !scrollViewReady || hasScrolledToVerse)
-      return;
+    const ready =
+      targetVerse &&
+      verses.length > 0 &&
+      scrollViewReady &&
+      (() => {
+        const index = verses.findIndex((v) => v.verse === targetVerse);
+        if (index === -1) return false;
+        for (let i = 0; i <= index; i++) {
+          const vnum = verses[i].verse;
+          if (!verseMeasurements[vnum]) return false;
+        }
+        return true;
+      })();
 
-    const attemptScroll = () => {
-      if (!isMounted.current) return;
-
-      if (scrollAttempts.current >= 3) {
-        scrollToVerseFallback(targetVerse);
-        setHasScrolledToVerse(true);
-        return;
-      }
-
-      scrollAttempts.current++;
-      const success = scrollToTargetVerse();
-
-      if (!success && scrollAttempts.current < 3) {
-        scrollTimeoutRef.current = setTimeout(attemptScroll, 500);
-      }
-    };
-
-    if (scrollTimeoutRef.current) {
-      clearTimeout(scrollTimeoutRef.current);
+    if (ready && !hasScrolledToVerse && scrollViewRef.current) {
+      requestAnimationFrame(() => {
+        if (!hasScrolledToVerse && isMounted.current) {
+          scrollToTargetVerse();
+        }
+      });
     }
-
-    scrollTimeoutRef.current = setTimeout(attemptScroll, 300);
-
-    return () => {
-      if (scrollTimeoutRef.current) {
-        clearTimeout(scrollTimeoutRef.current);
-      }
-    };
   }, [
-    targetVerse,
-    contentReady,
+    verses,
+    verseMeasurements,
     scrollViewReady,
+    targetVerse,
     hasScrolledToVerse,
     scrollToTargetVerse,
-    scrollToVerseFallback,
+  ]);
+
+  // Initial sync for secondary when multi-version is enabled and secondary is ready
+  useEffect(() => {
+    if (
+      showMultiVersion &&
+      secondaryVerses.length > 0 &&
+      !secondaryLoading &&
+      secondaryScrollViewRef.current
+    ) {
+      const syncSecondary = () => {
+        const primaryOffset = (scrollY as any).__getValue();
+
+        const viewHeight = scrollViewHeight;
+        let targetY = 0;
+        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 0);
+
+        // Find verse index in primary
+        let cumulative = 0;
+        let verseIndex = -1;
+        for (let i = 0; i < verses.length; i++) {
+          const verseNum = verses[i].verse;
+          const height = verseMeasurements[verseNum] || defaultVerseHeight;
+          if (primaryOffset < cumulative + height) {
+            verseIndex = i;
+            break;
+          }
+          cumulative += height;
+        }
+
+        if (verseIndex !== -1) {
+          const startY = cumulative;
+          const verseNum = verses[verseIndex].verse;
+          const secIndex = secondaryVerses.findIndex(
+            (v) => v.verse === verseNum
+          );
+          if (secIndex !== -1) {
+            let secCumulative = 0;
+            for (let j = 0; j < secIndex; j++) {
+              const sVerseNum = secondaryVerses[j].verse;
+              secCumulative +=
+                secondaryVerseMeasurements[sVerseNum] || defaultVerseHeight;
+            }
+            const secStartY = secCumulative;
+            targetY = secStartY - startY + primaryOffset;
+          } else {
+            // Fallback to progress
+            const maxPrimary = Math.max(contentHeight - viewHeight, 0);
+            const progress = maxPrimary > 0 ? primaryOffset / maxPrimary : 0;
+            targetY = progress * maxSecondary;
+          }
+        } else {
+          // At end
+          targetY = maxSecondary;
+        }
+
+        targetY = Math.max(0, Math.min(targetY, maxSecondary));
+
+        isSyncing.current = true;
+        secondaryScrollViewRef.current!.scrollTo({
+          y: targetY,
+          animated: false,
+        });
+        requestAnimationFrame(() => {
+          isSyncing.current = false;
+        });
+      };
+
+      const timer = setTimeout(syncSecondary, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    showMultiVersion,
+    secondaryLoading,
+    secondaryVerses.length,
+    verses,
+    verseMeasurements,
+    secondaryVerseMeasurements,
+    scrollViewHeight,
+    contentHeight,
+    secondaryContentHeight,
   ]);
 
   // Listen to scrollY for showEnd and other global updates
@@ -1110,6 +1219,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   // Render multi-version layout
   const renderMultiVersionContent = () => {
+    const primaryDisplay = getDisplayVersion(currentVersion);
+    const secondaryDisplay = getDisplayVersion(secondaryVersion);
+
     if (!showMultiVersion) {
       return (
         <ScrollView
@@ -1138,19 +1250,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
               fontSize={fontSize}
               onVersePress={handleVersePress}
               onVerseLayout={handleVerseLayout}
-              onVerseRef={handleVerseRef}
               highlightVerse={targetVerse}
               highlightedVerses={new Set(highlightedVerses)}
               bookmarkedVerses={bookmarkedVerses}
               isFullScreen={isFullScreen}
+              displayVersion={primaryDisplay}
             />
           </View>
         </ScrollView>
       );
     }
-
-    const primaryDisplay = getDisplayVersion(currentVersion);
-    const secondaryDisplay = getDisplayVersion(secondaryVersion);
 
     // Multi-version layout - side by side for both orientations
     return (
@@ -1180,11 +1289,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
               fontSize={fontSize}
               onVersePress={handleVersePress}
               onVerseLayout={handleVerseLayout}
-              onVerseRef={handleVerseRef}
               highlightVerse={targetVerse}
               highlightedVerses={new Set(highlightedVerses)}
               bookmarkedVerses={bookmarkedVerses}
               isFullScreen={isFullScreen}
+              displayVersion={primaryDisplay}
             />
           </ScrollView>
         </View>
@@ -1229,11 +1338,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 fontSize={fontSize}
                 onVersePress={handleVersePress}
                 onVerseLayout={handleSecondaryVerseLayout}
-                onVerseRef={handleSecondaryVerseRef}
                 highlightVerse={targetVerse}
                 highlightedVerses={new Set(highlightedVerses)}
                 bookmarkedVerses={bookmarkedVerses}
                 isFullScreen={isFullScreen}
+                displayVersion={secondaryDisplay}
               />
             </ScrollView>
           )}
@@ -1371,10 +1480,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
           {targetVerse && !hasScrolledToVerse && (
             <TouchableOpacity
-              onPress={async () => {
+              onPress={() => {
                 setHasScrolledToVerse(false);
-                scrollAttempts.current = 0;
-                await scrollToTargetVerse();
+                scrollToTargetVerse();
               }}
               className="bg-blue-500 px-3 py-1 rounded-full"
             >
@@ -1399,50 +1507,52 @@ export default function ReaderScreen({ navigation, route }: Props) {
           onPress={() => setShowSettings(false)}
         >
           <View
-            className={`bg-white rounded-xl w-11/12 max-w-md max-h-4/5 ${isLandscape ? "mt-28" : ""}`}
+            className="bg-white rounded-xl flex-1 size-11/12"
             onStartShouldSetResponder={() => true}
           >
             <View className="p-4 border-b border-gray-200 bg-blue-500">
               <Text className="text-lg font-bold text-white">Settings</Text>
             </View>
 
-            <ScrollView className="max-h-96 m-4">
+            <ScrollView className="flex-1 mx-4">
               {/* Font Size Controls */}
-              <View className="p-4 border-b border-gray-100">
-                <Text className="text-base font-semibold text-slate-700 mb-3">
+              <View className="px-4 py-2 border-b border-gray-100">
+                <Text className="text-sm font-semibold text-blue-500 mb-2">
                   Font Size
                 </Text>
                 <View className="flex-row justify-between items-center">
                   <TouchableOpacity
                     onPress={decreaseFontSize}
-                    className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
+                    className="size-8 rounded-full bg-gray-100 items-center justify-center"
                   >
-                    <Text className="text-gray-700 font-bold text-lg">A-</Text>
+                    <Text className="text-red-500 font-bold text-base">A-</Text>
                   </TouchableOpacity>
-                  <Text className="text-gray-700 text-lg font-medium">
+                  <Text className="text-gray-700 text-sm font-medium">
                     {fontSize}px
                   </Text>
                   <TouchableOpacity
                     onPress={increaseFontSize}
-                    className="w-12 h-12 rounded-full bg-gray-100 items-center justify-center"
+                    className="size-8 rounded-full bg-gray-100 items-center justify-center"
                   >
-                    <Text className="text-gray-700 font-bold text-lg">A+</Text>
+                    <Text className="text-green-500 font-bold text-base">
+                      A+
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
               {/* Multi-Version Toggle */}
-              <View className="p-4 border-b border-gray-100">
-                <Text className="text-base font-semibold text-slate-700 mb-3">
+              <View className="px-4 pt-2 border-b border-gray-100">
+                <Text className="text-sm font-semibold text-blue-500">
                   Multi-Version Display
                 </Text>
                 <View className="flex-row justify-between items-center">
-                  <Text className="text-gray-600 flex-1">
+                  <Text className="text-gray-600 flex-1 mb-2">
                     Show two Bible versions side by side
                   </Text>
                   <TouchableOpacity
                     onPress={toggleMultiVersion}
-                    className={`w-12 h-6 rounded-full justify-center ${
+                    className={`w-12 h-6 rounded-full justify-center -mt-8 ${
                       showMultiVersion ? "bg-blue-500" : "bg-gray-300"
                     }`}
                   >
@@ -1455,28 +1565,55 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 </View>
               </View>
 
-              {/* Bible Version Selection - USING SHARED COMPONENT */}
-              <VersionSelector
-                currentVersion={currentVersion}
-                availableVersions={availableVersions}
-                onVersionSelect={handleVersionSelect}
-                title="Primary Bible Version"
-                description="Choose your preferred Bible translation"
-                showCurrentVersion={true}
-              />
-
-              {/* Secondary Bible Version Selection */}
-              {showMultiVersion && (
-                <VersionSelector
-                  currentVersion={secondaryVersion || ""}
-                  availableVersions={availableVersions.filter(
-                    (v) => v !== currentVersion
+              {/* Bible Version Selection */}
+              {isLandscape && showMultiVersion ? (
+                <View className="flex-row gap-4">
+                  <View className="flex-1">
+                    <VersionSelector
+                      currentVersion={currentVersion}
+                      availableVersions={availableVersions}
+                      onVersionSelect={handleVersionSelect}
+                      title="Primary Bible Version"
+                      description="Choose your preferred Bible translation"
+                      showCurrentVersion={true}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <VersionSelector
+                      currentVersion={secondaryVersion || ""}
+                      availableVersions={availableVersions.filter(
+                        (v) => v !== currentVersion
+                      )}
+                      onVersionSelect={handleSecondaryVersionSelect}
+                      title="Secondary Bible Version"
+                      description="Choose a different translation for comparison"
+                      showCurrentVersion={true}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <VersionSelector
+                    currentVersion={currentVersion}
+                    availableVersions={availableVersions}
+                    onVersionSelect={handleVersionSelect}
+                    title="Primary Bible Version"
+                    description="Choose your preferred Bible translation"
+                    showCurrentVersion={true}
+                  />
+                  {showMultiVersion && (
+                    <VersionSelector
+                      currentVersion={secondaryVersion || ""}
+                      availableVersions={availableVersions.filter(
+                        (v) => v !== currentVersion
+                      )}
+                      onVersionSelect={handleSecondaryVersionSelect}
+                      title="Secondary Bible Version"
+                      description="Choose a different translation for comparison"
+                      showCurrentVersion={true}
+                    />
                   )}
-                  onVersionSelect={handleSecondaryVersionSelect}
-                  title="Secondary Bible Version"
-                  description="Choose a different translation for comparison"
-                  showCurrentVersion={true}
-                />
+                </>
               )}
             </ScrollView>
 
@@ -1484,7 +1621,9 @@ export default function ReaderScreen({ navigation, route }: Props) {
               onPress={() => setShowSettings(false)}
               className="p-4 border-t border-gray-200 items-center"
             >
-              <Text className="text-blue-600 font-semibold">Close</Text>
+              <Text className="text-blue-500 text-lg  font-semibold">
+                Close
+              </Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1510,7 +1649,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 <Ionicons name="arrow-back" size={24} color="white" />
               </TouchableOpacity>
               <Text className="text-white font-bold text-lg">
-                Navigate to...
+                Choose Passage to Read
               </Text>
               <View style={{ width: 24 }} />
             </View>

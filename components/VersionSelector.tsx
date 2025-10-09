@@ -34,17 +34,19 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
   const activeSelectedVersion = selectedVersion || currentVersion;
 
   return (
-    <View className="p-0">
-      {title && (
-        <Text className="text-base font-semibold text-slate-700 mb-2">
-          {title}
-        </Text>
-      )}
-      {description && (
-        <Text className="text-sm text-slate-500 mb-4">{description}</Text>
-      )}
+    <View className="px-4 mb-4">
+      <View className="bg-blue-500 rounded-t-xl">
+        {title && (
+          <Text className="text-base font-semibold text-white mt-2 mx-4">
+            {title}
+          </Text>
+        )}
+        {description && (
+          <Text className="text-sm text-slate-100 mb-2 mx-4">{description}</Text>
+        )}
+      </View>
 
-      <View className="rounded-md overflow-hidden border border-gray-200">
+      <View className="rounded-b-xl  overflow-hidden border border-gray-200">
         {availableVersions.map((version) => {
           const isSelected = activeSelectedVersion === version;
           const isCurrentlyActive = currentVersion === version;
@@ -98,17 +100,6 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
           );
         })}
       </View>
-
-      {showCurrentVersion && (
-        <View className="p-4 bg-blue-100 border-t border-blue-200 mt-4 rounded-lg">
-          <Text className="text-sm font-medium text-blue-500 mb-1">
-            Current Version
-          </Text>
-          <Text className="text-base font-semibold text-blue-500">
-            {getVersionDisplayName(currentVersion)}
-          </Text>
-        </View>
-      )}
     </View>
   );
 };

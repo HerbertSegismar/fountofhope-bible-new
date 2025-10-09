@@ -364,7 +364,7 @@ export default function BookmarksScreen({ navigation }: Props) {
       >
         <Ionicons name="book" size={18} color="white" />
         <Text className="text-white font-semibold ml-2">
-          Go to Home Screen
+          Go Back
         </Text>
       </TouchableOpacity>
     </View>

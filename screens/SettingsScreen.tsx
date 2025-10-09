@@ -53,27 +53,45 @@ const SettingsScreen = () => {
       setSelectedVersion(version);
       setIsSwitching(true);
 
-      try {
-        await switchVersion(version);
-        // Success - no need for additional verification
-      } catch (error: unknown) {
-        console.error("Version switch failed:", error);
+      const maxRetries = 3;
+      let lastError: unknown;
 
-        let errorMessage = "Failed to switch Bible version. Please try again.";
-        if (error instanceof Error) {
-          if (
-            error.message.includes("verification") ||
-            error.message.includes("not available")
-          ) {
-            errorMessage = `The ${getVersionDisplayName(version)} database appears to be corrupted or unavailable. Please try another version.`;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          await switchVersion(version);
+          console.log(
+            `Version switch to ${version} succeeded on attempt ${attempt + 1}`
+          ); // Optional debug log
+          setIsSwitching(false); // Reset on success
+          return; // Success
+        } catch (error: unknown) {
+          lastError = error;
+          console.error(`Version switch attempt ${attempt + 1} failed:`, error);
+
+          if (attempt < maxRetries - 1) {
+            const delay = 500 * Math.pow(2, attempt);
+            await new Promise((resolve) => setTimeout(resolve, delay));
           }
         }
-
-        Alert.alert("Error", errorMessage);
-        setSelectedVersion(currentVersion);
-      } finally {
-        setIsSwitching(false);
       }
+
+      // All retries failed
+      console.error("All version switch attempts failed:", lastError);
+
+      let errorMessage =
+        "Failed to switch Bible version after multiple attempts. Please try another version.";
+      if (lastError instanceof Error) {
+        if (
+          lastError.message.includes("verification") ||
+          lastError.message.includes("not available")
+        ) {
+          errorMessage = `The ${getVersionDisplayName(version)} database appears to be corrupted or unavailable. Please try another version.`;
+        }
+      }
+
+      Alert.alert("Error", errorMessage);
+      setSelectedVersion(currentVersion);
+      setIsSwitching(false);
     },
     [currentVersion, isSwitching, switchVersion]
   );
