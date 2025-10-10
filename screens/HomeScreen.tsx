@@ -26,7 +26,13 @@ interface Props {
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
 export default function HomeScreen({ navigation }: Props) {
-  const { bibleDB, currentVersion, isInitializing } = useBibleDatabase();
+  const {
+    bibleDB,
+    currentVersion,
+    isInitializing,
+    initializationError,
+    retryInitialization,
+  } = useBibleDatabase();
 
   const [verseRange, setVerseRange] = useState<Verse[] | null>(null);
   const [bookLongName, setBookLongName] = useState<string>("");
@@ -39,24 +45,41 @@ export default function HomeScreen({ navigation }: Props) {
     else setLoading(true);
   }, [bibleDB, currentVersion, isInitializing]);
 
-   useEffect(() => {
-      const updateLayout = () => {
-        const { width: newWidth, height: newHeight } = Dimensions.get("window");
-        const newIsLandscape = newWidth > newHeight;
-  
-        // Always update landscape state
-        setIsLandscape(newIsLandscape);
-      };
-  
-      // Initial check
-      updateLayout();
-  
-      const subscription = Dimensions.addEventListener("change", updateLayout);
-  
-      return () => {
-        subscription?.remove();
-      };
-    }, []);
+  useEffect(() => {
+    const updateLayout = () => {
+      const { width: newWidth, height: newHeight } = Dimensions.get("window");
+      const newIsLandscape = newWidth > newHeight;
+
+      // Always update landscape state
+      setIsLandscape(newIsLandscape);
+    };
+
+    // Initial check
+    updateLayout();
+
+    const subscription = Dimensions.addEventListener("change", updateLayout);
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      if (bibleDB && !isInitializing) {
+        try {
+          await loadRandomVerse();
+        } catch (err) {
+          console.error("Failed to load random verse:", err);
+          setError("Failed to load content");
+        }
+      } else {
+        setLoading(true);
+      }
+    };
+
+    initializeApp();
+  }, [bibleDB, currentVersion, isInitializing]);
 
   const getRandomBookChapter = async (): Promise<{
     bookId: number;
@@ -133,6 +156,20 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
+   if (initializationError) {
+     return (
+       <View className="flex-1 justify-center items-center bg-gray-50 p-6">
+         <Text className="text-lg text-red-600 text-center mb-4">
+           Database Error: {initializationError}
+         </Text>
+         <Text className="text-sm text-gray-600 text-center mb-4">
+           This might take a moment on first launch
+         </Text>
+         <Button title="Retry Initialization" onPress={retryInitialization} />
+       </View>
+     );
+   }
+
   const handleVersePress = (verse: Verse) => {
     navigation.navigate("VerseList", {
       book: {
@@ -150,6 +187,9 @@ export default function HomeScreen({ navigation }: Props) {
       <View className="flex-1 justify-center items-center bg-gray-50">
         <ActivityIndicator size="large" color="#3B82F6" />
         <Text className="text-lg text-gray-600 mt-4">Loading Bible App...</Text>
+        <Text className="text-sm text-gray-500 mt-2">
+          Preparing your Bible database
+        </Text>
       </View>
     );
   }
@@ -252,7 +292,7 @@ export default function HomeScreen({ navigation }: Props) {
       )}
 
       <View>
-        <MatrixRN/>
+        <MatrixRN />
       </View>
     </ScrollView>
   );

@@ -16,9 +16,11 @@ interface BibleDatabaseContextType {
   availableVersions: string[];
   switchVersion: (newVersion: string) => Promise<void>;
   isInitializing: boolean;
+  initializationError: string | null;
   refreshDatabase: () => Promise<void>;
   searchVerses: (query: string, options?: SearchOptions) => Promise<Verse[]>;
   getDatabase: (version: string) => BibleDatabase | undefined;
+  retryInitialization: () => Promise<void>;
 }
 
 const BibleDatabaseContext = createContext<
@@ -37,6 +39,9 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   const [bibleDB, setBibleDB] = useState<BibleDatabase | null>(null);
   const [currentVersion, setCurrentVersion] = useState("esv.sqlite3");
   const [isInitializing, setIsInitializing] = useState(false);
+  const [initializationError, setInitializationError] = useState<string | null>(
+    null
+  );
 
   const availableVersions = [
     "niv11.sqlite3",
@@ -58,43 +63,58 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     "tagmb12.sqlite3",
   ];
 
-  // Keep all open databases for lightning-fast switching
   const openDatabases = React.useRef<Map<string, BibleDatabase>>(new Map());
 
   // Initialize a database version if not already open
   const initializeDatabase = useCallback(async (version: string) => {
     setIsInitializing(true);
+    setInitializationError(null);
+
     try {
+      console.log(`Initializing database: ${version}`);
+
       if (openDatabases.current.has(version)) {
         const db = openDatabases.current.get(version)!;
         setBibleDB(db);
-        console.log(`Database already open: ${version}`);
+        console.log(`Using existing database: ${version}`);
       } else {
         const db = new BibleDatabase(version);
-        await db.init();
+
+        // Add timeout to prevent hanging indefinitely
+        const initPromise = db.init();
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(new Error("Database initialization timeout after 30s")),
+            30000
+          )
+        );
+
+        await Promise.race([initPromise, timeoutPromise]);
+
         openDatabases.current.set(version, db);
         setBibleDB(db);
-        console.log(`Database initialized: ${version}`);
+        console.log(`Database initialized successfully: ${version}`);
       }
     } catch (error) {
       console.error("Failed to initialize database:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown initialization error";
+      setInitializationError(errorMessage);
       setBibleDB(null);
+
+      // Clean up failed database
+      openDatabases.current.delete(version);
       throw error;
     } finally {
       setIsInitializing(false);
     }
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      openDatabases.current.forEach((db, version) => {
-        if (version !== currentVersion) db.close();
-      });
-      openDatabases.current.clear(); // Or retain only current
-      openDatabases.current.set(currentVersion, bibleDB!);
-    }, 300000); // 5 min
-    return () => clearTimeout(timer);
-  }, [currentVersion]);
+  // Retry initialization
+  const retryInitialization = useCallback(async () => {
+    await initializeDatabase(currentVersion);
+  }, [currentVersion, initializeDatabase]);
 
   // Load persisted version on mount
   useEffect(() => {
@@ -102,43 +122,19 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       try {
         const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
         const versionToLoad = savedVersion || currentVersion;
-        if (!openDatabases.current.has(versionToLoad)) {
-          await initializeDatabase(versionToLoad);
-        } else {
-          setBibleDB(openDatabases.current.get(versionToLoad)!);
-        }
+        console.log(`Loading version: ${versionToLoad}`);
+
+        await initializeDatabase(versionToLoad);
         setCurrentVersion(versionToLoad);
       } catch (err) {
-        console.warn("Failed to load persisted version:", err);
-        if (!openDatabases.current.has(currentVersion)) {
-          await initializeDatabase(currentVersion);
-        } else {
-          setBibleDB(openDatabases.current.get(currentVersion)!);
-        }
+        console.error("Failed to load persisted version:", err);
+        setInitializationError("Failed to load Bible database");
       }
     };
+
     loadVersion();
-  }, []);
+  }, [initializeDatabase]);
 
-  // In BibleDatabaseContext.tsx - Add this method
-  const verifyDatabaseReady = useCallback(
-    async (version: string): Promise<boolean> => {
-      const db = openDatabases.current.get(version);
-      if (!db) return false;
-
-      try {
-        // Try a simple query to verify the database is actually functional
-        await db.getBooks();
-        return true;
-      } catch (error) {
-        console.error(`Database verification failed for ${version}:`, error);
-        return false;
-      }
-    },
-    []
-  );
-
-  // Update switchVersion to include verification
   const switchVersion = useCallback(
     async (newVersion: string) => {
       if (newVersion === currentVersion || isInitializing) {
@@ -147,47 +143,28 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
       console.log(`Switching to version: ${newVersion}`);
       setIsInitializing(true);
+      setInitializationError(null);
 
       try {
-        // Save to storage first
         await AsyncStorage.setItem(STORAGE_KEY, newVersion);
-
-        // Then initialize the new database
         await initializeDatabase(newVersion);
-
-        // Verify the database is actually functional
-        const isReady = await verifyDatabaseReady(newVersion);
-        if (!isReady) {
-          throw new Error(`Database ${newVersion} failed verification`);
-        }
-
-        // Finally update the current version state
         setCurrentVersion(newVersion);
-
         console.log(`Successfully switched to: ${newVersion}`);
       } catch (err) {
         console.error("Failed to switch version:", err);
-
-        // Revert to previous version on failure
         await AsyncStorage.setItem(STORAGE_KEY, currentVersion);
-
-        // Re-initialize previous version
-        await initializeDatabase(currentVersion);
-
         throw err;
       } finally {
         setIsInitializing(false);
       }
     },
-    [currentVersion, isInitializing, initializeDatabase, verifyDatabaseReady]
+    [currentVersion, isInitializing, initializeDatabase]
   );
 
-  // Refresh current DB
   const refreshDatabase = useCallback(async () => {
     await initializeDatabase(currentVersion);
   }, [currentVersion, initializeDatabase]);
 
-  // Search helper - UPDATED to pass options to bibleDB
   const searchVerses = useCallback(
     async (query: string, options?: SearchOptions) => {
       if (!bibleDB) {
@@ -198,7 +175,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     [bibleDB]
   );
 
-  // Get a database if already open
   const getDatabase = useCallback(
     (version: string) => openDatabases.current.get(version),
     []
@@ -210,9 +186,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     availableVersions,
     switchVersion,
     isInitializing,
+    initializationError,
     refreshDatabase,
     searchVerses,
     getDatabase,
+    retryInitialization,
   };
 
   React.useEffect(() => {
@@ -228,7 +206,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   );
 };
 
-// Custom hook
 export const useBibleDatabase = (): BibleDatabaseContextType => {
   const context = useContext(BibleDatabaseContext);
   if (!context) {

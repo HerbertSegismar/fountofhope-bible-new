@@ -398,27 +398,28 @@ class BibleDatabase {
   }
 
   private async setupDatabase(): Promise<void> {
-  try {
-    const fileInfo = await getInfoAsync(this.dbPath);
-    const rootPath = `${documentDirectory}${this.dbName}`;  // Legacy root path
-    const rootInfo = await getInfoAsync(rootPath);
+    try {
+      const fileInfo = await getInfoAsync(this.dbPath);
+      const rootPath = `${documentDirectory}${this.dbName}`; // Legacy root path
+      const rootInfo = await getInfoAsync(rootPath);
 
-    if (!fileInfo.exists) {
-      if (rootInfo.exists && rootInfo.size > 0) {
-        console.log(`Migrating legacy DB from root to ${this.sqliteDirectory}`);
-        await copyAsync({ from: rootPath, to: this.dbPath });
-        // Optionally delete root: await deleteAsync(rootPath);
-      } else {
-        console.log(`Copying ${this.dbName} from assets...`);
-        await this.copyDatabaseFromAssets();
-      }
-    } else {
+      if (!fileInfo.exists) {
+        if (rootInfo.exists && rootInfo.size > 0) {
           console.log(
-            `Using existing ${this.dbName} (size: ${fileInfo.size} bytes)`
+            `Migrating legacy DB from root to ${this.sqliteDirectory}`
           );
+          await copyAsync({ from: rootPath, to: this.dbPath });
+          // Optionally delete root: await deleteAsync(rootPath);
+        } else {
+          console.log(`Copying ${this.dbName} from assets...`);
+          await this.copyDatabaseFromAssets();
         }
+      } else {
+        console.log(
+          `Using existing ${this.dbName} (size: ${fileInfo.size} bytes)`
+        );
       }
-     catch (error) {
+    } catch (error) {
       // Enhanced logging
       console.error(`Setup failure for ${this.dbName}:`, {
         error: error instanceof Error ? error.message : error,
@@ -451,14 +452,21 @@ class BibleDatabase {
     }
   }
 
-  // REFACTORED: Removed unnecessary downloadAsync() for bundled assets
   private async copyDatabaseFileFromBundle(): Promise<void> {
     try {
-      const asset = Asset.fromModule(this.getDatabaseAsset());
+      console.log(`Starting database copy for: ${this.dbName}`);
 
-      // FIXED: Remove downloadAsync() - unnecessary for bundled assets.
-      // localUri is immediately available for require()'d files.
-      // If this were a remote asset, you'd check !asset.localUri && call downloadAsync().
+      // Get the asset module
+      const assetModule = this.getDatabaseAsset();
+
+      // Use Expo Asset to load the database file properly
+      const asset = Asset.fromModule(assetModule);
+
+      // For production builds, we need to ensure the asset is loaded
+      if (!asset.localUri) {
+        console.log(`Downloading asset for: ${this.dbName}`);
+        await asset.downloadAsync();
+      }
 
       if (!asset.localUri) {
         throw new Error(
@@ -466,12 +474,24 @@ class BibleDatabase {
         );
       }
 
+      console.log(`Copying from: ${asset.localUri} to: ${this.dbPath}`);
+
+      // Copy the database file
       await copyAsync({
         from: asset.localUri,
         to: this.dbPath,
       });
+
+      // Verify the copy worked
+      const copiedInfo = await getInfoAsync(this.dbPath);
+      if (!copiedInfo.exists) {
+        throw new Error(`Copy failed - file doesn't exist at ${this.dbPath}`);
+      }
+
+      console.log(
+        `Database copied successfully. Size: ${copiedInfo.size} bytes`
+      );
     } catch (error) {
-      // Enhanced logging
       console.error(`Bundle copy failure for ${this.dbName}:`, {
         error: error instanceof Error ? error.message : error,
         operation: "copyDatabaseFileFromBundle",
