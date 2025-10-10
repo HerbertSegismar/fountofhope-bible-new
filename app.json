@@ -12,42 +12,28 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
-      "navigationBar": {
-        "visible": false,
-        "backgroundColor": "#1e40af",
-        "package": "com.fountofhope.fountofhopebible",
-        "versionCode": 1,
-        "permissions": [],
-        "adaptiveIcon": {
-          "foregroundImage": "./assets/fountofhope-512x512.png",
-          "backgroundColor": "#ffffff"
-        },
-        "edgeToEdgeEnabled": true,
-        "predictiveBackGestureEnabled": false
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/fountofhope-512x512.png",
+        "backgroundColor": "#ffffff"
       },
-      "web": {
-        "favicon": "./assets/fountofhope-512x512.png"
-      },
-      "plugins": [
-        "expo-sqlite",
-        "expo-asset",
-        "expo-font"
-      ],
-      "extra": {
-        "eas": {
-          "projectId": "64ac7b76-ad33-46ee-8fe5-584bb3befcd1"
-        }
-      },
-      "package": "com.fountofhope.fountofhopebible"
+      "package": "com.fountofhope.fountofhopebible",
+      "versionCode": 1,
+      "permissions": []
     },
+    "androidNavigationBar": {
+      "visible": false,
+      "backgroundColor": "#1e40af"
+    },
+    "web": {
+      "favicon": "./assets/fountofhope-512x512.png"
+    },
+    "plugins": ["expo-sqlite", "expo-asset", "expo-font"],
     "extra": {
       "eas": {
         "projectId": "8655600c-f728-4a18-b204-41aeff1a964c"

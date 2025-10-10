@@ -368,11 +368,15 @@ class BibleDatabase {
 
   // ==================== PRIVATE METHODS ====================
 
-  // REFACTORED: Enhanced with detailed logging
   private async initializeDatabase(): Promise<void> {
     try {
       await this.setupDatabase();
-      this.db = await SQLite.openDatabaseAsync(this.dbName);
+      // FIXED: Add dbLocation to match copy path
+      this.db = await SQLite.openDatabaseAsync(
+        this.dbName,
+        undefined,
+        this.sqliteDirectory // <- This ensures it opens in /SQLite/
+      );
       await this.runMigrations();
       await this.verifyDatabase();
       this.isInitialized = true;
@@ -393,25 +397,28 @@ class BibleDatabase {
     }
   }
 
-  // REFACTORED: Added file validation to avoid stale/empty files
   private async setupDatabase(): Promise<void> {
-    try {
-      const fileInfo = await getInfoAsync(this.dbPath);
-      if (!fileInfo.exists) {
+  try {
+    const fileInfo = await getInfoAsync(this.dbPath);
+    const rootPath = `${documentDirectory}${this.dbName}`;  // Legacy root path
+    const rootInfo = await getInfoAsync(rootPath);
+
+    if (!fileInfo.exists) {
+      if (rootInfo.exists && rootInfo.size > 0) {
+        console.log(`Migrating legacy DB from root to ${this.sqliteDirectory}`);
+        await copyAsync({ from: rootPath, to: this.dbPath });
+        // Optionally delete root: await deleteAsync(rootPath);
+      } else {
         console.log(`Copying ${this.dbName} from assets...`);
         await this.copyDatabaseFromAssets();
-      } else {
-        // Quick validation: Ensure file isn't empty/stale (optional safeguard)
-        if (fileInfo.size === 0 || fileInfo.modificationTime === undefined) {
-          console.warn(`Invalid cached file for ${this.dbName}, recopying...`);
-          await this.copyDatabaseFromAssets();
-        } else {
+      }
+    } else {
           console.log(
             `Using existing ${this.dbName} (size: ${fileInfo.size} bytes)`
           );
         }
       }
-    } catch (error) {
+     catch (error) {
       // Enhanced logging
       console.error(`Setup failure for ${this.dbName}:`, {
         error: error instanceof Error ? error.message : error,

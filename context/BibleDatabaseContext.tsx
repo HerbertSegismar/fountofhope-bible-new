@@ -1,4 +1,3 @@
-// context/BibleDatabaseContext.tsx
 import React, {
   createContext,
   useContext,
@@ -9,7 +8,7 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BibleDatabase } from "../services/BibleDatabase";
-import { Verse, SearchOptions } from "../types"; // Import from types
+import { Verse, SearchOptions } from "../types";
 
 interface BibleDatabaseContextType {
   bibleDB: BibleDatabase | null;
@@ -85,6 +84,17 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       setIsInitializing(false);
     }
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      openDatabases.current.forEach((db, version) => {
+        if (version !== currentVersion) db.close();
+      });
+      openDatabases.current.clear(); // Or retain only current
+      openDatabases.current.set(currentVersion, bibleDB!);
+    }, 300000); // 5 min
+    return () => clearTimeout(timer);
+  }, [currentVersion]);
 
   // Load persisted version on mount
   useEffect(() => {
