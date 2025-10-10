@@ -5,10 +5,16 @@ import React, {
   useState,
   type ReactNode,
 } from "react";
+import {
+  DefaultTheme,
+  DarkTheme,
+  Theme as NavTheme,
+} from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ColorScheme = "purple" | "green" | "red" | "yellow";
 export type Theme = "light" | "dark";
+export type FontFamily = "system" | "serif" | "sans-serif";
 
 export const colorSchemes = [
   {
@@ -65,16 +71,27 @@ export const colorSchemes = [
   },
 ];
 
+const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
+  purple: { light: "#A855F7", dark: "#9333EA" },
+  green: { light: "#10B981", dark: "#059669" },
+  red: { light: "#EF4444", dark: "#DC2626" },
+  yellow: { light: "#F59E0B", dark: "#D97706" },
+};
 
 interface ThemeContextType {
   theme: Theme;
   colorScheme: ColorScheme;
+  fontFamily: FontFamily;
   colorSchemes: typeof colorSchemes;
+  navTheme: NavTheme;
   toggleTheme: () => void;
   setColorScheme: (scheme: ColorScheme) => void;
+  setFontFamily: (family: FontFamily) => void;
 }
 
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextType | undefined>(
+  undefined
+);
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
@@ -91,19 +108,22 @@ interface ThemeProviderProps {
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>("light");
   const [colorScheme, setColorScheme] = useState<ColorScheme>("green");
+  const [fontFamily, setFontFamily] = useState<FontFamily>("system");
   const [isReady, setIsReady] = useState(false);
 
   // Load saved values from AsyncStorage
   useEffect(() => {
     const loadSavedValues = async () => {
       try {
-        const [savedTheme, savedScheme] = await Promise.all([
+        const [savedTheme, savedScheme, savedFont] = await Promise.all([
           AsyncStorage.getItem("theme"),
           AsyncStorage.getItem("colorScheme"),
+          AsyncStorage.getItem("fontFamily"),
         ]);
 
         if (savedTheme) setTheme(savedTheme as Theme);
         if (savedScheme) setColorScheme(savedScheme as ColorScheme);
+        if (savedFont) setFontFamily(savedFont as FontFamily);
       } catch (error) {
         console.error("Failed to load theme settings:", error);
       } finally {
@@ -144,6 +164,52 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     saveColorScheme();
   }, [colorScheme, isReady]);
 
+  // Sync fontFamily with AsyncStorage
+  useEffect(() => {
+    if (!isReady) return;
+
+    const saveFontFamily = async () => {
+      try {
+        await AsyncStorage.setItem("fontFamily", fontFamily);
+      } catch (error) {
+        console.error("Failed to save font family:", error);
+      }
+    };
+
+    saveFontFamily();
+  }, [fontFamily, isReady]);
+
+  const primaryColor =
+    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
+
+  const baseNavTheme = theme === "dark" ? DarkTheme : DefaultTheme;
+
+  const navTheme: NavTheme = {
+    dark: baseNavTheme.dark,
+    colors: {
+      ...baseNavTheme.colors,
+      primary: primaryColor,
+    },
+    fonts: {
+      regular: {
+        fontFamily: "",
+        fontWeight: "bold"
+      },
+      medium: {
+        fontFamily: "",
+        fontWeight: "bold"
+      },
+      bold: {
+        fontFamily: "",
+        fontWeight: "bold"
+      },
+      heavy: {
+        fontFamily: "",
+        fontWeight: "bold"
+      }
+    }
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
@@ -151,10 +217,17 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const value: ThemeContextType = {
     theme,
     colorScheme,
+    fontFamily,
     colorSchemes,
+    navTheme,
     toggleTheme,
     setColorScheme,
+    setFontFamily,
   };
+
+  if (!isReady) {
+    return null; // or a loading component
+  }
 
   return (
     <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>

@@ -1,7 +1,10 @@
 // App.tsx
-import React from "react";
+import React, { useContext } from "react";
 import { StatusBar } from "expo-status-bar";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  NavigationContainer,
+  useTheme as useNavigationTheme,
+} from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,7 +26,7 @@ import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 import { VerseMeasurementsProvider } from "./context/VerseMeasurementsContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
-import { ThemeProvider } from "./context/ThemeContext";
+import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
 // Param list types
 export type BibleStackParamList = {
@@ -61,12 +64,6 @@ const BookmarksStackNav = createStackNavigator<BookmarksStackParamList>();
 const SettingsStackNav = createStackNavigator<SettingsStackParamList>();
 const Tab = createBottomTabNavigator<RootStackParamList>();
 
-// Shared header theme
-const headerTheme = {
-  headerStyle: { backgroundColor: "#1e40af" },
-  headerTintColor: "#fff",
-};
-
 // Hook to determine if device is in Portrait mode
 function usePortraitMode() {
   const { width, height } = useWindowDimensions();
@@ -79,10 +76,11 @@ function BibleStack() {
 
   return (
     <BibleStackNav.Navigator
-      screenOptions={{
-        ...headerTheme,
+      screenOptions={({ theme }) => ({
+        headerStyle: { backgroundColor: theme.colors.primary },
+        headerTintColor: "#fff",
         headerShown: isPortrait, // Conditional header based on orientation
-      }}
+      })}
     >
       <BibleStackNav.Screen
         name="Home"
@@ -124,10 +122,11 @@ function SearchStack() {
 
   return (
     <SearchStackNav.Navigator
-      screenOptions={{
-        ...headerTheme,
+      screenOptions={({ theme }) => ({
+        headerStyle: { backgroundColor: theme.colors.primary },
+        headerTintColor: "#fff",
         headerShown: isPortrait, // Conditional header based on orientation
-      }}
+      })}
     >
       <SearchStackNav.Screen
         name="Search"
@@ -144,10 +143,11 @@ function BookmarksStack() {
 
   return (
     <BookmarksStackNav.Navigator
-      screenOptions={{
-        ...headerTheme,
+      screenOptions={({ theme }) => ({
+        headerStyle: { backgroundColor: theme.colors.primary },
+        headerTintColor: "#fff",
         headerShown: isPortrait, // Conditional header based on orientation
-      }}
+      })}
     >
       <BookmarksStackNav.Screen
         name="Bookmarks"
@@ -164,10 +164,11 @@ function SettingsStack() {
 
   return (
     <SettingsStackNav.Navigator
-      screenOptions={{
-        ...headerTheme,
+      screenOptions={({ theme }) => ({
+        headerStyle: { backgroundColor: theme.colors.primary },
+        headerTintColor: "#fff",
         headerShown: isPortrait, // Conditional header based on orientation
-      }}
+      })}
     >
       <SettingsStackNav.Screen
         name="Settings"
@@ -180,12 +181,13 @@ function SettingsStack() {
 
 // Bottom Tabs
 function AppTabs() {
+  const theme = useNavigationTheme();
 
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: "#1e40af",
+          backgroundColor: theme.colors.primary,
           display: "flex",
         },
         tabBarActiveTintColor: "#f59e0b",
@@ -238,13 +240,27 @@ function AppTabs() {
 
 // Custom Status Bar component for auto-hiding
 function AutoHideStatusBar() {
+  const theme = useNavigationTheme();
+
   return (
     <StatusBar
-      backgroundColor="#1e40af"
-      style="light"
+      backgroundColor={theme.colors.primary}
+      style={theme.dark ? "light" : "dark"}
       translucent={true}
       hidden={false}
     />
+  );
+}
+
+// App with Theme
+function AppWithTheme() {
+  const { navTheme } = useTheme();
+
+  return (
+    <NavigationContainer theme={navTheme}>
+      <AutoHideStatusBar />
+      <AppTabs />
+    </NavigationContainer>
   );
 }
 
@@ -257,10 +273,7 @@ export default function App() {
           <BibleDatabaseProvider>
             <ThemeProvider>
               <BookmarksProvider>
-                <NavigationContainer>
-                  <AutoHideStatusBar />
-                  <AppTabs />
-                </NavigationContainer>
+                <AppWithTheme />
               </BookmarksProvider>
             </ThemeProvider>
           </BibleDatabaseProvider>
