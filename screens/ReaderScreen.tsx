@@ -1762,6 +1762,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           }}
         >
           <SafeAreaView
+            className="max-h-[90%] shadow shadow-black"
             style={{
               backgroundColor: colors.card,
               borderRadius: 12,

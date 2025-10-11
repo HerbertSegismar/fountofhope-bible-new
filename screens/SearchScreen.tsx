@@ -440,13 +440,12 @@ const ScopeDropdown = React.memo(
           className="rounded-lg p-4 flex-row justify-between items-center"
         >
           <View className="flex-1">
-            <Text
-              className="font-semibold"
-              style={{ color: colors.text }}
-            >
+            <Text className="font-semibold text-white">
               {currentConfig.label}
             </Text>
-            <Text className="text-xs mt-1" style={{ color: colors.text }}>
+            <Text
+              className="text-xs mt-1 text-white"
+            >
               {currentConfig.description}
             </Text>
           </View>
@@ -468,15 +467,12 @@ const ScopeDropdown = React.memo(
             style={{ backgroundColor: colors.background + "CC" }}
           >
             <View
-              className="rounded-lg max-h-80"
+              className="rounded-lg max-h-[90%]"
               style={{ backgroundColor: colors.card }}
             >
               {/* Fixed Header - Not Scrollable */}
               <View style={headerStyle} className="px-4 py-3 sticky top-0 z-10">
-                <Text
-                  className="font-bold text-center text-base"
-                  style={{ color: colors.text }}
-                >
+                <Text className="font-bold text-center text-base text-white">
                   Select Search Scope
                 </Text>
               </View>
@@ -485,10 +481,7 @@ const ScopeDropdown = React.memo(
                 {Object.entries(SCOPE_CATEGORIES).map(([category, scopes]) => (
                   <View key={category}>
                     <View style={categoryHeaderStyle} className="px-4 py-2">
-                      <Text
-                        className="font-semibold text-sm"
-                        style={{ color: colors.text }}
-                      >
+                      <Text className="font-semibold text-sm text-white">
                         {category}
                       </Text>
                     </View>
@@ -808,8 +801,7 @@ export default function SearchScreen({ navigation }: Props) {
           style={{ backgroundColor: colors.primary }}
         >
           <Text
-            className="font-semibold text-center"
-            style={{ color: colors.text }}
+            className="font-semibold text-center text-white"
           >
             {resultStats}
           </Text>
