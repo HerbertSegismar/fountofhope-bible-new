@@ -10,6 +10,10 @@ module.exports = {
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
+      fontFamily: {
+        "oswald-variable": ["Oswald-Variable", "Oswald", "sans-serif"],
+        "rubik-glitch": ["RubikGlitch-Regular", "Rubik", "sans-serif"],
+      },
       colors: {
         primary: "#1e40af",
         secondary: "#f59e0b",

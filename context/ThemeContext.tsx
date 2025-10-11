@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   type ReactNode,
+  useMemo,
 } from "react";
 import {
   DefaultTheme,
@@ -46,9 +47,9 @@ export const colorSchemes = [
   {
     name: "red" as const,
     light: {
-      from: "from-red-400",
+      from: "from-red-300",
       to: "to-orange-300",
-      bg: "bg-gradient-to-r from-red-400 to-orange-300",
+      bg: "bg-gradient-to-r from-red-300 to-orange-300",
     },
     dark: {
       from: "from-red-500",
@@ -74,9 +75,33 @@ export const colorSchemes = [
 const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
   green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#EF4444", dark: "#DC2626" },
+  red: { light: "#c64141ff", dark: "#d44545ff" },
   yellow: { light: "#F59E0B", dark: "#D97706" },
 };
+
+const gradientMap: Record<
+  ColorScheme,
+  { light: [string, string]; dark: [string, string] }
+> = {
+  purple: {
+    light: ["#c084fc", "#93c5fd"],
+    dark: ["#a78bfa", "#60a5fa"],
+  },
+  green: {
+    light: ["#4ade80", "#5eead4"],
+    dark: ["#22c55e", "#2dd4bf"],
+  },
+  red: {
+    light: ["#fca5a5", "#fdba74"],
+    dark: ["#ef4444", "#fb923c"],
+  },
+  yellow: {
+    light: ["#facc15", "#fcd34d"],
+    dark: ["#eab308", "#fbbf24"],
+  },
+};
+
+type GradientColors = [string, string];
 
 interface ThemeContextType {
   theme: Theme;
@@ -84,6 +109,7 @@ interface ThemeContextType {
   fontFamily: FontFamily;
   colorSchemes: typeof colorSchemes;
   navTheme: NavTheme;
+  gradientColors: GradientColors;
   toggleTheme: () => void;
   setColorScheme: (scheme: ColorScheme) => void;
   setFontFamily: (family: FontFamily) => void;
@@ -182,6 +208,11 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const primaryColor =
     primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
 
+  const gradientColors = useMemo(
+    () => gradientMap[colorScheme][theme],
+    [colorScheme, theme]
+  );
+
   const baseNavTheme = theme === "dark" ? DarkTheme : DefaultTheme;
 
   const navTheme: NavTheme = {
@@ -193,21 +224,21 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     fonts: {
       regular: {
         fontFamily: "",
-        fontWeight: "bold"
+        fontWeight: "bold",
       },
       medium: {
         fontFamily: "",
-        fontWeight: "bold"
+        fontWeight: "bold",
       },
       bold: {
         fontFamily: "",
-        fontWeight: "bold"
+        fontWeight: "bold",
       },
       heavy: {
         fontFamily: "",
-        fontWeight: "bold"
-      }
-    }
+        fontWeight: "bold",
+      },
+    },
   };
 
   const toggleTheme = () => {
@@ -220,6 +251,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     fontFamily,
     colorSchemes,
     navTheme,
+    gradientColors,
     toggleTheme,
     setColorScheme,
     setFontFamily,
@@ -245,8 +277,8 @@ export const getColorClasses = (colorScheme: string) => {
       };
     case "red":
       return {
-        gradient: "from-red-500 to-orange-400",
-        text: "text-red-400",
+        gradient: "from-red-400 to-orange-300",
+        text: "text-red-700",
         lightBg: "bg-red-100",
         lightBorder: "border-red-100",
       };

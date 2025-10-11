@@ -1,9 +1,4 @@
-import React, {
-  useState,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import {
   Text,
   TextInput,
@@ -14,15 +9,25 @@ import {
   FlatList,
   Animated,
   Modal,
+  TextStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList, Verse, SearchOptions } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { useTheme } from "../context/ThemeContext";
 import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 import { Button } from "../components/Button";
 import { getBookInfo } from "../utils/testamentUtils";
-import { SCOPE_CATEGORIES, getScopeConfig, SearchScope, isBookScope, getBookNumberFromScope, SCOPE_RANGES, BOOK_COLORS } from "../components/Scope_Config";
+import {
+  SCOPE_CATEGORIES,
+  getScopeConfig,
+  SearchScope,
+  isBookScope,
+  getBookNumberFromScope,
+  SCOPE_RANGES,
+  BOOK_COLORS,
+} from "../components/Scope_Config";
 
 type SearchScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -160,7 +165,7 @@ const SearchResultItem = React.memo(
 );
 
 const PopularSearchTerms = React.memo(
-  ({ onSearch }: { onSearch: (term: string) => void }) => {
+  ({ onSearch, colors }: { onSearch: (term: string) => void; colors: any }) => {
     const terms = [
       "faith",
       "love",
@@ -178,9 +183,16 @@ const PopularSearchTerms = React.memo(
           <TouchableOpacity
             key={term}
             onPress={() => onSearch(term)}
-            className="bg-white border border-blue-200 rounded-full px-3 py-1 m-1"
+            style={{
+              backgroundColor: colors.card,
+              borderColor: colors.primary + "30",
+              borderWidth: 1,
+            }}
+            className="rounded-full px-3 py-1 m-1"
           >
-            <Text className="text-blue-600 text-xs">{term}</Text>
+            <Text className="text-xs" style={{ color: colors.primary }}>
+              {term}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -193,10 +205,12 @@ const BackToTopButton = React.memo(
     isVisible,
     onPress,
     animatedValue,
+    colors,
   }: {
     isVisible: boolean;
     onPress: () => void;
     animatedValue: Animated.Value;
+    colors: any;
   }) => {
     const translateY = animatedValue.interpolate({
       inputRange: [0, 1],
@@ -223,12 +237,23 @@ const BackToTopButton = React.memo(
       >
         <TouchableOpacity
           onPress={onPress}
-          className="bg-blue-500 rounded-full p-4 shadow-lg border border-blue-300"
+          style={{
+            backgroundColor: colors.primary,
+            borderColor: colors.primary + "50",
+            borderWidth: 1,
+          }}
+          className="rounded-full p-4 shadow-lg mb-2"
           activeOpacity={0.8}
         >
           <View className="items-center justify-center">
-            <Text className="text-white font-bold text-lg">↑</Text>
-            <Text className="text-white text-xs mt-1">Top</Text>
+            <Text
+              className="font-bold text-lg text-white"
+            >
+              ↑
+            </Text>
+            <Text className="text-xs mt-1 text-white">
+              Top
+            </Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -242,28 +267,65 @@ const EmptyStates = React.memo(
     query,
     loading,
     onPopularSearch,
+    colors,
   }: {
     hasSearched: boolean;
     query: string;
     loading: boolean;
     onPopularSearch: (term: string) => void;
+    colors: any;
   }) => {
     if (loading) return null;
+
+    const commonStyle: TextStyle = {
+      textAlign: "center",
+      fontSize: 18,
+      marginBottom: 8,
+    };
+    const subStyle: TextStyle = {
+      textAlign: "center",
+      fontSize: 14,
+      marginBottom: 24,
+    };
+    const tipsStyle = {
+      backgroundColor: colors.card,
+      padding: 16,
+      borderRadius: 8,
+      marginHorizontal: 16,
+    };
+    const tipTitleStyle: TextStyle = {
+      fontSize: 14,
+      textAlign: "center",
+      marginBottom: 8,
+      fontWeight: "600",
+    };
+    const tipTextStyle: TextStyle = {
+      fontSize: 12,
+      textAlign: "center",
+      lineHeight: 16,
+    };
 
     if (hasSearched && !query) {
       return (
         <View className="flex-1 justify-center items-center py-8">
-          <Text className="text-center text-gray-600 text-lg mb-2">
+          <Text style={[commonStyle, { color: colors.text }]}>
             Search the Bible
           </Text>
-          <Text className="text-center text-gray-500 text-sm mb-6">
+          <Text style={[subStyle, { color: colors.muted }]}>
             Enter a word or phrase to find relevant verses
           </Text>
-          <View className="bg-blue-50 p-4 rounded-lg w-full">
-            <Text className="text-blue-800 text-sm text-center font-medium mb-2">
+          <View
+            style={{
+              backgroundColor: colors.primary + "10",
+              padding: 16,
+              borderRadius: 8,
+              width: "100%",
+            }}
+          >
+            <Text style={[tipTitleStyle, { color: colors.primary }]}>
               Popular Search Terms
             </Text>
-            <PopularSearchTerms onSearch={onPopularSearch} />
+            <PopularSearchTerms onSearch={onPopularSearch} colors={colors} />
           </View>
         </View>
       );
@@ -272,17 +334,17 @@ const EmptyStates = React.memo(
     if (hasSearched && query && !loading) {
       return (
         <View className="flex-1 justify-center py-8">
-          <Text className="text-center text-gray-600 text-lg mb-2">
+          <Text style={[commonStyle, { color: colors.text, marginBottom: 8 }]}>
             No results found for "{query}"
           </Text>
-          <Text className="text-center text-gray-500 text-sm mb-4">
+          <Text style={[subStyle, { color: colors.muted }]}>
             Try different keywords or check spelling
           </Text>
-          <View className="bg-gray-50 p-4 rounded-lg mx-4">
-            <Text className="text-gray-600 text-sm text-center mb-2">
+          <View style={tipsStyle}>
+            <Text style={[tipTitleStyle, { color: colors.text }]}>
               Search tips:
             </Text>
-            <Text className="text-gray-500 text-xs text-center">
+            <Text style={[tipTextStyle, { color: colors.muted }]}>
               • Try simpler or more common words{"\n"}• Check for typos
               {"\n"}• Search for single words first
             </Text>
@@ -294,17 +356,24 @@ const EmptyStates = React.memo(
     if (!query && !hasSearched) {
       return (
         <View className="flex-1 justify-center py-8">
-          <Text className="text-center text-gray-600 text-lg mb-2">
+          <Text style={[commonStyle, { color: colors.text }]}>
             Search the Bible
           </Text>
-          <Text className="text-center text-gray-500 text-sm mb-6">
+          <Text style={[subStyle, { color: colors.muted }]}>
             Enter a word or phrase to find relevant verses
           </Text>
-          <View className="bg-blue-50 p-4 rounded-lg mx-4">
-            <Text className="text-blue-800 text-sm text-center font-medium mb-2">
+          <View
+            style={{
+              backgroundColor: colors.primary + "10",
+              padding: 16,
+              borderRadius: 8,
+              marginHorizontal: 16,
+            }}
+          >
+            <Text style={[tipTitleStyle, { color: colors.primary }]}>
               Popular Search Terms
             </Text>
-            <PopularSearchTerms onSearch={onPopularSearch} />
+            <PopularSearchTerms onSearch={onPopularSearch} colors={colors} />
           </View>
         </View>
       );
@@ -321,29 +390,69 @@ const ScopeDropdown = React.memo(
     onScopeChange,
     isOpen,
     onToggle,
+    colors,
   }: {
     scope: SearchScope;
     onScopeChange: (newScope: SearchScope) => void;
     isOpen: boolean;
     onToggle: () => void;
+    colors: any;
   }) => {
     const currentConfig = getScopeConfig(scope);
+
+    const headerStyle = {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary + "60",
+      borderBottomWidth: 1,
+    };
+    const categoryHeaderStyle = {
+      backgroundColor: colors.primary,
+      borderColor: colors.border,
+      borderBottomWidth: 1,
+    };
+    const itemStyle = {
+      borderBottomColor: colors.border,
+      borderBottomWidth: 1,
+      backgroundColor: colors.card,
+    };
+    const selectedItemStyle = {
+      backgroundColor: colors.primary + "10",
+    };
+    const textStyle = {
+      color: colors.text,
+    };
+    const selectedTextStyle = {
+      color: colors.primary,
+    };
+    const descStyle = {
+      color: colors.muted,
+    };
 
     return (
       <View className="mb-4">
         <TouchableOpacity
           onPress={onToggle}
-          className="bg-blue-500 border border-gray-300 rounded-lg p-4 flex-row justify-between items-center"
+          style={{
+            backgroundColor: colors.primary,
+            borderColor: colors.border,
+            borderWidth: 1,
+          }}
+          className="rounded-lg p-4 flex-row justify-between items-center"
         >
           <View className="flex-1">
-            <Text className="font-semibold text-white">
+            <Text
+              className="font-semibold"
+              style={{ color: colors.text }}
+            >
               {currentConfig.label}
             </Text>
-            <Text className="text-white text-xs mt-1">
+            <Text className="text-xs mt-1" style={{ color: colors.text }}>
               {currentConfig.description}
             </Text>
           </View>
-          <Text className="text-white text-lg">{isOpen ? "↑" : "↓"}</Text>
+          <Text className="text-lg" style={{ color: colors.text }}>
+            {isOpen ? "↑" : "↓"}
+          </Text>
         </TouchableOpacity>
 
         <Modal
@@ -353,14 +462,21 @@ const ScopeDropdown = React.memo(
           onRequestClose={onToggle}
         >
           <TouchableOpacity
-            className="flex-1 bg-black/50 justify-center p-4"
+            className="flex-1 justify-center p-4"
             activeOpacity={1}
             onPress={onToggle}
+            style={{ backgroundColor: colors.background + "CC" }}
           >
-            <View className="bg-white rounded-lg max-h-80">
+            <View
+              className="rounded-lg max-h-80"
+              style={{ backgroundColor: colors.card }}
+            >
               {/* Fixed Header - Not Scrollable */}
-              <View className="bg-blue-500 px-4 py-3 border-b border-blue-400 sticky top-0 z-10">
-                <Text className="font-bold text-white text-center text-base">
+              <View style={headerStyle} className="px-4 py-3 sticky top-0 z-10">
+                <Text
+                  className="font-bold text-center text-base"
+                  style={{ color: colors.text }}
+                >
                   Select Search Scope
                 </Text>
               </View>
@@ -368,8 +484,11 @@ const ScopeDropdown = React.memo(
               <ScrollView>
                 {Object.entries(SCOPE_CATEGORIES).map(([category, scopes]) => (
                   <View key={category}>
-                    <View className="bg-blue-500 px-4 py-2 border-b border-gray-200">
-                      <Text className="font-semibold text-white text-sm">
+                    <View style={categoryHeaderStyle} className="px-4 py-2">
+                      <Text
+                        className="font-semibold text-sm"
+                        style={{ color: colors.text }}
+                      >
                         {category}
                       </Text>
                     </View>
@@ -382,20 +501,22 @@ const ScopeDropdown = React.memo(
                             onScopeChange(scopeKey as SearchScope);
                             onToggle();
                           }}
-                          className={`px-4 py-3 border-b border-gray-100 ${
-                            scope === scopeKey ? "bg-blue-50" : "bg-white"
-                          }`}
+                          style={[
+                            itemStyle,
+                            scope === scopeKey ? selectedItemStyle : null,
+                          ]}
+                          className="px-4 py-3"
                         >
                           <Text
-                            className={`font-medium ${
-                              scope === scopeKey
-                                ? "text-blue-600"
-                                : "text-gray-800"
-                            }`}
+                            className="font-medium"
+                            style={[
+                              textStyle,
+                              scope === scopeKey ? selectedTextStyle : null,
+                            ]}
                           >
                             {config.label}
                           </Text>
-                          <Text className="text-gray-500 text-xs mt-1">
+                          <Text className="text-xs mt-1" style={descStyle}>
                             {config.description}
                           </Text>
                         </TouchableOpacity>
@@ -414,6 +535,19 @@ const ScopeDropdown = React.memo(
 
 export default function SearchScreen({ navigation }: Props) {
   const { searchVerses, bibleDB } = useBibleDatabase();
+  const { theme, colorScheme, navTheme } = useTheme();
+  const isDark = theme === "dark";
+  const primaryColor = navTheme.colors.primary;
+
+  const colors = {
+    primary: primaryColor,
+    background: isDark ? "#0f172a" : "#f8fafc",
+    text: isDark ? "#ffffff" : "#000000",
+    muted: isDark ? "#9ca3af" : "#6b7280",
+    card: isDark ? "#1e293b" : "#ffffff",
+    border: isDark ? "#374151" : "#e5e7eb",
+  };
+
   const [hasSearched, setHasSearched] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Verse[]>([]);
@@ -631,34 +765,52 @@ export default function SearchScreen({ navigation }: Props) {
           onScopeChange={handleScopeChange}
           isOpen={showScopeDropdown}
           onToggle={() => setShowScopeDropdown(!showScopeDropdown)}
+          colors={colors}
         />
 
         {/* Search Input */}
         <View className="flex-row items-center mb-4">
-          <View className="flex-1 bg-white rounded-lg shadow-sm border border-gray-200">
+          <View
+            className="flex-1 rounded-lg shadow-sm border"
+            style={{
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+            }}
+          >
             <TextInput
-              className="p-4 text-base placeholder:text-gray-400 text-blue-500"
+              className="p-4 text-base"
               placeholder={`Search ${getScopeConfig(scope).label.toLowerCase()}...`}
+              placeholderTextColor={colors.muted}
               value={query}
               onChangeText={handleQueryChange} // Use the new handler
               onSubmitEditing={() => handleSearch()}
               returnKeyType="search"
+              style={{ color: colors.text }}
             />
           </View>
           {query.length > 0 && (
             <TouchableOpacity onPress={clearSearch} className="ml-2">
-              <Text className="text-blue-500 font-medium p-4">Clear</Text>
+              <Text
+                className="font-medium p-4"
+                style={{ color: colors.primary }}
+              >
+                {"Clear"}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Search Button */}
         <TouchableOpacity
-          className="bg-blue-500 p-4 rounded-lg shadow-sm mb-4"
+          className="p-4 rounded-lg shadow-sm mb-4"
           onPress={() => handleSearch()}
           disabled={!query.trim()}
+          style={{ backgroundColor: colors.primary }}
         >
-          <Text className="text-white font-semibold text-center">
+          <Text
+            className="font-semibold text-center"
+            style={{ color: colors.text }}
+          >
             {resultStats}
           </Text>
         </TouchableOpacity>
@@ -673,16 +825,17 @@ export default function SearchScreen({ navigation }: Props) {
       handleSearch,
       clearSearch,
       handleQueryChange, // Include the new handler
+      colors,
     ]
   );
 
   // Loading state
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#3B82F6" />
-          <Text className="text-lg text-gray-600 mt-4">
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text className="text-lg mt-4" style={{ color: colors.text }}>
             Searching {getScopeConfig(scope).label}...
           </Text>
         </View>
@@ -693,9 +846,14 @@ export default function SearchScreen({ navigation }: Props) {
   // Error state
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50">
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
         <View className="flex-1 justify-center items-center p-6">
-          <Text className="text-lg text-red-600 text-center mb-4">{error}</Text>
+          <Text
+            className="text-lg text-center mb-4"
+            style={{ color: colors.primary }}
+          >
+            {error}
+          </Text>
           <Button title="Try Again" onPress={() => handleSearch()} />
         </View>
       </SafeAreaView>
@@ -703,8 +861,8 @@ export default function SearchScreen({ navigation }: Props) {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50">
-      <View className="flex-1 px-4">
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+      <View className="flex-1 px-4 -mt-8">
         <FlatList
           ref={flatListRef}
           data={results}
@@ -717,6 +875,7 @@ export default function SearchScreen({ navigation }: Props) {
               query={query}
               loading={loading}
               onPopularSearch={handlePopularSearch}
+              colors={colors}
             />
           }
           onScroll={handleScroll}
@@ -740,6 +899,7 @@ export default function SearchScreen({ navigation }: Props) {
           isVisible={showBackToTop && results.length > 10}
           onPress={scrollToTop}
           animatedValue={backToTopAnimation}
+          colors={colors}
         />
       </View>
     </SafeAreaView>

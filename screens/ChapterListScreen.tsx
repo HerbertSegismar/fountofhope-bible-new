@@ -13,6 +13,8 @@ import { StackNavigationProp } from "@react-navigation/stack";
 import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { useTheme } from "../context/ThemeContext";
+import { lightenColor } from "../utils/colorUtils";
 
 type ChapterListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -43,6 +45,26 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
   // Use the context
   const { bibleDB, currentVersion } = useBibleDatabase();
+  const { theme, navTheme } = useTheme();
+  const primaryColor = navTheme.colors.primary;
+
+  const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
+  const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
+  const headerBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
+  const textPrimaryClass = theme === "dark" ? "text-gray-100" : "text-gray-800";
+  const textSecondaryClass =
+    theme === "dark" ? "text-gray-400" : "text-gray-500";
+  const textTertiaryClass =
+    theme === "dark" ? "text-gray-300" : "text-gray-600";
+  const borderClass = theme === "dark" ? "border-gray-700" : "border-gray-200";
+  const lightGrayClass = theme === "dark" ? "bg-gray-700" : "bg-gray-100";
+  const warningBgClass = theme === "dark" ? "bg-yellow-900/20" : "bg-yellow-50";
+  const warningBorderClass =
+    theme === "dark" ? "border-yellow-800/50" : "border-yellow-200";
+  const warningTextPrimaryClass =
+    theme === "dark" ? "text-yellow-300" : "text-yellow-800";
+  const warningTextSecondaryClass =
+    theme === "dark" ? "text-yellow-400" : "text-yellow-600";
 
   useEffect(() => {
     loadChapterData();
@@ -139,15 +161,22 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     const verseCount = verseMapping[chapter] || 0;
 
     if (verseCount === 0) {
-      return "bg-gray-100 border-gray-300";
+      return theme === "dark"
+        ? "bg-gray-700 border-gray-600"
+        : "bg-gray-100 border-gray-300";
     }
 
     if (book.book_color) {
-      return "bg-white border-l-4";
-    } else if (book.testament === "NT") {
-      return "bg-blue-50 border-blue-200";
+      return `${theme === "dark" ? "bg-gray-800" : "bg-white"} border-l-4`;
     } else {
-      return "bg-green-50 border-green-200";
+      const testamentScheme = book.testament === "OT" ? "red" : "green";
+      const lightBg = `bg-${testamentScheme}-50`;
+      const lightBorder = `border-${testamentScheme}-200`;
+      const darkBg = `bg-${testamentScheme}-900/20`;
+      const darkBorder = `border-${testamentScheme}-800/50`;
+      return theme === "dark"
+        ? `${darkBg} ${darkBorder}`
+        : `${lightBg} ${lightBorder}`;
     }
   };
 
@@ -158,17 +187,19 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     return {};
   };
 
-  const getTextColor = (chapter: number) => {
+  const getTextColorValue = (chapter: number) => {
     const verseCount = verseMapping[chapter] || 0;
 
     if (verseCount === 0) {
-      return "text-gray-400";
+      return theme === "dark" ? "#6B7280" : "#9CA3AF";
     }
 
     if (book.book_color) {
-      return { color: book.book_color };
+      return book.book_color;
+    } else {
+      const baseColor = book.testament === "OT" ? "#DC2626" : "#059669";
+      return theme === "dark" ? lightenColor(baseColor, 0.6) : baseColor;
     }
-    return book.testament === "NT" ? "text-blue-800" : "text-green-800";
   };
 
   const getChapterDisplay = (chapter: number) => {
@@ -177,8 +208,15 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     if (verseCount === 0) {
       return (
         <View className="justify-center items-center">
-          <Text className="font-bold text-lg text-gray-400">{chapter}</Text>
-          <Text className="text-xs text-gray-400 mt-1">No verses</Text>
+          <Text
+            className="font-bold text-lg"
+            style={{ color: getTextColorValue(chapter) }}
+          >
+            {chapter}
+          </Text>
+          <Text className={`text-xs mt-1 ${textSecondaryClass}`}>
+            No verses
+          </Text>
         </View>
       );
     }
@@ -186,11 +224,12 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     return (
       <View className="justify-center items-center">
         <Text
-          className={`font-bold text-lg ${typeof getTextColor(chapter) === "string" ? getTextColor(chapter) : ""}`}
+          className="font-bold text-lg"
+          style={{ color: getTextColorValue(chapter) }}
         >
           {chapter}
         </Text>
-        <Text className="text-xs text-gray-500 mt-1">
+        <Text className={`text-xs ${textSecondaryClass} mt-1`}>
           {verseCount} v{verseCount !== 1 ? "s" : ""}
         </Text>
       </View>
@@ -203,13 +242,15 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
   if (loading && chapterCount === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-lg text-gray-600 mt-4">Loading chapters...</Text>
-        <Text className="text-sm text-gray-500 mt-2">
+      <SafeAreaView className={`flex-1 ${bgClass} justify-center items-center`}>
+        <ActivityIndicator size="large" color={primaryColor} />
+        <Text className={`text-lg ${textTertiaryClass} mt-4`}>
+          Loading chapters...
+        </Text>
+        <Text className={`text-sm ${textSecondaryClass} mt-2`}>
           {currentVersion.replace(".sqlite3", "").toUpperCase()}
         </Text>
-        <Text className="text-xs text-gray-400 mt-1">
+        <Text className={`text-xs ${textTertiaryClass} mt-1`}>
           Loading verse mapping for {book.long_name}
         </Text>
       </SafeAreaView>
@@ -218,13 +259,16 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
   if (!bibleDB) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center p-6">
-        <Text className="text-lg text-red-600 text-center mb-4">
+      <SafeAreaView
+        className={`flex-1 ${bgClass} justify-center items-center p-6`}
+      >
+        <Text className="text-lg text-red-500 text-center mb-4">
           Database not available
         </Text>
         <TouchableOpacity
           onPress={refreshData}
-          className="bg-blue-500 px-4 py-3 rounded-lg"
+          className="px-4 py-3 rounded-lg"
+          style={{ backgroundColor: primaryColor }}
         >
           <Text className="text-white font-semibold">Try Again</Text>
         </TouchableOpacity>
@@ -239,84 +283,105 @@ export default function ChapterListScreen({ navigation, route }: Props) {
   );
 
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50"
-      showsVerticalScrollIndicator={false}
-    >
-      <SafeAreaView className="p-4">
-        {/* Header */}
-        <View
-          className="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 -mt-10 h-30"
-          style={{ borderLeftColor: book.book_color || "#3B82F6" }}
-        >
-          <Text className="text-2xl font-bold text-primary text-center">
-            {book.long_name}
-          </Text>
-          <Text className="text-gray-500 text-sm text-center">
-            Select a chapter to read
-          </Text>
-          <Text className="text-xs text-gray-400 text-center mt-1">
-            {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
-            {chapterCount} chapters • {totalVerses} total verses
-          </Text>
-        </View>
+    <SafeAreaView className={`flex-1 ${bgClass}`}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <View className="p-4">
+          {/* Header */}
+          <View
+            className={`${headerBgClass} rounded-lg p-4 mb-4 shadow-sm border-l-4 h-30 ${borderClass}`}
+            style={{ borderLeftColor: book.book_color || primaryColor }}
+          >
+            <Text
+              className="text-2xl font-bold text-center"
+              style={{ color: primaryColor }}
+            >
+              {book.long_name}
+            </Text>
+            <Text className={`text-sm ${textSecondaryClass} text-center`}>
+              Select a chapter to read
+            </Text>
+            <Text className={`text-xs ${textTertiaryClass} text-center mt-1`}>
+              {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
+              {chapterCount} chapters • {totalVerses} total verses
+            </Text>
+          </View>
 
-        {/* Chapters Grid */}
-        {chapterCount > 0 ? (
-          <View className="flex-row flex-wrap gap-3 justify-center">
-            {chapters.map((chapter) => (
-              <TouchableOpacity
-                key={chapter}
-                className={`${getChapterColor(chapter)} border rounded-lg shadow-sm justify-center items-center`}
-                style={[
-                  {
-                    width: CHAPTER_SIZE,
-                    height: CHAPTER_SIZE,
-                  },
-                  getBorderColor(),
-                ]}
-                onPress={() => handleChapterPress(chapter)}
-                onLongPress={() => handleLongPress(chapter)}
-                delayLongPress={500}
-                activeOpacity={0.7}
-                disabled={!verseMapping[chapter] || verseMapping[chapter] === 0}
+          {/* Chapters Grid */}
+          {chapterCount > 0 ? (
+            <View className="flex-row flex-wrap gap-3 justify-center">
+              {chapters.map((chapter) => (
+                <TouchableOpacity
+                  key={chapter}
+                  className={`${getChapterColor(chapter)} border rounded-lg shadow-sm justify-center items-center`}
+                  style={[
+                    {
+                      width: CHAPTER_SIZE,
+                      height: CHAPTER_SIZE,
+                    },
+                    getBorderColor(),
+                  ]}
+                  onPress={() => handleChapterPress(chapter)}
+                  onLongPress={() => handleLongPress(chapter)}
+                  delayLongPress={500}
+                  activeOpacity={0.7}
+                  disabled={
+                    !verseMapping[chapter] || verseMapping[chapter] === 0
+                  }
+                >
+                  {getChapterDisplay(chapter)}
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <View
+              className={`p-6 rounded-lg border ${warningBorderClass}`}
+              style={{
+                backgroundColor:
+                  warningBgClass === "bg-yellow-50" ? undefined : undefined,
+              }}
+            >
+              <Text
+                className={`text-center text-lg ${warningTextPrimaryClass}`}
               >
-                {getChapterDisplay(chapter)}
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View className="bg-yellow-50 p-6 rounded-lg border border-yellow-200">
-            <Text className="text-yellow-800 text-center text-lg">
-              No chapters found for this book
-            </Text>
-            <Text className="text-yellow-600 text-center mt-2 text-sm">
-              This book may not be available in the{" "}
-              {currentVersion.replace(".sqlite3", "").toUpperCase()} translation
-            </Text>
-          </View>
-        )}
+                No chapters found for this book
+              </Text>
+              <Text
+                className={`text-center mt-2 text-sm ${warningTextSecondaryClass}`}
+              >
+                This book may not be available in the{" "}
+                {currentVersion.replace(".sqlite3", "").toUpperCase()}{" "}
+                translation
+              </Text>
+            </View>
+          )}
 
-        {/* Book Information */}
-        <View className="mt-6 bg-gray-100 rounded-lg p-4">
-          <View className="flex-row justify-between items-center">
-            <Text className="text-sm text-gray-600">
-              {book.testament === "OT" ? "Old Testament" : "New Testament"} Book
-            </Text>
-            <Text className="text-xs text-gray-500">
-              {currentVersion.replace(".sqlite3", "").toUpperCase()}
-            </Text>
-          </View>
-          <View className="flex-row justify-between items-center mt-2">
-            <Text className="text-sm text-gray-600">
-              Total: {chapterCount} chapters, {totalVerses} verses
-            </Text>
-            <TouchableOpacity onPress={refreshData}>
-              <Text className="text-blue-500 text-sm font-medium">Refresh</Text>
-            </TouchableOpacity>
+          {/* Book Information */}
+          <View className={`mt-6 ${lightGrayClass} rounded-lg p-4`}>
+            <View className="flex-row justify-between items-center">
+              <Text className={`text-sm ${textTertiaryClass}`}>
+                {book.testament === "OT" ? "Old Testament" : "New Testament"}{" "}
+                Book
+              </Text>
+              <Text className={`text-xs ${textSecondaryClass}`}>
+                {currentVersion.replace(".sqlite3", "").toUpperCase()}
+              </Text>
+            </View>
+            <View className="flex-row justify-between items-center mt-2">
+              <Text className={`text-sm ${textTertiaryClass}`}>
+                Total: {chapterCount} chapters, {totalVerses} verses
+              </Text>
+              <TouchableOpacity onPress={refreshData}>
+                <Text
+                  className="text-sm font-medium"
+                  style={{ color: primaryColor }}
+                >
+                  Refresh
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </SafeAreaView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

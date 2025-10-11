@@ -14,6 +14,7 @@ import { RootStackParamList } from "../types";
 import { Book } from "../services/BibleDatabase";
 import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { useTheme } from "../context/ThemeContext";
 import { lightenColor } from "../utils/colorUtils";
 
 type BookListScreenNavigationProp = StackNavigationProp<
@@ -34,6 +35,10 @@ export default function BookListScreen({ navigation }: Props) {
 
   // Use the context
   const { bibleDB, currentVersion } = useBibleDatabase();
+  const { theme, navTheme } = useTheme();
+  const primaryColor = navTheme.colors.primary;
+  const lightPrimaryBg = lightenColor(primaryColor, 0.95);
+  const primaryBorder = lightenColor(primaryColor, 0.5);
 
   useEffect(() => {
     loadBooks();
@@ -71,12 +76,24 @@ export default function BookListScreen({ navigation }: Props) {
   const oldTestament = books.filter((book) => book.testament === "OT");
   const newTestament = books.filter((book) => book.testament === "NT");
 
+  const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
+  const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
+  const textPrimaryClass = theme === "dark" ? "text-gray-100" : "text-gray-800";
+  const textSecondaryClass =
+    theme === "dark" ? "text-gray-400" : "text-gray-500";
+  const textTertiaryClass =
+    theme === "dark" ? "text-gray-300" : "text-gray-600";
+  const borderClass = theme === "dark" ? "border-gray-700" : "border-gray-200";
+  const headerBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
+
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-lg text-gray-600 mt-4">Loading books...</Text>
-        <Text className="text-sm text-gray-500 mt-2">
+      <View className={`flex-1 justify-center items-center ${bgClass}`}>
+        <ActivityIndicator size="large" color={primaryColor} />
+        <Text className={`text-lg ${textTertiaryClass} mt-4`}>
+          Loading books...
+        </Text>
+        <Text className={`text-sm ${textSecondaryClass} mt-2`}>
           Version: {currentVersion.replace(".sqlite3", "").toUpperCase()}
         </Text>
       </View>
@@ -85,13 +102,14 @@ export default function BookListScreen({ navigation }: Props) {
 
   if (!bibleDB) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50 p-6">
-        <Text className="text-lg text-red-600 text-center mb-4">
+      <View className={`flex-1 justify-center items-center ${bgClass} p-6`}>
+        <Text className="text-lg text-red-500 text-center mb-4">
           Database not available
         </Text>
         <TouchableOpacity
           onPress={loadBooks}
-          className="bg-blue-500 px-4 py-2 rounded-lg"
+          className="px-4 py-2 rounded-lg"
+          style={{ backgroundColor: primaryColor }}
         >
           <Text className="text-white font-medium">Try Again</Text>
         </TouchableOpacity>
@@ -99,10 +117,14 @@ export default function BookListScreen({ navigation }: Props) {
     );
   }
 
-  // Updated BookCard with soft background colors and dark text for readability
+  // Updated BookCard with soft background colors and dynamic text for readability
   const BookCard = ({ book, color }: { book: Book; color: string }) => {
     const borderColor = book.book_color || color;
-    const backgroundColor = lightenColor(borderColor, 0.15) || "#fff"; // light translucent background
+    const backgroundColor =
+      lightenColor(borderColor, 0.15) ||
+      (theme === "dark" ? "#374151" : "#fff"); // Adjust fallback for dark mode
+
+    const textColor = theme === "dark" ? "#F3F4F6" : "#1F2937";
 
     return (
       <TouchableOpacity
@@ -118,7 +140,7 @@ export default function BookListScreen({ navigation }: Props) {
       >
         <Text
           className="font-semibold text-center text-sm"
-          style={{ color: "#1F2937" }} // dark gray text for readability
+          style={{ color: textColor }}
           numberOfLines={2}
           adjustsFontSizeToFit
           minimumFontScale={0.8}
@@ -130,13 +152,13 @@ export default function BookListScreen({ navigation }: Props) {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className={`flex-1 ${bgClass}`}>
       {/* Header with version info */}
-      <View className="bg-white px-4 py-3 border-b border-gray-200">
-        <Text className="text-lg font-bold text-gray-800 text-center">
+      <View className={`${headerBgClass} px-4 py-3 border-b ${borderClass}`}>
+        <Text className={`text-lg font-bold ${textPrimaryClass} text-center`}>
           Bible Books
         </Text>
-        <Text className="text-sm text-gray-500 text-center mt-1">
+        <Text className={`text-sm ${textSecondaryClass} text-center mt-1`}>
           {currentVersion.replace(".sqlite3", "").toUpperCase()} Version
         </Text>
       </View>
@@ -149,10 +171,10 @@ export default function BookListScreen({ navigation }: Props) {
         {/* Old Testament Section */}
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xl font-bold text-primary">
+            <Text className="text-xl font-bold" style={{ color: primaryColor }}>
               Old Testament
             </Text>
-            <Text className="text-sm text-gray-500">
+            <Text className={`text-sm ${textSecondaryClass}`}>
               {oldTestament.length} books
             </Text>
           </View>
@@ -170,10 +192,10 @@ export default function BookListScreen({ navigation }: Props) {
         {/* New Testament Section */}
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xl font-bold text-primary">
+            <Text className="text-xl font-bold" style={{ color: primaryColor }}>
               New Testament
             </Text>
-            <Text className="text-sm text-gray-500">
+            <Text className={`text-sm ${textSecondaryClass}`}>
               {newTestament.length} books
             </Text>
           </View>
@@ -189,8 +211,14 @@ export default function BookListScreen({ navigation }: Props) {
         </View>
 
         {/* Summary */}
-        <View className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <Text className="text-blue-800 text-sm text-center">
+        <View
+          className={`p-4 rounded-lg border`}
+          style={{
+            backgroundColor: lightPrimaryBg,
+            borderColor: primaryBorder,
+          }}
+        >
+          <Text className="text-sm text-center text-white">
             📚 Total: {books.length} books • OT: {oldTestament.length} • NT:{" "}
             {newTestament.length}
           </Text>

@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   Animated,
   Easing,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
+import { Fonts } from "../utils/fonts";
 
 const JesusAttributes = [
   "Jesus Christ",
@@ -396,8 +396,12 @@ const MatrixNative = () => {
       >
         <Text
           style={[
-            styles.text,
-            { color: overlay.color, fontSize: overlay.fontSize },
+            styles.overlayTextContent,
+            {
+              color: overlay.color,
+              fontSize: overlay.fontSize,
+              fontFamily: Fonts.RubikGlitchRegular,
+            },
           ]}
         >
           {overlay.text}
@@ -410,7 +414,15 @@ const MatrixNative = () => {
 
   return (
     <View style={styles.outerContainer}>
-      <Text style={[styles.title, { color: matrixColor }]}>
+      <Text
+        style={[
+          styles.title,
+          {
+            fontFamily: Fonts.RubikGlitchRegular,
+            color: matrixColor,
+          },
+        ]}
+      >
         Names & Attributes of the Lord Jesus Christ
       </Text>
       <View
@@ -428,12 +440,13 @@ const styles = StyleSheet.create({
   outerContainer: {
     backgroundColor: "black",
     borderRadius: 16,
-    marginTop: 32,
+    marginTop: 25,
     marginBottom: 24,
+    padding: 5
   },
   title: {
-    padding: 8,
-    fontSize: 12,
+    padding: 16,
+    fontSize: 14,
     textAlign: "center",
   },
   container: {
@@ -467,10 +480,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     zIndex: 10,
   },
-  text: {
-    fontWeight: "200",
-    fontFamily: "Oswald", // Assume loaded; fallback to system
+  overlayTextContent: {
+    fontWeight: "400",
     includeFontPadding: false,
+    textShadowColor: "rgba(0, 0, 0, 0.8)",
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   },
 });
 

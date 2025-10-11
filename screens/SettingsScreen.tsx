@@ -11,12 +11,20 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, ColorScheme } from "../context/ThemeContext";
 import { VersionSelector } from "../components/VersionSelector";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
-import { colorSchemes } from "../context/ThemeContext";
+import { Fonts } from "../utils/fonts";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+// Define primaryColors with proper typing
+const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
+  purple: { light: "#A855F7", dark: "#9333EA" },
+  green: { light: "#10B981", dark: "#059669" },
+  red: { light: "#bb3636ff", dark: "#a22c2cff" },
+  yellow: { light: "#F59E0B", dark: "#D97706" },
+};
 
 const SettingsScreen = () => {
   const { currentVersion, availableVersions, switchVersion, isInitializing } =
@@ -25,6 +33,7 @@ const SettingsScreen = () => {
     theme,
     colorScheme,
     fontFamily,
+    colorSchemes,
     toggleTheme,
     setColorScheme,
     setFontFamily,
@@ -38,22 +47,14 @@ const SettingsScreen = () => {
     const updateLayout = () => {
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
       const newIsLandscape = newWidth > newHeight;
-
-      // Always update landscape state
       setIsLandscape(newIsLandscape);
     };
 
-    // Initial check
     updateLayout();
-
     const subscription = Dimensions.addEventListener("change", updateLayout);
-
-    return () => {
-      subscription?.remove();
-    };
+    return () => subscription?.remove();
   }, []);
 
-  // Sync with current version from context
   useEffect(() => {
     setSelectedVersion(currentVersion);
   }, [currentVersion]);
@@ -73,9 +74,9 @@ const SettingsScreen = () => {
           await switchVersion(version);
           console.log(
             `Version switch to ${version} succeeded on attempt ${attempt + 1}`
-          ); // Optional debug log
-          setIsSwitching(false); // Reset on success
-          return; // Success
+          );
+          setIsSwitching(false);
+          return;
         } catch (error: unknown) {
           lastError = error;
           console.error(`Version switch attempt ${attempt + 1} failed:`, error);
@@ -86,9 +87,6 @@ const SettingsScreen = () => {
           }
         }
       }
-
-      // All retries failed
-      console.error("All version switch attempts failed:", lastError);
 
       let errorMessage =
         "Failed to switch Bible version after multiple attempts. Please try another version.";
@@ -111,6 +109,28 @@ const SettingsScreen = () => {
   const isLoading = isInitializing || isSwitching;
   const isDark = theme === "dark";
 
+  // Get current color scheme configuration
+  const currentColorScheme = colorSchemes.find(
+    (scheme) => scheme.name === colorScheme
+  );
+  const schemeColors = currentColorScheme
+    ? currentColorScheme[isDark ? "dark" : "light"]
+    : colorSchemes[0][isDark ? "dark" : "light"];
+
+  // Get primary color - now properly typed
+  const primaryColor =
+    primaryColors[colorScheme as ColorScheme][isDark ? "dark" : "light"];
+
+  // Create a colors object based on theme
+  const colors = {
+    primary: primaryColor,
+    background: schemeColors.bg || (isDark ? "#0f172a" : "#f8fafc"),
+    text: isDark ? "#ffffff" : "#000000",
+    muted: isDark ? "#9ca3af" : "#6b7280",
+    card: isDark ? "#1e293b" : "#ffffff",
+    border: isDark ? "#374151" : "#e5e7eb",
+  };
+
   const getFontFamilyStyle = (family: string): string | undefined => {
     switch (family) {
       case "system":
@@ -120,7 +140,9 @@ const SettingsScreen = () => {
       case "sans-serif":
         return "Helvetica, Arial, sans-serif";
       case "oswald":
-        return "Oswald, sans-serif";
+        return Fonts.OswaldVariable;
+      case "rubik-glitch":
+        return Fonts.RubikGlitchRegular;
       case "poppins":
         return "Poppins, sans-serif";
       default:
@@ -128,26 +150,256 @@ const SettingsScreen = () => {
     }
   };
 
-  return (
-    <ScrollView
-      className={`flex-1 bg-slate-50 dark:bg-gray-900 ${isLandscape ? "mr-12" : "mr-0"}`}
-      contentContainerStyle={{ paddingBottom: 20 }}
+  const getFontDisplayName = (family: string): string => {
+    switch (family) {
+      case "system":
+        return "System Default";
+      case "serif":
+        return "Serif";
+      case "sans-serif":
+        return "Sans Serif";
+      case "oswald":
+        return "Oswald";
+      case "rubik-glitch":
+        return "Rubik Glitch";
+      case "poppins":
+        return "Poppins";
+      default:
+        return family;
+    }
+  };
+
+  const SettingSection = ({
+    title,
+    subtitle,
+    children,
+    icon,
+  }: {
+    title: string;
+    subtitle?: string;
+    children: React.ReactNode;
+    icon?: string;
+  }) => (
+    <View
+      className="mx-4 mb-4 rounded-2xl shadow-sm border overflow-hidden"
+      style={{
+        backgroundColor: colors.card,
+        borderColor: colors.border,
+      }}
     >
-      {/* Bible Version Selection */}
-      <View className="bg-white dark:bg-gray-800 m-4 p-4 rounded-xl shadow-md">
-        <Text className="text-lg font-bold text-slate-800 dark:text-white mb-1">
-          Bible Version
-        </Text>
-        <Text className="text-sm text-slate-500 dark:text-gray-400 mb-4">
-          Choose your preferred Bible translation
+      <View className="p-5 border-b" style={{ borderColor: colors.border }}>
+        <View className="flex-row items-center">
+          {icon && (
+            <Ionicons
+              name={icon as any}
+              size={20}
+              color={colors.primary}
+              className="mr-3"
+            />
+          )}
+          <View className="flex-1">
+            <Text
+              className="text-lg font-bold"
+              style={{ color: colors.text, fontFamily: Fonts.OswaldVariable }}
+            >
+              {title}
+            </Text>
+            {subtitle && (
+              <Text className="text-sm mt-1" style={{ color: colors.muted }}>
+                {subtitle}
+              </Text>
+            )}
+          </View>
+        </View>
+      </View>
+      <View className="p-5">{children}</View>
+    </View>
+  );
+
+  const SettingItem = ({
+    title,
+    subtitle,
+    children,
+    icon,
+    onPress,
+  }: {
+    title: string;
+    subtitle?: string;
+    children?: React.ReactNode;
+    icon?: string;
+    onPress?: () => void;
+  }) => (
+    <TouchableOpacity
+      className={`flex-row items-center justify-between py-3 ${onPress ? "active:opacity-70" : ""}`}
+      onPress={onPress}
+      disabled={!onPress}
+    >
+      <View className="flex-row items-center flex-1">
+        {icon && (
+          <View
+            className="w-10 h-10 rounded-full items-center justify-center mr-3"
+            style={{ backgroundColor: colors.primary + "20" }} // 20% opacity
+          >
+            <Ionicons name={icon as any} size={18} color={colors.primary} />
+          </View>
+        )}
+        <View className="flex-1">
+          <Text
+            className="text-base font-medium"
+            style={{ color: colors.text }}
+          >
+            {title}
+          </Text>
+          {subtitle && (
+            <Text className="text-sm mt-1" style={{ color: colors.muted }}>
+              {subtitle}
+            </Text>
+          )}
+        </View>
+      </View>
+      {children}
+    </TouchableOpacity>
+  );
+
+  const ColorButton = ({
+    scheme,
+    isSelected,
+    onPress,
+  }: {
+    scheme: any;
+    isSelected: boolean;
+    onPress: () => void;
+  }) => {
+    const previewColors = scheme[isDark ? "dark" : "light"];
+    const previewPrimary =
+      primaryColors[scheme.name as ColorScheme][isDark ? "dark" : "light"];
+    const previewBg = previewColors.bg || (isDark ? "#0f172a" : "#f8fafc");
+    const previewText = isDark ? "#ffffff" : "#000000";
+
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        className={`mr-3 p-3 rounded-xl border-2 items-center`}
+        style={{
+          minWidth: 90,
+          borderColor: isSelected ? previewPrimary : "#CCCCCC",
+          backgroundColor: previewBg,
+        }}
+      >
+        {/* Simple color preview */}
+        <View
+          className="w-full h-8 rounded mb-2"
+          style={{ backgroundColor: previewPrimary }}
+        />
+
+        <Text
+          className="text-center text-xs font-semibold"
+          style={{
+            color: previewText,
+          }}
+        >
+          {scheme.name.charAt(0).toUpperCase() + scheme.name.slice(1)}
         </Text>
 
+        {isSelected && (
+          <View
+            className="absolute top-2 right-2 w-5 h-5 rounded-full border-2 items-center justify-center"
+            style={{
+              backgroundColor: previewPrimary,
+              borderColor: previewBg,
+            }}
+          >
+            <Ionicons name="checkmark" size={12} color="#ffffff" />
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  const FontButton = ({
+    font,
+    isSelected,
+    onPress,
+  }: {
+    font: string;
+    isSelected: boolean;
+    onPress: () => void;
+  }) => {
+    const fontStyle = getFontFamilyStyle(font);
+    return (
+      <TouchableOpacity
+        onPress={onPress}
+        className={`m-1 flex-1 min-w-[45%] p-3 rounded-xl border-2`}
+        style={{
+          borderColor: isSelected ? colors.primary : colors.border,
+          backgroundColor: colors.card,
+        }}
+      >
+        <Text
+          className={`text-center text-sm font-medium`}
+          style={{
+            color: isSelected ? colors.primary : colors.text,
+            fontFamily: isSelected ? Fonts.RubikGlitchRegular : fontStyle,
+          }}
+          numberOfLines={1}
+        >
+          {getFontDisplayName(font)}
+        </Text>
+        <Text
+          className="text-xs text-center mt-1"
+          style={{
+            color: colors.muted,
+            fontFamily: fontStyle,
+          }}
+          numberOfLines={1}
+        >
+          Aa
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <ScrollView
+      className="flex-1"
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={{ paddingVertical: 16 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View className="px-4 mb-6">
+        <Text
+          className="text-2xl font-bold"
+          style={{
+            color: colors.text,
+            fontFamily: Fonts.RubikGlitchRegular,
+            fontSize: 28,
+          }}
+        >
+          Settings
+        </Text>
+        <Text className="text-sm mt-2" style={{ color: colors.muted }}>
+          Customize your Bible reading experience
+        </Text>
+      </View>
+
+      {/* Bible Version Section */}
+      <SettingSection
+        title="Bible Version"
+        subtitle="Choose your preferred translation"
+        icon="book-outline"
+      >
         {isLoading && (
-          <View className="mb-4 items-center">
-            <ActivityIndicator size="small" color="#3B82F6" />
-            <Text className="text-sm italic text-slate-500 dark:text-gray-400 mt-2">
-              Switching version... Please wait
-            </Text>
+          <View
+            className="mb-4 p-3 rounded-lg"
+            style={{ backgroundColor: colors.primary + "20" }}
+          >
+            <View className="flex-row items-center">
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text className="text-sm ml-3" style={{ color: colors.primary }}>
+                Switching version... Please wait
+              </Text>
+            </View>
           </View>
         )}
 
@@ -162,128 +414,229 @@ const SettingsScreen = () => {
           showActiveIndicator={true}
           disabled={isLoading}
         />
-      </View>
 
-      {/* Current Version Display */}
-      <View className="bg-white dark:bg-gray-800 m-4 p-4 rounded-xl shadow-md">
-        <Text className="text-lg font-bold text-slate-800 dark:text-white mb-2">
-          Current Version
-        </Text>
-        <View className="flex-row justify-between items-center py-2">
-          <Text className="text-base text-slate-600 dark:text-gray-300">
-            Active Translation
+        <View
+          className="mt-4 p-3 rounded-lg"
+          style={{ backgroundColor: colors.border }}
+        >
+          <Text className="text-sm font-medium" style={{ color: colors.muted }}>
+            Current Version
           </Text>
-          <Text className="text-base font-medium text-slate-800 dark:text-white">
+          <Text
+            className="text-lg font-bold mt-1"
+            style={{
+              color: colors.text,
+              fontFamily: Fonts.OswaldVariable,
+            }}
+          >
             {getVersionDisplayName(currentVersion)}
           </Text>
         </View>
-      </View>
+      </SettingSection>
 
-      {/* Theme Toggle */}
-      <View className="flex-row items-center justify-between mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg mx-4">
-        <View>
-          <Text className="text-lg font-semibold text-gray-900 dark:text-white">
-            Dark Mode
-          </Text>
-          <Text className="text-sm text-gray-600 dark:text-gray-300">
-            Toggle between light and dark themes
-          </Text>
-        </View>
-        <Switch
-          value={isDark}
-          onValueChange={toggleTheme}
-          thumbColor={isDark ? "#f59e0b" : "#f4f3f4"}
-          trackColor={{ false: "#767577", true: "#81b0ff" }}
+      {/* Appearance Section */}
+      <SettingSection
+        title="Appearance"
+        subtitle="Customize look and feel"
+        icon="color-palette-outline"
+      >
+        {/* Theme Toggle */}
+        <SettingItem
+          title="Dark Mode"
+          subtitle="Toggle between light and dark themes"
+          icon="moon-outline"
+        >
+          <Switch
+            value={isDark}
+            onValueChange={toggleTheme}
+            thumbColor={isDark ? colors.primary : "#f4f3f4"}
+            trackColor={{ false: "#D1D5DB", true: colors.primary + "80" }}
+          />
+        </SettingItem>
+
+        <View
+          className="border-t my-3"
+          style={{ borderColor: colors.border }}
         />
-      </View>
 
-      {/* Color Scheme Selection */}
-      <View className="mb-6 mx-4">
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Color Scheme
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="flex-row"
-        >
-          {colorSchemes.map((scheme) => {
-            const isSelected = colorScheme === scheme.name;
-            const schemeConfig = scheme[isDark ? "dark" : "light"];
-            return (
-              <TouchableOpacity
+        {/* Color Scheme */}
+        <View className="mb-4">
+          <Text
+            className="text-sm font-semibold mb-3"
+            style={{ color: colors.text }}
+          >
+            Color Scheme
+          </Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="flex-row"
+            contentContainerStyle={{ paddingRight: 16 }}
+          >
+            {colorSchemes.map((scheme) => (
+              <ColorButton
                 key={scheme.name}
+                scheme={scheme}
+                isSelected={colorScheme === scheme.name}
                 onPress={() => setColorScheme(scheme.name)}
-                className={`mr-3 p-3 rounded-lg border-2 ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                    : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
-                }`}
-                style={{ minWidth: 80 }}
-              >
-                <View className={`${schemeConfig.bg} h-12 rounded mb-2`} />
-                <Text
-                  className={`text-center font-medium ${
-                    isSelected
-                      ? "text-blue-600 dark:text-blue-400"
-                      : "text-gray-700 dark:text-gray-300"
-                  }`}
-                >
-                  {scheme.name.charAt(0).toUpperCase() + scheme.name.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+              />
+            ))}
+          </ScrollView>
+        </View>
 
-      {/* Font Family Selection */}
-      <View className="mb-6 mx-4">
-        <Text className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Font Family
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className="flex-row"
-        >
-          {["system", "serif", "sans-serif", "oswald", "poppins"].map(
-            (familyStr) => {
+        <View
+          className="border-t my-3"
+          style={{ borderColor: colors.border }}
+        />
+
+        {/* Font Family */}
+        <View>
+          <Text
+            className="text-sm font-semibold mb-3"
+            style={{ color: colors.text }}
+          >
+            Font Family
+          </Text>
+          <View className="flex-row flex-wrap -mx-1">
+            {[
+              "system",
+              "serif",
+              "sans-serif",
+              "oswald",
+              "rubik-glitch",
+              "poppins",
+            ].map((familyStr) => {
               const family = familyStr as any;
-              const isSelected = fontFamily === family;
-              const fontStyle = getFontFamilyStyle(familyStr);
               return (
-                <TouchableOpacity
+                <FontButton
                   key={familyStr}
+                  font={familyStr}
+                  isSelected={fontFamily === family}
                   onPress={() => setFontFamily(family)}
-                  className={`mr-3 p-4 rounded-lg border-2 ${
-                    isSelected
-                      ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                      : "border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800"
-                  }`}
-                  style={{ minWidth: 100 }}
-                >
-                  <Text
-                    className={`text-center font-medium ${
-                      isSelected
-                        ? "text-blue-600 dark:text-blue-400"
-                        : "text-gray-700 dark:text-gray-300"
-                    }`}
-                    style={{ fontFamily: fontStyle }}
-                  >
-                    {familyStr.charAt(0).toUpperCase() + familyStr.slice(1)}
-                  </Text>
-                  <Text
-                    className="text-xs text-center text-gray-500 dark:text-gray-400 mt-1"
-                    style={{ fontFamily: fontStyle }}
-                  >
-                    Sample text
-                  </Text>
-                </TouchableOpacity>
+                />
               );
+            })}
+          </View>
+        </View>
+      </SettingSection>
+
+      {/* Additional Settings Section */}
+      <SettingSection
+        title="More Options"
+        subtitle="Additional preferences"
+        icon="settings-outline"
+      >
+        <SettingItem
+          title="Data & Storage"
+          subtitle="Manage app data and cache"
+          icon="server-outline"
+          onPress={() =>
+            Alert.alert(
+              "Coming Soon",
+              "Data management features will be available in the next update."
+            )
+          }
+        >
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </SettingItem>
+
+        <View
+          className="border-t my-3"
+          style={{ borderColor: colors.border }}
+        />
+
+        <SettingItem
+          title="Reading Preferences"
+          subtitle="Customize reading experience"
+          icon="reader-outline"
+          onPress={() =>
+            Alert.alert(
+              "Coming Soon",
+              "Reading preferences will be available in the next update."
+            )
+          }
+        >
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </SettingItem>
+
+        <View
+          className="border-t my-3"
+          style={{ borderColor: colors.border }}
+        />
+
+        <SettingItem
+          title="About"
+          subtitle="App version and information"
+          icon="information-circle-outline"
+          onPress={() =>
+            Alert.alert("About", "Bible App v1.0.0\n\nFount of Hope Studios")
+          }
+        >
+          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+        </SettingItem>
+      </SettingSection>
+
+      {/* Action Buttons */}
+      <SettingSection
+        title="Quick Actions"
+        subtitle="Common tasks"
+        icon="flash-outline"
+      >
+        <View className="flex-row flex-wrap -mx-1">
+          <TouchableOpacity
+            className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center"
+            style={{ backgroundColor: colors.primary }}
+            onPress={() =>
+              Alert.alert(
+                "Reset Settings",
+                "This will reset all settings to default."
+              )
             }
-          )}
-        </ScrollView>
+          >
+            <Ionicons name="refresh" size={20} color="#ffffff" />
+            <Text
+              className="text-white font-medium mt-2 text-center"
+              style={{ fontFamily: Fonts.OswaldVariable }}
+            >
+              Reset Settings
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center border"
+            style={{
+              borderColor: colors.primary,
+              backgroundColor: colors.primary + "10",
+            }}
+            onPress={() =>
+              Alert.alert("Feedback", "Share your feedback with us.")
+            }
+          >
+            <Ionicons name="chatbubble" size={20} color={colors.primary} />
+            <Text
+              className="font-medium mt-2 text-center"
+              style={{
+                color: colors.primary,
+                fontFamily: Fonts.OswaldVariable,
+              }}
+            >
+              Send Feedback
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SettingSection>
+
+      {/* Footer */}
+      <View className="px-4 mt-4 mb-8">
+        <Text className="text-center text-xs" style={{ color: colors.muted }}>
+          Made with ❤️ for Bible study
+        </Text>
+        <Text
+          className="text-center text-xs mt-1"
+          style={{ color: colors.muted }}
+        >
+          Version 1.0.0
+        </Text>
       </View>
     </ScrollView>
   );

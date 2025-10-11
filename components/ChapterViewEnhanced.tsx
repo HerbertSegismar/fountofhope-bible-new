@@ -3,15 +3,39 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   StyleProp,
   ViewStyle,
   TextStyle,
   LayoutChangeEvent,
   DimensionValue,
+  useColorScheme,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
+
+interface Colors {
+  primary: string;
+  background?: {
+    target: string;
+    highlight: string;
+    default: string;
+  };
+  text?: {
+    primary: string;
+    secondary: string;
+    verseNumber: string;
+    target: string;
+  };
+  border?: {
+    target: string;
+    highlight: string;
+    default: string;
+  };
+  secondary?: string;
+  accent?: string;
+  muted?: string;
+  card?: string;
+}
 
 interface ChapterViewProps {
   verses: Verse[];
@@ -30,6 +54,7 @@ interface ChapterViewProps {
   bookId?: number;
   isFullScreen?: boolean;
   displayVersion?: string;
+  colors?: Colors;
 }
 
 interface VerseTextElement {
@@ -38,8 +63,8 @@ interface VerseTextElement {
   isNumber?: boolean;
 }
 
-// Constants for better maintainability
-const COLORS = {
+// Constants for better maintainability - light theme fallback values
+const LIGHT_THEME_COLORS = {
   primary: "#3B82F6",
   secondary: "#1E40AF",
   accent: "#FF6B6B",
@@ -59,11 +84,37 @@ const COLORS = {
     verseNumber: "#1E40AF",
     target: "#DC2626",
   },
+  muted: "#6B7280",
+  card: "#FFFFFF",
+} as const;
+
+// Dark theme colors
+const DARK_THEME_COLORS = {
+  primary: "#60A5FA",
+  secondary: "#3B82F6",
+  accent: "#F87171",
+  background: {
+    target: "#1F2937",
+    highlight: "#1E3A8A",
+    default: "#111827",
+  },
+  border: {
+    target: "#FCD34D",
+    highlight: "#60A5FA",
+    default: "#374151",
+  },
+  text: {
+    primary: "#F9FAFB",
+    secondary: "#D1D5DB",
+    verseNumber: "#93C5FD",
+    target: "#FECACA",
+  },
+  muted: "#9CA3AF",
+  card: "#111827",
 } as const;
 
 const STYLES = {
   container: {
-    backgroundColor: "#fff",
     padding: 16,
     borderRadius: 12,
     minHeight: 400,
@@ -75,7 +126,6 @@ const STYLES = {
     fontWeight: "700" as const,
     textAlign: "center" as const,
     marginBottom: 16,
-    color: "#0F172A",
   },
   verse: {
     flexDirection: "row" as const,
@@ -95,6 +145,13 @@ const STYLES = {
     minWidth: 0,
   },
 } as const;
+
+// Get theme-based default colors
+const getDefaultColors = (
+  theme: "light" | "dark" | null | undefined
+): Colors => {
+  return theme === "dark" ? DARK_THEME_COLORS : LIGHT_THEME_COLORS;
+};
 
 // Parse verse text and extract XML tags
 const parseVerseText = (text: string): VerseTextElement[] => {
@@ -148,7 +205,8 @@ const parseVerseText = (text: string): VerseTextElement[] => {
 // Render verse text with XML highlighting
 const renderVerseText = (
   elements: VerseTextElement[],
-  baseFontSize: number
+  baseFontSize: number,
+  accentColor: string
 ) => {
   return elements.map((element, index) => {
     if (element.type === "text") {
@@ -161,7 +219,7 @@ const renderVerseText = (
             fontSize: element.isNumber
               ? baseFontSize * 0.5
               : baseFontSize * 0.95,
-            color: COLORS.accent,
+            color: accentColor,
           }}
         >
           {element.content}
@@ -187,7 +245,38 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   style,
   isFullScreen,
   displayVersion,
+  colors: propColors,
 }) => {
+  const theme = useColorScheme();
+  const defaultColors = getDefaultColors(theme);
+
+  // Use provided colors or theme-based defaults
+  const colors = { ...defaultColors, ...propColors };
+
+  // Extract specific colors with fallbacks
+  const primaryColor = colors.primary;
+  const secondaryColor =
+    colors.secondary ?? defaultColors.secondary! ?? primaryColor;
+  const accentColor = colors.accent ?? defaultColors.accent!;
+  const backgroundTarget =
+    colors.background?.target ?? defaultColors.background!.target;
+  const backgroundHighlight =
+    colors.background?.highlight ?? defaultColors.background!.highlight;
+  const backgroundDefault =
+    colors.background?.default ?? defaultColors.background!.default;
+  const borderTarget = colors.border?.target ?? defaultColors.border!.target;
+  const borderHighlight =
+    colors.border?.highlight ?? defaultColors.border!.highlight;
+  const borderDefault = colors.border?.default ?? defaultColors.border!.default;
+  const textPrimary = colors.text?.primary ?? defaultColors.text!.primary;
+  const textSecondary = colors.text?.secondary ?? defaultColors.text!.secondary;
+  const textVerseNumber =
+    colors.text?.verseNumber ?? defaultColors.text!.verseNumber;
+  const textTarget = colors.text?.target ?? defaultColors.text!.target;
+  const cardBg = colors.card ?? defaultColors.card!;
+  const mutedColor = colors.muted ?? defaultColors.muted!;
+  const borderColor = colors.border?.default ?? defaultColors.border!.default;
+
   // Sort verses by verse number
   const sortedVerses = React.useMemo(
     () => [...verses].sort((a, b) => a.verse - b.verse),
@@ -227,25 +316,25 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     if (isTargetVerse && isHighlighted) {
       return {
         ...baseStyle,
-        backgroundColor: COLORS.background.target,
+        backgroundColor: backgroundTarget,
         borderLeftWidth: 4,
-        borderLeftColor: COLORS.border.target,
+        borderLeftColor: borderTarget,
         borderRightWidth: 4,
-        borderRightColor: COLORS.border.highlight,
+        borderRightColor: borderHighlight,
       };
     } else if (isTargetVerse) {
       return {
         ...baseStyle,
-        backgroundColor: COLORS.background.target,
+        backgroundColor: backgroundTarget,
         borderLeftWidth: 4,
-        borderLeftColor: COLORS.border.target,
+        borderLeftColor: borderTarget,
       };
     } else if (isHighlighted) {
       return {
         ...baseStyle,
-        backgroundColor: COLORS.background.highlight,
+        backgroundColor: backgroundHighlight,
         borderLeftWidth: 4,
-        borderLeftColor: COLORS.border.highlight,
+        borderLeftColor: borderHighlight,
       };
     }
 
@@ -265,19 +354,19 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     if (isTargetVerse) {
       return {
         ...baseStyle,
-        color: COLORS.text.target,
+        color: textTarget,
         fontWeight: "bold",
       };
     } else if (isHighlighted) {
       return {
         ...baseStyle,
-        color: COLORS.secondary,
+        color: secondaryColor,
         fontWeight: "bold",
       };
     } else {
       return {
         ...baseStyle,
-        color: COLORS.text.verseNumber,
+        color: textVerseNumber,
         fontWeight: "normal",
       };
     }
@@ -297,19 +386,19 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     if (isTargetVerse) {
       return {
         ...baseStyle,
-        color: COLORS.text.primary,
+        color: textPrimary,
         fontWeight: "600",
       };
     } else if (isHighlighted) {
       return {
         ...baseStyle,
-        color: COLORS.secondary,
+        color: secondaryColor,
         fontWeight: "500",
       };
     } else {
       return {
         ...baseStyle,
-        color: COLORS.text.secondary,
+        color: textSecondary,
         fontWeight: "normal",
       };
     }
@@ -339,7 +428,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           }}
         >
           <Text style={getVerseTextStyle(verse.verse)}>
-            {renderVerseText(verse.elements, fontSize)}
+            {renderVerseText(verse.elements, fontSize, accentColor)}
           </Text>
 
           {/* Bookmark Icon */}
@@ -347,7 +436,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
             <Ionicons
               name="bookmark"
               size={16}
-              color={COLORS.primary}
+              color={primaryColor}
               style={{ marginLeft: 8, marginTop: 2 }}
             />
           )}
@@ -362,7 +451,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         <View style={{ padding: 20 }}>
           <Text
             style={{
-              color: "#6B7280",
+              color: mutedColor,
               textAlign: "center",
               fontSize,
               lineHeight: fontSize * 1.6,
@@ -389,10 +478,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const containerStyle: ViewStyle = verses[0]?.book_color
     ? {
         ...STYLES.container,
+        backgroundColor: cardBg,
         borderLeftWidth: 4,
         borderLeftColor: verses[0].book_color,
       }
-    : STYLES.container;
+    : {
+        ...STYLES.container,
+        backgroundColor: cardBg,
+      };
 
   // Adjust padding for full screen mode
   const adjustedStyle = isFullScreen
@@ -402,7 +495,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const chapterContent = (
     <View style={[adjustedStyle, style]}>
       <Text
-        style={STYLES.header}
+        style={[
+          STYLES.header,
+          {
+            color: textPrimary,
+          },
+        ]}
         numberOfLines={2}
         adjustsFontSizeToFit
         minimumFontScale={0.8}
@@ -417,13 +515,13 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           marginTop: 16,
           paddingTop: 12,
           borderTopWidth: 1,
-          borderTopColor: "#E5E7EB",
+          borderTopColor: borderColor,
         }}
       >
         <Text
           style={{
             textAlign: "center",
-            color: "#6B7280",
+            color: mutedColor,
             fontSize: 12,
           }}
         >

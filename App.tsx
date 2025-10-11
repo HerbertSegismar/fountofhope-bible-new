@@ -1,5 +1,4 @@
-// App.tsx
-import React, { useContext } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
   NavigationContainer,
@@ -8,8 +7,14 @@ import {
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
-import { useWindowDimensions } from "react-native";
-import "./global.css";
+import {
+  useWindowDimensions,
+  View,
+  ActivityIndicator,
+  Text,
+  TouchableOpacity,
+} from "react-native";
+import * as Font from "expo-font";
 
 import HomeScreen from "./screens/HomeScreen";
 import BookListScreen from "./screens/BookListScreen";
@@ -19,6 +24,7 @@ import SearchScreen from "./screens/SearchScreen";
 import BookmarksScreen from "./screens/BookmarksScreen";
 import ReaderScreen from "./screens/ReaderScreen";
 import SettingsScreen from "./screens/SettingsScreen";
+import "./global.css";
 
 import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -28,7 +34,9 @@ import { VerseMeasurementsProvider } from "./context/VerseMeasurementsContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
-// Param list types
+import Oswald_Variable from "./assets/Oswald_VariableFont_wght.ttf";
+import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
+
 export type BibleStackParamList = {
   Home: undefined;
   BookList: undefined;
@@ -57,6 +65,76 @@ export type RootStackParamList = {
   SettingsTab: SettingsStackParamList;
 };
 
+// Simple font loading hook
+function useFonts() {
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadFonts() {
+      try {
+        await Font.loadAsync({
+          "Oswald-Variable": Oswald_Variable,
+          "RubikGlitch-Regular": RubikGlitch_Regular,
+          // Add fallbacks
+          "Oswald-VariableFallback": Oswald_Variable,
+          "RubikGlitch-RegularFallback": RubikGlitch_Regular,
+        });
+        setFontsLoaded(true);
+      } catch (error) {
+        console.warn("Error loading fonts:", error);
+        setFontsLoaded(true); // Continue even if fonts fail
+      }
+    }
+
+    loadFonts();
+  }, []);
+
+  return fontsLoaded;
+}
+
+// Simple loading component
+function LoadingScreen() {
+  return (
+    <View className="flex-1 justify-center items-center bg-gray-50">
+      <ActivityIndicator size="large" color="#3B82F6" />
+      <Text className="text-lg text-gray-600 mt-4">Loading Bible App...</Text>
+    </View>
+  );
+}
+
+// Header Right Actions Component
+function HeaderActions() {
+  const { toggleTheme, theme, colorScheme, setColorScheme, colorSchemes } =
+    useTheme();
+
+  const handleColorSchemePress = () => {
+    const currentIndex = colorSchemes.findIndex((s) => s.name === colorScheme);
+    const nextIndex = (currentIndex + 1) % colorSchemes.length;
+    setColorScheme(colorSchemes[nextIndex].name);
+  };
+
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center" }}>
+      <TouchableOpacity
+        onPress={toggleTheme}
+        style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+      >
+        <Ionicons
+          name={theme === "light" ? "moon" : "sunny"}
+          size={24}
+          color="#fff"
+        />
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={handleColorSchemePress}
+        style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+      >
+        <Ionicons name="color-palette" size={24} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 // Navigators
 const BibleStackNav = createStackNavigator<BibleStackParamList>();
 const SearchStackNav = createStackNavigator<SearchStackParamList>();
@@ -79,7 +157,8 @@ function BibleStack() {
       screenOptions={({ theme }) => ({
         headerStyle: { backgroundColor: theme.colors.primary },
         headerTintColor: "#fff",
-        headerShown: isPortrait, // Conditional header based on orientation
+        headerShown: isPortrait,
+        headerRight: () => <HeaderActions />,
       })}
     >
       <BibleStackNav.Screen
@@ -109,7 +188,7 @@ function BibleStack() {
         component={ReaderScreen}
         options={({ route }) => ({
           title: `${route.params.bookName} ${route.params.chapter}`,
-          headerShown: false, // Keep Reader header hidden even in landscape
+          headerShown: false,
         })}
       />
     </BibleStackNav.Navigator>
@@ -125,7 +204,8 @@ function SearchStack() {
       screenOptions={({ theme }) => ({
         headerStyle: { backgroundColor: theme.colors.primary },
         headerTintColor: "#fff",
-        headerShown: isPortrait, // Conditional header based on orientation
+        headerShown: isPortrait,
+        headerRight: () => <HeaderActions />,
       })}
     >
       <SearchStackNav.Screen
@@ -146,13 +226,22 @@ function BookmarksStack() {
       screenOptions={({ theme }) => ({
         headerStyle: { backgroundColor: theme.colors.primary },
         headerTintColor: "#fff",
-        headerShown: isPortrait, // Conditional header based on orientation
+        headerShown: isPortrait,
+        headerRight: () => <HeaderActions />,
       })}
     >
       <BookmarksStackNav.Screen
         name="Bookmarks"
         component={BookmarksScreen}
         options={{ title: "Saved Bookmarks" }}
+      />
+      <BookmarksStackNav.Screen
+        name="Reader"
+        component={ReaderScreen}
+        options={({ route }) => ({
+          title: `${route.params.bookName} ${route.params.chapter}`,
+          headerShown: false,
+        })}
       />
     </BookmarksStackNav.Navigator>
   );
@@ -167,7 +256,8 @@ function SettingsStack() {
       screenOptions={({ theme }) => ({
         headerStyle: { backgroundColor: theme.colors.primary },
         headerTintColor: "#fff",
-        headerShown: isPortrait, // Conditional header based on orientation
+        headerShown: isPortrait,
+        headerRight: () => <HeaderActions />,
       })}
     >
       <SettingsStackNav.Screen
@@ -179,19 +269,35 @@ function SettingsStack() {
   );
 }
 
-// Bottom Tabs
+// Bottom Tabs - RESTORED ORIGINAL STYLING
 function AppTabs() {
-  const theme = useNavigationTheme();
+  const navigationTheme = useNavigationTheme();
+  const { colorScheme } = useTheme();
+
+  const activeTintColor = useMemo(() => {
+    switch (colorScheme) {
+      case "purple":
+        return "#C4B5FD";
+      case "green":
+        return "#A7F3D0";
+      case "red":
+        return "#FCA5A5";
+      case "yellow":
+        return "#FEF08A";
+      default:
+        return "#a5a4ecff";
+    }
+  }, [colorScheme]);
 
   return (
     <Tab.Navigator
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: theme.colors.primary,
+          backgroundColor: navigationTheme.colors.primary,
           display: "flex",
         },
-        tabBarActiveTintColor: "#f59e0b",
-        tabBarInactiveTintColor: "#93c5fd",
+        tabBarActiveTintColor: activeTintColor,
+        tabBarInactiveTintColor: "white",
         headerShown: false,
       }}
     >
@@ -238,7 +344,7 @@ function AppTabs() {
   );
 }
 
-// Custom Status Bar component for auto-hiding
+// Custom Status Bar component - RESTORED ORIGINAL
 function AutoHideStatusBar() {
   const theme = useNavigationTheme();
 
@@ -252,7 +358,7 @@ function AutoHideStatusBar() {
   );
 }
 
-// App with Theme
+// App with Theme - RESTORED ORIGINAL
 function AppWithTheme() {
   const { navTheme } = useTheme();
 
@@ -264,8 +370,14 @@ function AppWithTheme() {
   );
 }
 
-// App Entry
+// Main App Component - SIMPLIFIED
 export default function App() {
+  const fontsLoaded = useFonts();
+
+  if (!fontsLoaded) {
+    return <LoadingScreen />;
+  }
+
   return (
     <SafeAreaProvider>
       <HighlightsProvider>

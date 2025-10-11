@@ -19,6 +19,7 @@ import {
   LayoutChangeEvent,
   ActivityIndicator,
   Modal,
+  TextStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -30,6 +31,7 @@ import { VersionSelector } from "../components/VersionSelector";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
+import { useTheme } from "../context/ThemeContext";
 import { getTestament } from "../utils/testamentUtils";
 import { lightenColor } from "../utils/colorUtils";
 import { BibleDatabase } from "../services/BibleDatabase";
@@ -83,6 +85,99 @@ const dbToDisplayName: Record<string, string> = {
 export default function ReaderScreen({ navigation, route }: Props) {
   // Use route params directly as source of truth
   const { bookId, chapter, bookName, verse: targetVerse } = route.params;
+
+  // Theme
+  const {
+    theme,
+    navTheme,
+    colorScheme,
+    setColorScheme,
+    colorSchemes,
+    toggleTheme,
+  } = useTheme();
+  const isDark = theme === "dark";
+  const primaryColor = navTheme.colors.primary;
+  const primaryTextColor = "#ffffff";
+
+  const handleColorSchemePress = useCallback(() => {
+    const currentIndex = colorSchemes.findIndex((s) => s.name === colorScheme);
+    const nextIndex = (currentIndex + 1) % colorSchemes.length;
+    setColorScheme(colorSchemes[nextIndex].name);
+  }, [colorScheme, colorSchemes, setColorScheme]);
+
+  // Light theme colors
+  const lightColors = {
+    primary: "#3B82F6",
+    secondary: "#1E40AF",
+    accent: "#FF6B6B",
+    background: {
+      target: "#FFF9E6",
+      highlight: "#EFF6FF",
+      default: "#FFFFFF",
+    },
+    border: {
+      target: "#FFD700",
+      highlight: "#3B82F6",
+      default: "#E5E7EB",
+    },
+    text: {
+      primary: "#1F2937",
+      secondary: "#374151",
+      verseNumber: "#1E40AF",
+      target: "#DC2626",
+    },
+    muted: "#6B7280",
+    card: "#FFFFFF",
+  };
+
+  // Dark theme colors
+  const darkColors = {
+    primary: "#60A5FA",
+    secondary: "#3B82F6",
+    accent: "#F87171",
+    background: {
+      target: "#1F2937",
+      highlight: "#1E3A8A",
+      default: "#111827",
+    },
+    border: {
+      target: "#FCD34D",
+      highlight: "#60A5FA",
+      default: "#374151",
+    },
+    text: {
+      primary: "#F9FAFB",
+      secondary: "#D1D5DB",
+      verseNumber: "#93C5FD",
+      target: "#FECACA",
+    },
+    muted: "#9CA3AF",
+    card: "#111827",
+  };
+
+  const themeColors = isDark ? darkColors : lightColors;
+
+  const colors = {
+    primary: primaryColor,
+    background: themeColors.background,
+    text: themeColors.text,
+    border: themeColors.border,
+    secondary: themeColors.secondary,
+    accent: themeColors.accent,
+    muted: isDark ? "#9ca3af" : "#6b7280",
+    card: isDark ? "#1e293b" : "#ffffff",
+  };
+
+  const versionSelectorColors = {
+    primary: primaryColor,
+    background: themeColors.background.default,
+    text: themeColors.text.primary,
+    muted: colors.muted,
+    card: colors.card,
+    border: themeColors.border.default,
+    secondary: themeColors.secondary,
+    accent: themeColors.accent,
+  };
 
   // Component state
   const [verses, setVerses] = useState<Verse[]>([]);
@@ -333,7 +428,6 @@ export default function ReaderScreen({ navigation, route }: Props) {
           chapter: selectedChapter,
           verse: verse,
           bookName: selectedBook.long_name,
-          bookColor: selectedBook.book_color,
           testament: selectedBook.testament,
         });
       }
@@ -1238,7 +1332,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
           <View
             ref={chapterContainerRef}
             onLayout={handleChapterContainerLayout}
-            className={isFullScreen ? "pt-4" : ""}
+            style={{ paddingTop: isFullScreen ? 16 : 0 }}
           >
             <ChapterViewEnhanced
               verses={verses}
@@ -1254,6 +1348,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
               bookmarkedVerses={bookmarkedVerses}
               isFullScreen={isFullScreen}
               displayVersion={primaryDisplay}
+              colors={colors}
             />
           </View>
         </ScrollView>
@@ -1264,9 +1359,25 @@ export default function ReaderScreen({ navigation, route }: Props) {
     return (
       <View className="flex-1 flex-row">
         {/* Primary Version */}
-        <View className="flex-1 border-r border-gray-200">
-          <View className="bg-gray-50 py-2 px-4 border-b border-gray-200">
-            <Text className="text-sm font-semibold text-gray-700">
+        <View
+          style={{
+            flex: 1,
+            borderRightWidth: 1,
+            borderRightColor: colors.border?.default || "#E5E7EB",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: colors.muted + "20",
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border?.default || "#E5E7EB",
+            }}
+          >
+            <Text
+              style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}
+            >
               {primaryDisplay}
             </Text>
           </View>
@@ -1293,28 +1404,60 @@ export default function ReaderScreen({ navigation, route }: Props) {
               bookmarkedVerses={bookmarkedVerses}
               isFullScreen={isFullScreen}
               displayVersion={primaryDisplay}
+              colors={colors}
             />
           </ScrollView>
         </View>
 
         {/* Secondary Version */}
-        <View className="flex-1">
-          <View className="bg-gray-50 py-2 px-4 border-b border-gray-200">
-            <Text className="text-sm font-semibold text-gray-700">
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              backgroundColor: colors.muted + "20",
+              paddingVertical: 8,
+              paddingHorizontal: 16,
+              borderBottomWidth: 1,
+              borderBottomColor: colors.border?.default || "#E5E7EB",
+            }}
+          >
+            <Text
+              style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}
+            >
               {secondaryDisplay}
             </Text>
           </View>
           {secondaryLoading ? (
-            <View className="flex-1 justify-center items-center">
-              <ActivityIndicator size="small" color="#3B82F6" />
-              <Text className="text-gray-500 mt-2">Loading version...</Text>
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{ color: colors.muted, marginTop: 8 }}>
+                Loading version...
+              </Text>
             </View>
           ) : secondaryVerses.length === 0 ? (
-            <View className="flex-1 justify-center items-center">
-              <Text className="text-gray-500 text-center">
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Text style={{ color: colors.muted, textAlign: "center" }}>
                 Unable to load {secondaryDisplay} version
               </Text>
-              <Text className="text-gray-400 text-sm text-center mt-1">
+              <Text
+                style={{
+                  color: colors.muted + "80",
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
                 This version may not be available
               </Text>
             </View>
@@ -1342,6 +1485,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 bookmarkedVerses={bookmarkedVerses}
                 isFullScreen={isFullScreen}
                 displayVersion={secondaryDisplay}
+                colors={colors}
               />
             </ScrollView>
           )}
@@ -1352,9 +1496,18 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
   if (!bibleDB || loading || highlightedVersesLoading || isSwitchingVersion) {
     return (
-      <SafeAreaView className="flex-1 bg-gray-50 justify-center items-center">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-gray-600 mt-2">
+      <SafeAreaView
+        style={{
+          flex: 1,
+          backgroundColor: colors.background?.default || "#FFFFFF",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text
+          style={{ color: colors.text?.primary || "#000000", marginTop: 8 }}
+        >
           {isSwitchingVersion ? "Switching version..." : "Loading..."}
         </Text>
       </SafeAreaView>
@@ -1362,17 +1515,53 @@ export default function ReaderScreen({ navigation, route }: Props) {
   }
 
   return (
-    <View className="flex-1 bg-white">
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background?.default || "#FFFFFF",
+      }}
+    >
       {/* Header */}
       {!isFullScreen && (
-        <View className="bg-primary w-screen h-24 flex items-start justify-end readerView">
-          <View className="flex-row justify-between items-center w-full px-6 pb-2">
-            <Text className="text-white ml-0 tracking-wider text-xl">
+        <View
+          style={{
+            backgroundColor: colors.primary,
+            width: "100%",
+            height: 96,
+            justifyContent: "flex-end",
+          }}
+        >
+          <View className="flex-row justify-between items-center w-full px-6 pb-2 reader">
+            <Text
+              style={{
+                color: primaryTextColor,
+                marginLeft: 0,
+                letterSpacing: 1,
+                fontSize: 20,
+              }}
+            >
               Bible Reader
             </Text>
             <View
-              className={`flex-row ${isLandscape ? "mr-28 top-2 gap-4" : "mr-0"}`}
+              className={`flex-row ${isLandscape ? "mr-40 top-2 gap-4" : "mr-0 gap-2"}`}
             >
+              <TouchableOpacity onPress={toggleTheme} className="p-2">
+                <Ionicons
+                  name={theme === "light" ? "moon-outline" : "sunny-outline"}
+                  size={24}
+                  color={primaryTextColor}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleColorSchemePress}
+                className="p-2"
+              >
+                <Ionicons
+                  name="color-palette-outline"
+                  size={24}
+                  color={primaryTextColor}
+                />
+              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
                   setShowNavigation(true);
@@ -1381,17 +1570,21 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 className="p-2 mr-2"
                 testID="navigation-button"
               >
-                <Ionicons name="book-outline" size={24} color="white" />
+                <Ionicons
+                  name="book-outline"
+                  size={24}
+                  color={primaryTextColor}
+                />
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={toggleMultiVersion}
-                className={`p-2 mr-2 ${showMultiVersion ? "bg-white/20 rounded" : ""}`}
+                className="p-2 mr-2"
                 testID="multi-version-button"
               >
                 <Ionicons
                   name={showMultiVersion ? "copy" : "copy-outline"}
                   size={24}
-                  color={showMultiVersion ? "#FBBF24" : "white"}
+                  color={showMultiVersion ? "#f6f0f0ff" : "white"}
                 />
               </TouchableOpacity>
               <TouchableOpacity
@@ -1399,7 +1592,11 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 className="p-2"
                 testID="settings-button"
               >
-                <Ionicons name="settings-outline" size={24} color="white" />
+                <Ionicons
+                  name="settings-outline"
+                  size={24}
+                  color={primaryTextColor}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -1408,19 +1605,38 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
       {/* Chapter Navigation */}
       {!isFullScreen && (
-        <View className="bg-primary px-4 py-2">
+        <View
+          style={{
+            backgroundColor: colors.primary,
+            paddingHorizontal: 16,
+            paddingVertical: 8,
+          }}
+        >
           <View className="flex-row justify-between items-center">
             <TouchableOpacity
               onPress={goToPreviousChapter}
               disabled={chapter <= 1}
               className={`p-2 ${chapter <= 1 ? "opacity-30" : ""}`}
             >
-              <Text className="text-white font-semibold text-sm">← Prev</Text>
+              <Text
+                style={{
+                  color: primaryTextColor,
+                  fontWeight: "600",
+                  fontSize: 12,
+                }}
+              >
+                ← Prev
+              </Text>
             </TouchableOpacity>
 
             <View className="flex-1 items-center">
               <Text
-                className="text-white font-bold text-center text-sm"
+                style={{
+                  color: primaryTextColor,
+                  fontWeight: "bold",
+                  textAlign: "center",
+                  fontSize: 12,
+                }}
                 numberOfLines={2}
                 adjustsFontSizeToFit
               >
@@ -1432,15 +1648,34 @@ export default function ReaderScreen({ navigation, route }: Props) {
               onPress={goToNextChapter}
               className={`p-2 ${isLandscape ? "mr-12" : "mr-0"}`}
             >
-              <Text className="text-white font-semibold text-sm">Next →</Text>
+              <Text
+                style={{
+                  color: primaryTextColor,
+                  fontWeight: "600",
+                  fontSize: 12,
+                }}
+              >
+                Next →
+              </Text>
             </TouchableOpacity>
           </View>
 
           {/* Progress Bar */}
-          <View className="mt-2 w-full h-1 bg-blue-300 rounded-full">
+          <View
+            style={{
+              marginTop: 8,
+              width: "100%",
+              height: 4,
+              backgroundColor: colors.primary + "40",
+              borderRadius: 2,
+            }}
+          >
             <Animated.View
-              className="h-1 bg-yellow-400 rounded-full"
+              className="h-1 bg-primary rounded-full"
               style={{
+                height: 4,
+                backgroundColor: colors.primary,
+                borderRadius: 2,
                 width: progress.interpolate({
                   inputRange: [0, 1],
                   outputRange: ["0%", "100%"],
@@ -1454,25 +1689,41 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
       {/* Font Size Controls */}
       {!isFullScreen && (
-        <View className="flex-row justify-between items-center px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <Text className="text-gray-600 text-sm">Font Size</Text>
+        <View
+          className="flex-row justify-between items-center px-4 py-2"
+          style={{
+            backgroundColor: colors.card + "80",
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border?.default || "#E5E7EB",
+          }}
+        >
+          <Text style={{ color: colors.muted, fontSize: 12 }}>Font Size</Text>
           <View
             className={`flex-row items-center space-x-3 ${isLandscape ? "mr-12 gap-4" : "mr-0 gap-2"}`}
           >
             <TouchableOpacity
               onPress={decreaseFontSize}
-              className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
+              className="w-8 h-8 rounded-full items-center justify-center"
+              style={{ backgroundColor: colors.card }}
             >
-              <Text className="text-gray-700 font-bold">A-</Text>
+              <Text style={{ color: colors.muted, fontWeight: "bold" }}>
+                A-
+              </Text>
             </TouchableOpacity>
-            <Text className="text-gray-700 w-10 text-center text-sm">
+            <Text
+              className="text-gray-700 w-10 text-center text-sm"
+              style={{ color: colors.text?.primary || "#000000" }}
+            >
               {fontSize}px
             </Text>
             <TouchableOpacity
               onPress={increaseFontSize}
-              className="w-8 h-8 rounded-full bg-gray-200 items-center justify-center"
+              className="w-8 h-8 rounded-full items-center justify-center"
+              style={{ backgroundColor: colors.card }}
             >
-              <Text className="text-gray-700 font-bold">A+</Text>
+              <Text style={{ color: colors.muted, fontWeight: "bold" }}>
+                A+
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -1482,9 +1733,12 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 setHasScrolledToVerse(false);
                 scrollToTargetVerse();
               }}
-              className="bg-blue-500 px-3 py-1 rounded-full"
+              className="px-3 py-1 rounded-full"
+              style={{ backgroundColor: colors.primary }}
             >
-              <Text className="text-white text-xs">{`Center ${targetVerse}`}</Text>
+              <Text
+                style={{ color: primaryTextColor, fontSize: 12 }}
+              >{`Center ${targetVerse}`}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1500,39 +1754,98 @@ export default function ReaderScreen({ navigation, route }: Props) {
         }}
       >
         <TouchableOpacity
-          className="flex-1 bg-black/50 justify-center items-center"
+          className="flex-1 justify-center items-center"
           activeOpacity={1}
           onPress={() => setShowSettings(false)}
+          style={{
+            backgroundColor: colors.background?.default + "CC" || "#FFFFFFCC",
+          }}
         >
           <SafeAreaView
-            className="bg-white rounded-xl flex-1 size-11/12"
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 12,
+              flex: 1,
+              width: "92%",
+            }}
             onStartShouldSetResponder={() => true}
           >
-            <View className="p-4 border-b border-gray-200 bg-blue-500">
-              <Text className="text-lg font-bold text-white">Settings</Text>
+            <View
+              style={{
+                padding: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default || "#E5E7EB",
+                backgroundColor: colors.primary,
+              }}
+            >
+              <Text
+                style={{
+                  color: primaryTextColor,
+                  fontSize: 18,
+                  fontWeight: "bold",
+                }}
+              >
+                Settings
+              </Text>
             </View>
 
             <ScrollView className="flex-1 mx-4">
               {/* Font Size Controls */}
-              <View className="px-4 py-2 border-b border-gray-100">
-                <Text className="text-sm font-semibold text-blue-500 mb-2">
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border?.default || "#E5E7EB",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: "600",
+                    marginBottom: 8,
+                  }}
+                >
                   Font Size
                 </Text>
                 <View className="flex-row justify-between items-center">
                   <TouchableOpacity
                     onPress={decreaseFontSize}
-                    className="size-8 rounded-full bg-gray-100 items-center justify-center"
+                    className="size-8 rounded-full items-center justify-center"
+                    style={{ backgroundColor: colors.card }}
                   >
-                    <Text className="text-red-500 font-bold text-base">A-</Text>
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "bold",
+                        fontSize: 16,
+                      }}
+                    >
+                      A-
+                    </Text>
                   </TouchableOpacity>
-                  <Text className="text-gray-700 text-sm font-medium">
+                  <Text
+                    style={{
+                      color: colors.text?.primary || "#000000",
+                      fontSize: 12,
+                      fontWeight: "500",
+                    }}
+                  >
                     {fontSize}px
                   </Text>
                   <TouchableOpacity
                     onPress={increaseFontSize}
-                    className="size-8 rounded-full bg-gray-100 items-center justify-center"
+                    className="size-8 rounded-full items-center justify-center"
+                    style={{ backgroundColor: colors.card }}
                   >
-                    <Text className="text-green-500 font-bold text-base">
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontWeight: "bold",
+                        fontSize: 16,
+                      }}
+                    >
                       A+
                     </Text>
                   </TouchableOpacity>
@@ -1540,24 +1853,46 @@ export default function ReaderScreen({ navigation, route }: Props) {
               </View>
 
               {/* Multi-Version Toggle */}
-              <View className="px-4 pt-2 border-b border-gray-100">
-                <Text className="text-sm font-semibold text-blue-500">
+              <View
+                style={{
+                  paddingHorizontal: 16,
+                  paddingTop: 8,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border?.default || "#E5E7EB",
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontSize: 12,
+                    fontWeight: "600",
+                  }}
+                >
                   Multi-Version Display
                 </Text>
                 <View className="flex-row justify-between items-center">
-                  <Text className="text-gray-600 flex-1 mb-2">
+                  <Text
+                    style={{
+                      color: colors.text?.primary || "#000000",
+                      flex: 1,
+                      marginBottom: 8,
+                    }}
+                  >
                     Show two Bible versions side by side
                   </Text>
                   <TouchableOpacity
                     onPress={toggleMultiVersion}
-                    className={`w-12 h-6 rounded-full justify-center -mt-8 ${
-                      showMultiVersion ? "bg-blue-500" : "bg-gray-300"
-                    }`}
+                    className="w-12 h-6 rounded-full justify-center -mt-8 bg-gray-200"
                   >
                     <View
-                      className={`w-5 h-5 rounded-full bg-white absolute ${
+                      className={`w-5 h-5 rounded-full absolute z-50 ${
                         showMultiVersion ? "right-1" : "left-1"
                       }`}
+                      style={{
+                        backgroundColor: showMultiVersion
+                          ? colors.primary
+                          : colors.muted,
+                      }}
                     />
                   </TouchableOpacity>
                 </View>
@@ -1574,6 +1909,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                       title="Primary Bible Version"
                       description="Choose your preferred Bible translation"
                       showCurrentVersion={true}
+                      colors={versionSelectorColors}
                     />
                   </View>
                   <View className="flex-1">
@@ -1586,6 +1922,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                       title="Secondary Bible Version"
                       description="Choose a different translation for comparison"
                       showCurrentVersion={true}
+                      colors={versionSelectorColors}
                     />
                   </View>
                 </View>
@@ -1598,6 +1935,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                     title="Primary Bible Version"
                     description="Choose your preferred Bible translation"
                     showCurrentVersion={true}
+                    colors={versionSelectorColors}
                   />
                   {showMultiVersion && (
                     <VersionSelector
@@ -1609,6 +1947,7 @@ export default function ReaderScreen({ navigation, route }: Props) {
                       title="Secondary Bible Version"
                       description="Choose a different translation for comparison"
                       showCurrentVersion={true}
+                      colors={versionSelectorColors}
                     />
                   )}
                 </>
@@ -1617,9 +1956,20 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
             <TouchableOpacity
               onPress={() => setShowSettings(false)}
-              className="p-4 border-t border-gray-200 items-center"
+              style={{
+                padding: 16,
+                borderTopWidth: 1,
+                borderTopColor: colors.border?.default || "#E5E7EB",
+                alignItems: "center",
+              }}
             >
-              <Text className="text-blue-500 text-lg  font-semibold">
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: 16,
+                  fontWeight: "600",
+                }}
+              >
                 Close
               </Text>
             </TouchableOpacity>
@@ -1634,9 +1984,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
         animationType="slide"
         onRequestClose={() => setShowNavigation(false)}
       >
-        <SafeAreaView className="flex-1 bg-white">
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.card }}>
           {/* Header */}
-          <View className="bg-primary px-4 py-4">
+          <View
+            style={{
+              backgroundColor: colors.primary,
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+            }}
+          >
             <View className="flex-row justify-between items-center">
               <TouchableOpacity
                 onPress={() => {
@@ -1644,9 +2000,19 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 }}
                 className="p-2"
               >
-                <Ionicons name="arrow-back" size={24} color="white" />
+                <Ionicons
+                  name="arrow-back"
+                  size={24}
+                  color={primaryTextColor}
+                />
               </TouchableOpacity>
-              <Text className="text-white font-bold text-lg">
+              <Text
+                style={{
+                  color: primaryTextColor,
+                  fontWeight: "bold",
+                  fontSize: 18,
+                }}
+              >
                 Choose Passage to Read
               </Text>
               <View style={{ width: 24 }} />
@@ -1657,17 +2023,44 @@ export default function ReaderScreen({ navigation, route }: Props) {
             ref={modalScrollViewRef}
             className="flex-1 p-4"
             showsVerticalScrollIndicator={true}
+            style={{ backgroundColor: colors.background?.default || "#FFFFFF" }}
           >
             {isLoadingNavigation && (
-              <View className="absolute top-0 left-0 right-0 bottom-0 bg-white/80 z-10 justify-center items-center">
-                <ActivityIndicator size="large" color="#3B82F6" />
-                <Text className="text-gray-600 mt-2">Loading books...</Text>
+              <View
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: colors.card + "80",
+                  zIndex: 10,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text
+                  style={{
+                    color: colors.text?.primary || "#000000",
+                    marginTop: 8,
+                  }}
+                >
+                  Loading books...
+                </Text>
               </View>
             )}
 
             {/* Book Selection */}
             <View className="mb-6">
-              <Text className="text-lg font-semibold text-slate-800 mb-3">
+              <Text
+                style={{
+                  color: colors.text?.primary || "#000000",
+                  fontSize: 18,
+                  fontWeight: "600",
+                  marginBottom: 12,
+                }}
+              >
                 Select Book
               </Text>
 
@@ -1675,10 +2068,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
               {oldTestament.length > 0 && (
                 <View className="mb-6">
                   <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-xl font-bold text-primary">
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: 20,
+                        fontWeight: "bold",
+                      }}
+                    >
                       Old Testament
                     </Text>
-                    <Text className="text-sm text-gray-500">
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>
                       {oldTestament.length} books
                     </Text>
                   </View>
@@ -1693,12 +2092,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
                           borderLeftColor: book.book_color || "#DC2626",
                           backgroundColor:
                             lightenColor(book.book_color || "#DC2626", 0.15) ||
-                            "#fff",
+                            colors.card,
                         }}
                       >
                         <Text
-                          className="font-semibold text-center text-xs"
-                          style={{ color: "#1F2937" }}
+                          style={{
+                            color: colors.text?.primary || "#000000",
+                            fontWeight: "600",
+                            textAlign: "center",
+                            fontSize: 12,
+                          }}
                           numberOfLines={2}
                           adjustsFontSizeToFit
                           minimumFontScale={0.8}
@@ -1715,10 +2118,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
               {newTestament.length > 0 && (
                 <View className="mb-6">
                   <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-xl font-bold text-primary">
+                    <Text
+                      style={{
+                        color: colors.primary,
+                        fontSize: 20,
+                        fontWeight: "bold",
+                      }}
+                    >
                       New Testament
                     </Text>
-                    <Text className="text-sm text-gray-500">
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>
                       {newTestament.length} books
                     </Text>
                   </View>
@@ -1733,12 +2142,16 @@ export default function ReaderScreen({ navigation, route }: Props) {
                           borderLeftColor: book.book_color || "#059669",
                           backgroundColor:
                             lightenColor(book.book_color || "#059669", 0.15) ||
-                            "#fff",
+                            colors.card,
                         }}
                       >
                         <Text
-                          className="font-semibold text-center text-xs"
-                          style={{ color: "#1F2937" }}
+                          style={{
+                            color: colors.text?.primary || "#000000",
+                            fontWeight: "600",
+                            textAlign: "center",
+                            fontSize: 12,
+                          }}
                           numberOfLines={2}
                           adjustsFontSizeToFit
                           minimumFontScale={0.8}
@@ -1753,13 +2166,36 @@ export default function ReaderScreen({ navigation, route }: Props) {
             </View>
 
             {/* Current Selection Display */}
-            <View className="bg-blue-100 rounded-lg p-2 mb-4 border border-blue-200">
-              <Text className="text-blue-800 font-semibold text-center text-lg">
+            <View
+              style={{
+                backgroundColor: colors.primary + "10",
+                borderRadius: 8,
+                padding: 8,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: colors.primary + "30",
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontWeight: "600",
+                  textAlign: "center",
+                  fontSize: 16,
+                }}
+              >
                 {selectedBook
                   ? `${selectedBook.long_name} ${selectedChapter}${selectedVerse ? `:${selectedVerse}` : ""}`
                   : "Select a book"}
               </Text>
-              <Text className="text-blue-600 text-sm text-center mt-1">
+              <Text
+                style={{
+                  color: colors.primary + "80",
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
                 {selectedBook
                   ? `${chapters.length} ${chapters.length > 1 ? "chapters available" : "chapter available"}`
                   : ""}
@@ -1769,12 +2205,19 @@ export default function ReaderScreen({ navigation, route }: Props) {
             {/* Chapter Selection - UPDATED: Added ref for auto-scroll */}
             {selectedBook && chapters.length > 0 && (
               <View ref={chaptersSectionRef} className="mb-6">
-                <Text className="text-lg font-semibold text-slate-800 mb-3">
+                <Text
+                  style={{
+                    color: colors.text?.primary || "#000000",
+                    fontSize: 18,
+                    fontWeight: "600",
+                    marginBottom: 12,
+                  }}
+                >
                   Select Chapter
                 </Text>
                 {isLoadingChapters ? (
                   <View className="flex-row justify-center py-4">
-                    <ActivityIndicator size="small" color="#3B82F6" />
+                    <ActivityIndicator size="small" color={colors.primary} />
                   </View>
                 ) : (
                   <View className="flex-row flex-wrap gap-2 justify-center">
@@ -1784,8 +2227,8 @@ export default function ReaderScreen({ navigation, route }: Props) {
                         onPress={() => handleChapterSelect(chapterInfo.chapter)}
                         className={`rounded-lg border items-center justify-center ${
                           selectedChapter === chapterInfo.chapter
-                            ? "bg-blue-500 border-blue-600"
-                            : "bg-white border-gray-300"
+                            ? "bg-primary border-primary"
+                            : "bg-card border-border"
                         }`}
                         style={{
                           width: 40,
@@ -1793,20 +2236,25 @@ export default function ReaderScreen({ navigation, route }: Props) {
                         }}
                       >
                         <Text
-                          className={`font-bold text-sm ${
-                            selectedChapter === chapterInfo.chapter
-                              ? "text-white"
-                              : "text-blue-500"
-                          }`}
+                          style={{
+                            fontWeight: "bold",
+                            fontSize: 12,
+                            color:
+                              selectedChapter === chapterInfo.chapter
+                                ? primaryTextColor
+                                : colors.primary,
+                          }}
                         >
                           {chapterInfo.chapter}
                         </Text>
                         <Text
-                          className={`text-xs ${
-                            selectedChapter === chapterInfo.chapter
-                              ? "text-blue-100"
-                              : "text-gray-500"
-                          }`}
+                          style={{
+                            fontSize: 10,
+                            color:
+                              selectedChapter === chapterInfo.chapter
+                                ? primaryTextColor + "80"
+                                : colors.muted,
+                          }}
                         >
                           {chapterInfo.verseCount} v
                           {chapterInfo.verseCount !== 1 ? "s" : ""}
@@ -1820,7 +2268,13 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
             {!hasTappedChapter && (
               <View className="mb-6">
-                <Text className="text-sm text-slate-500 mb-3">
+                <Text
+                  style={{
+                    color: colors.muted,
+                    fontSize: 12,
+                    marginBottom: 12,
+                  }}
+                >
                   Choose a chapter to reveal verse selection
                 </Text>
               </View>
@@ -1832,11 +2286,24 @@ export default function ReaderScreen({ navigation, route }: Props) {
               selectedChapter &&
               versesList.length > 0 && (
                 <View ref={versesSectionRef} className="mb-6">
-                  <Text className="text-lg font-semibold text-slate-800 mb-3">
+                  <Text
+                    style={{
+                      color: colors.text?.primary || "#000000",
+                      fontSize: 18,
+                      fontWeight: "600",
+                      marginBottom: 12,
+                    }}
+                  >
                     Select Verse{" "}
                     {selectedVerse && `- Selected: ${selectedVerse}`}
                   </Text>
-                  <Text className="text-sm text-slate-500 mb-3">
+                  <Text
+                    style={{
+                      color: colors.muted,
+                      fontSize: 12,
+                      marginBottom: 12,
+                    }}
+                  >
                     {selectedVerse
                       ? `Will navigate to ${selectedBook.long_name} ${selectedChapter}:${selectedVerse}`
                       : "Choose any verse to navigate directly"}
@@ -1847,9 +2314,15 @@ export default function ReaderScreen({ navigation, route }: Props) {
                         <TouchableOpacity
                           key={verse}
                           onPress={() => handleVerseSelect(verse)}
-                          className="size-10 rounded-lg border items-center justify-center bg-white border-blue-500"
+                          className="size-10 rounded-lg border items-center justify-center bg-card border-primary"
                         >
-                          <Text className="text-sm font-medium text-slate-700">
+                          <Text
+                            style={{
+                              color: colors.text?.primary || "#000000",
+                              fontSize: 12,
+                              fontWeight: "500",
+                            }}
+                          >
                             {verse}
                           </Text>
                         </TouchableOpacity>
@@ -1863,17 +2336,29 @@ export default function ReaderScreen({ navigation, route }: Props) {
               onPress={handleNavigateToLocation}
               disabled={!selectedBook || isLoadingNavigation}
               className={`p-4 rounded-lg mt-4 mb-20 ${
-                selectedBook && !isLoadingNavigation
-                  ? "bg-blue-500"
-                  : "bg-gray-300"
+                selectedBook && !isLoadingNavigation ? "bg-primary" : "bg-muted"
               }`}
             >
-              <Text className="text-white font-semibold text-center text-lg">
+              <Text
+                style={{
+                  color: primaryTextColor,
+                  fontWeight: "600",
+                  textAlign: "center",
+                  fontSize: 16,
+                }}
+              >
                 {selectedBook
                   ? `Go to ${selectedBook.long_name} ${selectedChapter}`
                   : "Select a book to continue"}
               </Text>
-              <Text className="text-blue-100 text-sm text-center mt-1">
+              <Text
+                style={{
+                  color: primaryTextColor + "80",
+                  fontSize: 12,
+                  textAlign: "center",
+                  marginTop: 4,
+                }}
+              >
                 Navigate to chapter {selectedChapter}
               </Text>
             </TouchableOpacity>
@@ -1886,7 +2371,14 @@ export default function ReaderScreen({ navigation, route }: Props) {
 
       {/* Quick Navigation Footer */}
       {!isFullScreen && (
-        <View className="flex-row justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-200">
+        <View
+          className="flex-row justify-between items-center px-4 py-3"
+          style={{
+            backgroundColor: colors.card + "80",
+            borderTopWidth: 1,
+            borderTopColor: colors.border?.default || "#E5E7EB",
+          }}
+        >
           <TouchableOpacity
             onPress={() =>
               navigation.navigate("VerseList", {
@@ -1894,9 +2386,17 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 chapter: chapter,
               })
             }
-            className="bg-white px-4 py-2 rounded-lg border border-gray-300"
+            className="px-4 py-2 rounded-lg border"
+            style={{
+              backgroundColor: colors.card,
+              borderColor: colors.border?.default || "#E5E7EB",
+            }}
           >
-            <Text className="text-gray-700 text-sm">Verse List</Text>
+            <Text
+              style={{ color: colors.text?.primary || "#000000", fontSize: 12 }}
+            >
+              Verse List
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1905,9 +2405,17 @@ export default function ReaderScreen({ navigation, route }: Props) {
                 book: book || { book_number: bookId, long_name: bookName },
               })
             }
-            className={`bg-white px-4 py-2 rounded-lg border border-gray-300 ${isLandscape ? "mr-12" : "mr-0"}`}
+            className={`px-4 py-2 rounded-lg border ${isLandscape ? "mr-12" : "mr-0"}`}
+            style={{
+              backgroundColor: colors.card,
+              borderColor: colors.border?.default || "#E5E7EB",
+            }}
           >
-            <Text className="text-gray-700 text-sm">All Chapters</Text>
+            <Text
+              style={{ color: colors.text?.primary || "#000000", fontSize: 12 }}
+            >
+              All Chapters
+            </Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1916,9 +2424,18 @@ export default function ReaderScreen({ navigation, route }: Props) {
       {isLandscape && (
         <TouchableOpacity
           onPress={toggleFullScreen}
-          className="absolute top-12 right-18 size-12 bg-gray-600/50 rounded-full items-center justify-center z-50"
+          className="absolute top-12 right-18 size-12 rounded-full items-center justify-center z-50"
+          style={{
+            backgroundColor: colors.background?.default + "80" || "#FFFFFF80",
+          }}
         >
-          <Text className="text-white text-4xl font-bold">
+          <Text
+            style={{
+              color: colors.text?.primary || "#000000",
+              fontSize: 24,
+              fontWeight: "bold",
+            }}
+          >
             {isFullScreen ? "◱" : "◲"}
           </Text>
         </TouchableOpacity>

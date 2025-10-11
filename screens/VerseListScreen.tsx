@@ -14,6 +14,7 @@ import { RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../types";
 import { Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { useTheme } from "../context/ThemeContext";
 
 type VerseListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -38,6 +39,29 @@ export default function VerseListScreen({ navigation, route }: Props) {
   const [chapterCount, setChapterCount] = useState(0);
 
   const { bibleDB, currentVersion } = useBibleDatabase();
+  const { theme, navTheme } = useTheme();
+  const primaryColor = navTheme.colors.primary;
+
+  const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
+  const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
+  const headerBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
+  const textPrimaryClass = theme === "dark" ? "text-gray-100" : "text-gray-800";
+  const textSecondaryClass =
+    theme === "dark" ? "text-gray-400" : "text-gray-500";
+  const textTertiaryClass =
+    theme === "dark" ? "text-gray-300" : "text-gray-600";
+  const borderClass = theme === "dark" ? "border-gray-700" : "border-gray-200";
+  const lightGrayClass = theme === "dark" ? "bg-gray-700" : "bg-gray-100";
+  const warningBgClass = theme === "dark" ? "bg-yellow-900/20" : "bg-yellow-50";
+  const warningBorderClass =
+    theme === "dark" ? "border-yellow-800/50" : "border-yellow-200";
+  const warningTextPrimaryClass =
+    theme === "dark" ? "text-yellow-300" : "text-yellow-800";
+  const warningTextSecondaryClass =
+    theme === "dark" ? "text-yellow-400" : "text-yellow-600";
+  const disabledBgClass = theme === "dark" ? "bg-gray-700" : "bg-gray-300";
+  const disabledTextClass =
+    theme === "dark" ? "text-gray-500" : "text-gray-500";
 
   useEffect(() => {
     loadChapterData();
@@ -138,11 +162,16 @@ export default function VerseListScreen({ navigation, route }: Props) {
 
   const getVerseColor = (verseNumber: number) => {
     if (book.book_color) {
-      return "bg-white border";
-    } else if (book.testament === "NT") {
-      return "bg-blue-50 border-blue-200";
+      return `${theme === "dark" ? "bg-gray-800" : "bg-white"} border`;
     } else {
-      return "bg-green-50 border-green-200";
+      const testamentScheme = book.testament === "OT" ? "red" : "green";
+      const lightBg = `bg-${testamentScheme}-50`;
+      const lightBorder = `border-${testamentScheme}-200`;
+      const darkBg = `bg-${testamentScheme}-900/20`;
+      const darkBorder = `border-${testamentScheme}-800/50`;
+      return theme === "dark"
+        ? `${darkBg} ${darkBorder}`
+        : `${lightBg} ${lightBorder}`;
     }
   };
 
@@ -153,11 +182,13 @@ export default function VerseListScreen({ navigation, route }: Props) {
     return {};
   };
 
-  const getTextColor = () => {
+  const getTextColorValue = () => {
     if (book.book_color) {
-      return { color: book.book_color };
+      return book.book_color;
+    } else {
+      const baseColor = book.testament === "OT" ? "#DC2626" : "#059669";
+      return baseColor;
     }
-    return book.testament === "NT" ? "text-blue-800" : "text-green-800";
   };
 
   const isFirstChapter = chapter <= 1;
@@ -165,13 +196,15 @@ export default function VerseListScreen({ navigation, route }: Props) {
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-lg text-gray-600 mt-4">Loading verses...</Text>
-        <Text className="text-sm text-gray-500 mt-2">
+      <SafeAreaView className={`flex-1 justify-center items-center ${bgClass}`}>
+        <ActivityIndicator size="large" color={primaryColor} />
+        <Text className={`text-lg ${textTertiaryClass} mt-4`}>
+          Loading verses...
+        </Text>
+        <Text className={`text-sm ${textSecondaryClass} mt-2`}>
           {currentVersion.replace(".sqlite3", "").toUpperCase()}
         </Text>
-        <Text className="text-xs text-gray-400 mt-1">
+        <Text className={`text-xs ${textTertiaryClass} mt-1`}>
           Loading verse selection for {book.long_name} {chapter}
         </Text>
       </SafeAreaView>
@@ -180,13 +213,16 @@ export default function VerseListScreen({ navigation, route }: Props) {
 
   if (!bibleDB) {
     return (
-      <SafeAreaView className="flex-1 justify-center items-center bg-gray-50 p-6">
-        <Text className="text-lg text-red-600 text-center mb-4">
+      <SafeAreaView
+        className={`flex-1 justify-center items-center ${bgClass} p-6`}
+      >
+        <Text className="text-lg text-red-500 text-center mb-4">
           Database not available
         </Text>
         <TouchableOpacity
           onPress={loadChapterData}
-          className="bg-blue-500 px-4 py-3 rounded-lg"
+          className="px-4 py-3 rounded-lg"
+          style={{ backgroundColor: primaryColor }}
         >
           <Text className="text-white font-semibold">Try Again</Text>
         </TouchableOpacity>
@@ -195,170 +231,188 @@ export default function VerseListScreen({ navigation, route }: Props) {
   }
 
   return (
-    <ScrollView
-      className="flex-1 bg-gray-50"
-      showsVerticalScrollIndicator={false}
-    >
-      <SafeAreaView className="p-4">
-        {/* Header */}
-        <View
-          className="bg-white rounded-lg p-4 mb-4 shadow-sm border-l-4 -mt-10 h-30"
-          style={{ borderLeftColor: book.book_color || "#3B82F6" }}
-        >
-          <Text className="text-2xl font-bold text-primary text-center">
-            {book.long_name}
-          </Text>
-          <Text className="text-base text-gray-600 text-center">
-            Chapter {chapter}
-          </Text>
-          <Text className="text-sm text-gray-500 text-center mt-1">
-            {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
-            {verseCount} verses
-          </Text>
-
-          {/* Chapter Progress */}
-          {chapterCount > 0 && (
-            <View className="mt-2">
-              <Text className="text-xs text-gray-400 text-center">
-                Chapter {chapter} of {chapterCount}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Verse Selection Grid */}
-        {verses.length > 0 ? (
-          <View className="mb-6">
-            <Text className="text-lg font-semibold text-gray-700 mb-2 text-center">
-              Select a Verse to Read
-            </Text>
-
-            <View className="flex-row flex-wrap gap-2 justify-center">
-              {verses.map((verse) => (
-                <TouchableOpacity
-                  key={verse.verse}
-                  className={`${getVerseColor(verse.verse)} rounded-lg shadow-sm justify-center items-center`}
-                  style={[
-                    {
-                      width: VERSE_SIZE,
-                      height: VERSE_SIZE,
-                    },
-                    getBorderColor(),
-                  ]}
-                  onPress={() => handleVersePress(verse.verse)}
-                  onLongPress={() => handleVerseLongPress(verse.verse)}
-                  delayLongPress={500}
-                  activeOpacity={0.7}
-                >
-                  <Text className={`font-bold text-lg ${getTextColor()}`}>
-                    {verse.verse}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ) : (
-          <View className="bg-yellow-50 p-6 rounded-lg border border-yellow-200 mb-6">
-            <Text className="text-yellow-800 text-center text-lg">
-              No verses found for {book.long_name} {chapter}
-            </Text>
-            <Text className="text-yellow-600 text-center mt-2 text-sm">
-              This chapter may not exist in the current translation
-            </Text>
-            <TouchableOpacity
-              onPress={loadChapterData}
-              className="bg-yellow-500 px-4 py-2 rounded-lg mt-4"
-            >
-              <Text className="text-white font-semibold text-center">
-                Try Again
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Full Chapter Reading */}
-        {verses.length > 0 && (
-          <View className="mb-6">
-            <TouchableOpacity
-              className="bg-blue-500 px-6 py-4 rounded-lg shadow-sm"
-              onPress={handleReadFullChapter}
-            >
-              <Text className="text-white font-semibold text-center text-lg">
-                Read Full Chapter
-              </Text>
-              <Text className="text-blue-100 text-sm text-center mt-1">
-                Start reading from verse 1
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Chapter Navigation */}
-        <View className="flex-row justify-between mb-6">
-          <TouchableOpacity
-            className={`flex-1 mr-2 px-4 py-3 rounded-lg ${
-              isFirstChapter ? "bg-gray-300" : "bg-primary"
-            }`}
-            onPress={() => navigateToChapter(chapter - 1)}
-            disabled={isFirstChapter}
+    <SafeAreaView className={`flex-1 ${bgClass}`}>
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <View className="p-4">
+          {/* Header */}
+          <View
+            className={`${headerBgClass} rounded-lg p-4 mb-4 shadow-sm border-l-4 h-30 ${borderClass}`}
+            style={{ borderLeftColor: book.book_color || primaryColor }}
           >
             <Text
-              className={`font-semibold text-center ${
-                isFirstChapter ? "text-gray-500" : "text-white"
-              }`}
+              className="text-2xl font-bold text-center"
+              style={{ color: primaryColor }}
             >
-              ← Previous Chapter
+              {book.long_name}
             </Text>
-          </TouchableOpacity>
-
-          <View className="flex-1 mx-2 bg-white px-4 py-3 rounded-lg border border-gray-200">
-            <Text className="text-gray-700 font-semibold text-center">
-              {chapter} of {chapterCount || "?"}
+            <Text className={`text-base ${textTertiaryClass} text-center`}>
+              Chapter {chapter}
             </Text>
-            <Text className="text-gray-500 text-xs text-center mt-1">
+            <Text className={`text-sm ${textSecondaryClass} text-center mt-1`}>
+              {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
               {verseCount} verses
             </Text>
+
+            {/* Chapter Progress */}
+            {chapterCount > 0 && (
+              <View className="mt-2">
+                <Text className={`text-xs ${textTertiaryClass} text-center`}>
+                  Chapter {chapter} of {chapterCount}
+                </Text>
+              </View>
+            )}
           </View>
 
-          <TouchableOpacity
-            className={`flex-1 ml-2 px-4 py-3 rounded-lg ${
-              isLastChapter ? "bg-gray-300" : "bg-primary"
-            }`}
-            onPress={() => navigateToChapter(chapter + 1)}
-            disabled={isLastChapter}
-          >
-            <Text
-              className={`font-semibold text-center ${
-                isLastChapter ? "text-gray-500" : "text-white"
-              }`}
+          {/* Verse Selection Grid */}
+          {verses.length > 0 ? (
+            <View className="mb-6">
+              <Text
+                className={`text-lg font-semibold ${textTertiaryClass} mb-2 text-center`}
+              >
+                Select a Verse to Read
+              </Text>
+
+              <View className="flex-row flex-wrap gap-2 justify-center">
+                {verses.map((verse) => (
+                  <TouchableOpacity
+                    key={verse.verse}
+                    className={`${getVerseColor(verse.verse)} rounded-lg shadow-sm justify-center items-center`}
+                    style={[
+                      {
+                        width: VERSE_SIZE,
+                        height: VERSE_SIZE,
+                      },
+                      getBorderColor(),
+                    ]}
+                    onPress={() => handleVersePress(verse.verse)}
+                    onLongPress={() => handleVerseLongPress(verse.verse)}
+                    delayLongPress={500}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      className="font-bold text-lg"
+                      style={{ color: getTextColorValue() }}
+                    >
+                      {verse.verse}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View
+              className={`p-6 rounded-lg border ${warningBorderClass}`}
+              style={{ backgroundColor: warningBgClass }}
             >
-              Next Chapter →
+              <Text
+                className={`text-center text-lg ${warningTextPrimaryClass}`}
+              >
+                No verses found for {book.long_name} {chapter}
+              </Text>
+              <Text
+                className={`text-center mt-2 text-sm ${warningTextSecondaryClass}`}
+              >
+                This chapter may not exist in the current translation
+              </Text>
+              <TouchableOpacity
+                onPress={loadChapterData}
+                className="px-4 py-2 rounded-lg mt-4"
+                style={{ backgroundColor: "#F59E0B" }}
+              >
+                <Text className="text-white font-semibold text-center">
+                  Try Again
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Full Chapter Reading */}
+          {verses.length > 0 && (
+            <View className="mb-6">
+              <TouchableOpacity
+                className="px-6 py-4 rounded-lg shadow-sm"
+                style={{ backgroundColor: primaryColor }}
+                onPress={handleReadFullChapter}
+              >
+                <Text className="text-white font-semibold text-center text-lg">
+                  Read Full Chapter
+                </Text>
+                <Text className="text-white/80 text-sm text-center mt-1">
+                  Start reading from verse 1
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Chapter Navigation */}
+          <View className="flex-row justify-between mb-6">
+            <TouchableOpacity
+              className={`flex-1 mr-2 px-4 py-3 rounded-lg ${isFirstChapter ? disabledBgClass : ""}`}
+              style={{
+                backgroundColor: isFirstChapter ? undefined : primaryColor,
+              }}
+              onPress={() => navigateToChapter(chapter - 1)}
+              disabled={isFirstChapter}
+            >
+              <Text
+                className={`font-semibold text-center ${isFirstChapter ? disabledTextClass : "text-white"}`}
+              >
+                ← Previous Chapter
+              </Text>
+            </TouchableOpacity>
+
+            <View className={`flex-1 mx-2 px-4 py-3 rounded-lg ${borderClass}`}>
+              <Text className={`font-semibold text-center ${textPrimaryClass}`}>
+                {chapter} of {chapterCount || "?"}
+              </Text>
+              <Text
+                className={`text-xs text-center mt-1 ${textSecondaryClass}`}
+              >
+                {verseCount} verses
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              className={`flex-1 ml-2 px-4 py-3 rounded-lg ${isLastChapter ? disabledBgClass : ""}`}
+              style={{
+                backgroundColor: isLastChapter ? undefined : primaryColor,
+              }}
+              onPress={() => navigateToChapter(chapter + 1)}
+              disabled={isLastChapter}
+            >
+              <Text
+                className={`font-semibold text-center ${isLastChapter ? disabledTextClass : "text-white"}`}
+              >
+                Next Chapter →
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Quick Actions */}
+          <View className={`${lightGrayClass} rounded-lg p-4`}>
+            <Text className={`text-sm ${textTertiaryClass} font-semibold mb-2`}>
+              Quick Actions
             </Text>
-          </TouchableOpacity>
-        </View>
+            <View className="flex-row justify-between">
+              <TouchableOpacity
+                className={`${cardBgClass} px-3 py-2 rounded ${borderClass}`}
+                onPress={() => navigation.navigate("ChapterList", { book })}
+              >
+                <Text className={`text-sm ${textTertiaryClass}`}>
+                  All Chapters
+                </Text>
+              </TouchableOpacity>
 
-        {/* Quick Actions */}
-        <View className="bg-gray-100 rounded-lg p-4">
-          <Text className="text-sm text-gray-600 font-semibold mb-2">
-            Quick Actions
-          </Text>
-          <View className="flex-row justify-between">
-            <TouchableOpacity
-              className="bg-white px-3 py-2 rounded border border-gray-300"
-              onPress={() => navigation.navigate("ChapterList", { book })}
-            >
-              <Text className="text-gray-700 text-sm">All Chapters</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              className="bg-white px-3 py-2 rounded border border-gray-300"
-              onPress={() => navigation.goBack()}
-            >
-              <Text className="text-gray-700 text-sm">Back</Text>
-            </TouchableOpacity>
+              <TouchableOpacity
+                className={`${cardBgClass} px-3 py-2 rounded ${borderClass}`}
+                onPress={() => navigation.goBack()}
+              >
+                <Text className={`text-sm ${textTertiaryClass}`}>Back</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      </SafeAreaView>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }

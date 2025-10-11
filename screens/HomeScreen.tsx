@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Image,
   Dimensions,
+  Platform,
 } from "react-native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
@@ -15,7 +16,13 @@ import { BibleDatabaseError, Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 import MatrixRN from "../components/MatrixRN";
-// import MatrixGPT from "../components/MatrixGPT";
+import { Fonts } from "../utils/fonts";
+import {
+  useTheme,
+  type ColorScheme,
+  type Theme,
+  type FontFamily,
+} from "../context/ThemeContext";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -25,7 +32,138 @@ interface Props {
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
+// Primary colors for each scheme and theme
+const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
+  purple: { light: "#A855F7", dark: "#9333EA" },
+  green: { light: "#10B981", dark: "#059669" },
+  red: { light: "#EF4444", dark: "#DC2626" },
+  yellow: { light: "#F59E0B", dark: "#D97706" },
+};
+
+// Generate lighter/darker variants for verseNumber, tagColor, etc.
+const getLighterColor = (hex: string, amount: number = 50): string => {
+  const num = parseInt(hex.replace("#", ""), 16);
+  const amt = Math.round(2.55 * amount);
+  const R = (num >> 16) + amt;
+  const G = ((num >> 8) & 0x00ff) + amt;
+  const B = (num & 0x0000ff) + amt;
+  return (
+    "#" +
+    (
+      0x1000000 +
+      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
+      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
+      (B < 255 ? (B < 1 ? 0 : B) : 255)
+    )
+      .toString(16)
+      .slice(1)
+  );
+};
+
+// Base light theme colors (adjust accents based on scheme)
+const BASE_LIGHT_THEME_COLORS = {
+  card: "#FFFFFF",
+  background: "#FFFFFF",
+  surface: "#F8F9FA",
+  textPrimary: "#1F2937",
+  textSecondary: "#374151",
+  textMuted: "#6C757D",
+  highlightBg: "#FFF3CD",
+  highlightBorder: "#FFD700",
+  highlightText: "#8B4513",
+  highlightIcon: "#B8860B",
+  tagBg: "rgba(0,255,0,0.1)",
+  searchHighlightBg: "#FFFF99",
+  border: "#E9ECEF",
+} as const;
+
+// Base dark theme colors (adjust accents based on scheme)
+const BASE_DARK_THEME_COLORS = {
+  card: "#111827",
+  background: "#111827",
+  surface: "#1F2937",
+  textPrimary: "#F9FAFB",
+  textSecondary: "#D1D5DB",
+  textMuted: "#9CA3AF",
+  highlightBg: "#1F2937",
+  highlightBorder: "#FCD34D",
+  highlightText: "#FECACA",
+  highlightIcon: "#FCD34D",
+  tagBg: "rgba(255,255,255,0.1)",
+  searchHighlightBg: "#374151",
+  border: "#374151",
+} as const;
+
+type BaseThemeColors =
+  | typeof BASE_LIGHT_THEME_COLORS
+  | typeof BASE_DARK_THEME_COLORS;
+
+// Dynamic theme colors function
+const getThemeColors = (
+  theme: Theme,
+  colorScheme: ColorScheme
+): ThemeColors => {
+  const primary =
+    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
+  const baseColors =
+    theme === "dark" ? BASE_DARK_THEME_COLORS : BASE_LIGHT_THEME_COLORS;
+
+  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 80 : 30);
+
+  return {
+    ...baseColors,
+    primary,
+    verseNumber: lighterPrimary,
+    tagColor: primary,
+  } as const;
+};
+
+type ThemeColors = BaseThemeColors & {
+  primary: string;
+  verseNumber: string;
+  tagColor: string;
+};
+
+// Helper function to determine text color based on background color
+const getContrastColor = (
+  backgroundColor: string,
+  themeColors: ThemeColors
+): string => {
+  // Default to theme text primary if no background color
+  if (!backgroundColor) return themeColors.textPrimary;
+
+  // Convert hex color to RGB
+  const hex = backgroundColor.replace("#", "");
+  const r = parseInt(hex.substr(0, 2), 16);
+  const g = parseInt(hex.substr(2, 2), 16);
+  const b = parseInt(hex.substr(4, 2), 16);
+
+  // Calculate luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  // Return dark text for light colors, light text for dark colors
+  return luminance > 0.5 ? themeColors.textSecondary : themeColors.textPrimary;
+};
+
+// Map fontFamily to actual font family string
+const getFontFamily = (fontFamily: FontFamily): string | undefined => {
+  switch (fontFamily) {
+    case "serif":
+      return Platform.OS === "ios" ? "Georgia" : "serif";
+    case "sans-serif":
+      return Platform.OS === "ios" ? "Helvetica Neue" : "sans-serif";
+    case "system":
+    default:
+      return undefined;
+  }
+};
+
 export default function HomeScreen({ navigation }: Props) {
+  // Theme
+  const { theme, colorScheme, fontFamily } = useTheme();
+  const themeColors = getThemeColors(theme, colorScheme);
+  const actualFontFamily = getFontFamily(fontFamily);
+
   const {
     bibleDB,
     currentVersion,
@@ -48,20 +186,12 @@ export default function HomeScreen({ navigation }: Props) {
   useEffect(() => {
     const updateLayout = () => {
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
-      const newIsLandscape = newWidth > newHeight;
-
-      // Always update landscape state
-      setIsLandscape(newIsLandscape);
+      setIsLandscape(newWidth > newHeight);
     };
 
-    // Initial check
     updateLayout();
-
     const subscription = Dimensions.addEventListener("change", updateLayout);
-
-    return () => {
-      subscription?.remove();
-    };
+    return () => subscription?.remove();
   }, []);
 
   useEffect(() => {
@@ -128,16 +258,12 @@ export default function HomeScreen({ navigation }: Props) {
         return;
       }
 
-      // Random start index
       const startIndex = Math.floor(Math.random() * verses.length);
-      // Random range length between 1-5, ensure we don't exceed chapter
       const maxRange = Math.min(5, verses.length - startIndex);
       const rangeLength = Math.floor(Math.random() * maxRange) + 1;
-
       const range = verses.slice(startIndex, startIndex + rangeLength);
       setVerseRange(range);
 
-      // Load book long name
       try {
         const bookInfo = await bibleDB.getBook(bookId);
         setBookLongName(
@@ -156,20 +282,6 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-   if (initializationError) {
-     return (
-       <View className="flex-1 justify-center items-center bg-gray-50 p-6">
-         <Text className="text-lg text-red-600 text-center mb-4">
-           Database Error: {initializationError}
-         </Text>
-         <Text className="text-sm text-gray-600 text-center mb-4">
-           This might take a moment on first launch
-         </Text>
-         <Button title="Retry Initialization" onPress={retryInitialization} />
-       </View>
-     );
-   }
-
   const handleVersePress = (verse: Verse) => {
     navigation.navigate("VerseList", {
       book: {
@@ -182,12 +294,74 @@ export default function HomeScreen({ navigation }: Props) {
     });
   };
 
+  // Early returns (must be before main return)
+  if (initializationError) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: themeColors.background,
+          padding: 24,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 18,
+            color: themeColors.textSecondary,
+            textAlign: "center",
+            marginBottom: 16,
+            fontFamily: actualFontFamily,
+          }}
+        >
+          Database Error: {initializationError}
+        </Text>
+        <Text
+          style={{
+            fontSize: 14,
+            color: themeColors.textMuted,
+            textAlign: "center",
+            marginBottom: 16,
+            fontFamily: actualFontFamily,
+          }}
+        >
+          This might take a moment on first launch
+        </Text>
+        <Button title="Retry Initialization" onPress={retryInitialization} />
+      </View>
+    );
+  }
+
   if (loading || isInitializing || !bibleDB) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50">
-        <ActivityIndicator size="large" color="#3B82F6" />
-        <Text className="text-lg text-gray-600 mt-4">Loading Bible App...</Text>
-        <Text className="text-sm text-gray-500 mt-2">
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: themeColors.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={themeColors.primary} />
+        <Text
+          style={{
+            fontSize: 18,
+            color: themeColors.textSecondary,
+            marginTop: 16,
+            fontFamily: actualFontFamily,
+          }}
+        >
+          Loading Bible App...
+        </Text>
+        <Text
+          style={{
+            fontSize: 14,
+            color: themeColors.textMuted,
+            marginTop: 8,
+            fontFamily: actualFontFamily,
+          }}
+        >
           Preparing your Bible database
         </Text>
       </View>
@@ -196,57 +370,129 @@ export default function HomeScreen({ navigation }: Props) {
 
   if (error) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-50 p-6">
-        <Text className="text-lg text-red-600 text-center mb-4">{error}</Text>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: themeColors.background,
+          padding: 24,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 18,
+            color: themeColors.textSecondary,
+            textAlign: "center",
+            marginBottom: 16,
+            fontFamily: actualFontFamily,
+          }}
+        >
+          {error}
+        </Text>
         <Button title="Try Again" onPress={loadRandomVerse} />
       </View>
     );
   }
 
+  // Main render
   return (
     <ScrollView
-      className="flex-1 bg-gray-50"
+      style={{ flex: 1, backgroundColor: themeColors.background }}
       contentContainerStyle={{ padding: 16 }}
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <View className="items-center mb-6">
+      <View style={{ alignItems: "center", marginBottom: 24 }}>
         <Image
-          source={require("../assets/fohs-512x512.png")} // Update path as needed
-          className="size-40 mb-4 rounded-lg"
+          source={require("../assets/fohs-512x512.png")}
+          style={{ width: 160, height: 160, marginBottom: 16, borderRadius: 8 }}
           resizeMode="contain"
         />
-        <Text className="text-2xl font-bold text-primary text-center">
+        <Text
+          style={{
+            fontSize: 30,
+            color: themeColors.primary,
+            textAlign: "center",
+            padding: 8,
+            width: "100%",
+            fontFamily: Fonts.RubikGlitchRegular || actualFontFamily,
+          }}
+        >
           Bible App
         </Text>
-        <Text className="text-gray-600 text-center mt-2 capitalize">
+        <Text
+          style={{
+            color: themeColors.textMuted,
+            textAlign: "center",
+            marginTop: 8,
+            textTransform: "capitalize",
+            fontSize: 20,
+            fontFamily: Fonts.OswaldVariable || actualFontFamily,
+          }}
+        >
           Your daily source of Inspiration
         </Text>
       </View>
 
       {/* Verse of the Day */}
-      <View className="mb-6">
-        <View className="flex-row justify-between items-center mb-4">
-          <View>
-            <Text className="text-lg font-semibold text-gray-800">
+      <View style={{ marginBottom: 24 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 16,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "600",
+                color: themeColors.textPrimary,
+                fontFamily: actualFontFamily,
+              }}
+            >
               Fresh Revelations
             </Text>
-            <Text className="text-sm text-gray-500">
+            <Text
+              style={{
+                fontSize: 14,
+                color: themeColors.textMuted,
+                fontFamily: actualFontFamily,
+              }}
+            >
               Version: {currentVersion.replace(".sqlite3", "").toUpperCase()}
             </Text>
           </View>
           <TouchableOpacity
             onPress={loadRandomVerse}
-            className={`bg-blue-500 px-4 py-2 rounded-lg ${isLandscape ? "mr-12" : "mr-0"}`}
+            style={{
+              backgroundColor: themeColors.primary,
+              paddingHorizontal: 16,
+              paddingVertical: 8,
+              borderRadius: 8,
+              marginLeft: 16,
+            }}
           >
-            <Text className="text-white text-sm font-medium">Refresh</Text>
+            <Text
+              style={{
+                color: "white",
+                fontSize: 14,
+                fontWeight: "500",
+                fontFamily: actualFontFamily,
+              }}
+            >
+              Refresh
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View className={`${isLandscape ? "mr-12" : "mr-0"}`}>
+        <View style={{ marginRight: isLandscape ? 48 : 0 }}>
           {verseRange && verseRange.length > 0 && (
             <VerseViewEnhanced
-              verses={verseRange} // show the full range
+              verses={verseRange}
               bookName={bookLongName}
               chapterNumber={verseRange[0].chapter}
               fontSize={16}
@@ -258,16 +504,32 @@ export default function HomeScreen({ navigation }: Props) {
 
       {/* Daily Inspiration */}
       <View
-        className={`bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200 ${isLandscape ? "mr-12" : "mr-0"}`}
+        style={{
+          padding: 16,
+          marginBottom: 24,
+          marginRight: isLandscape ? 48 : 0,
+        }}
       >
-        <Text className="text-blue-800 text-sm text-center font-medium">
+        <Text
+          style={{
+            color: themeColors.primary,
+            fontSize: 16,
+            textAlign: "center",
+            fontWeight: "500",
+            fontFamily: actualFontFamily,
+          }}
+        >
           📖 Start your day with God's Word
         </Text>
       </View>
 
       {/* Main Actions */}
       <View
-        className={`space-y-4 mb-6 gap-2 ${isLandscape ? "mr-12" : "mr-0"}`}
+        style={{
+          gap: 8,
+          marginBottom: 24,
+          marginRight: isLandscape ? 48 : 0,
+        }}
       >
         <Button
           title="Read Bible"
@@ -283,9 +545,23 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Quick Tips */}
       {verseRange && verseRange.length > 0 && (
         <View
-          className={`bg-white p-4 rounded-lg border border-gray-200 ${isLandscape ? "mr-12" : "mr-0"}`}
+          style={{
+            backgroundColor: themeColors.card,
+            padding: 16,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: themeColors.border,
+            marginRight: isLandscape ? 48 : 0,
+          }}
         >
-          <Text className="text-gray-600 text-center text-sm">
+          <Text
+            style={{
+              color: themeColors.textMuted,
+              textAlign: "center",
+              fontSize: 14,
+              fontFamily: actualFontFamily,
+            }}
+          >
             ✨ Tap "Refresh" for fresh inspiration anytime
           </Text>
         </View>
