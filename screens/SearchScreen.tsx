@@ -449,7 +449,7 @@ const ScopeDropdown = React.memo(
               {currentConfig.description}
             </Text>
           </View>
-          <Text className="text-lg" style={{ color: colors.text }}>
+          <Text className="text-lg text-white">
             {isOpen ? "↑" : "↓"}
           </Text>
         </TouchableOpacity>
@@ -461,10 +461,9 @@ const ScopeDropdown = React.memo(
           onRequestClose={onToggle}
         >
           <TouchableOpacity
-            className="flex-1 justify-center p-4"
+            className="flex-1 justify-center p-4 bg-black/80"
             activeOpacity={1}
             onPress={onToggle}
-            style={{ backgroundColor: colors.background + "CC" }}
           >
             <View
               className="rounded-lg max-h-[90%]"

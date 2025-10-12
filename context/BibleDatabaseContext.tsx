@@ -33,6 +33,9 @@ interface BibleDatabaseProviderProps {
 
 const STORAGE_KEY = "selected_bible_version";
 
+// REFACTOR: Shared cache for cross-version queries (e.g., books list—static across DBs)
+const sharedQueryCache = new Map<string, any>();
+
 export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   children,
 }) => {
@@ -94,6 +97,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
         openDatabases.current.set(version, db);
         setBibleDB(db);
+        // REFACTOR: Consolidated logging (remove from class; use one here)
         console.log(`Database initialized successfully: ${version}`);
       }
     } catch (error) {
@@ -196,6 +200,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   React.useEffect(() => {
     return () => {
       openDatabases.current.forEach((db) => db.close());
+      sharedQueryCache.clear(); // REFACTOR: Clear shared cache on unmount
     };
   }, []);
 

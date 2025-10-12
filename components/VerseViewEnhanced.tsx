@@ -68,7 +68,7 @@ const BASE_DARK_THEME_COLORS = {
   highlightText: "#FECACA",
   highlightIcon: "#FCD34D",
   tagBg: "rgba(255,255,255,0.1)",
-  searchHighlightBg: "#374151",
+  searchHighlightBg: "#81df81ff",
   border: "#374151",
 } as const;
 
@@ -106,7 +106,7 @@ const getThemeColors = (
     );
   };
 
-  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 80 : 30);
+  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 40 : -10);
 
   return {
     ...baseColors,

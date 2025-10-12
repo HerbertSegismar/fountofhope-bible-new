@@ -35,6 +35,17 @@ class BibleDatabase {
   private initializationPromise: Promise<void> | null = null;
   private isClosing = false;
 
+  // REFACTOR: Simple in-memory cache for common queries (e.g., getBook, getVerses). Clear on close.
+  private queryCache = new Map<string, any>();
+  // REFACTOR: Cache for table existence checks to avoid repeated sqlite_master queries
+  private tableExistsCache = new Map<string, boolean>();
+  // REFACTOR: Cache for chapter counts (MAX chapter per book) to avoid repeated MAX queries
+  private chapterCounts = new Map<number, number>();
+  // REFACTOR: Cache for verse counts per chapter to avoid repeated COUNT queries
+  private verseCounts = new Map<string, number>();
+  // REFACTOR: Cache for database stats (computed once as data is static)
+  private statsCache?: DatabaseStats;
+
   private readonly dbName: string;
   private readonly sqliteDirectory = `${documentDirectory}SQLite`;
   private readonly dbPath: string;
@@ -116,6 +127,11 @@ class BibleDatabase {
         this.db = null;
         this.isInitialized = false;
         this.initializationPromise = null;
+        this.queryCache.clear(); // REFACTOR: Clear cache on close
+        this.tableExistsCache.clear();
+        this.chapterCounts.clear();
+        this.verseCounts.clear();
+        this.statsCache = undefined;
         this.isClosing = false;
       }
     }
@@ -152,7 +168,10 @@ class BibleDatabase {
   }
 
   async getBooks(): Promise<Book[]> {
-    return this.withRetry(async () => {
+    const cacheKey = "getBooks";
+    if (this.queryCache.has(cacheKey)) return this.queryCache.get(cacheKey)!;
+
+    const books = await this.withRetry(async () => {
       await this.ensureInitialized();
       return await this.db!.getAllAsync<Book>(
         `SELECT book_number, short_name, long_name, book_color 
@@ -160,6 +179,9 @@ class BibleDatabase {
          ORDER BY book_number`
       );
     }, "getBooks");
+
+    this.queryCache.set(cacheKey, books);
+    return books;
   }
 
   async getAllBooks(): Promise<Book[]> {
@@ -181,13 +203,19 @@ class BibleDatabase {
   }
 
   async getBook(bookNumber: number): Promise<Book | null> {
-    return this.withRetry(async () => {
+    const cacheKey = `getBook:${bookNumber}`;
+    if (this.queryCache.has(cacheKey)) return this.queryCache.get(cacheKey)!;
+
+    const book = await this.withRetry(async () => {
       await this.ensureInitialized();
       return await this.db!.getFirstAsync<Book>(
         "SELECT * FROM books WHERE book_number = ?",
         [bookNumber]
       );
     }, `getBook(${bookNumber})`);
+
+    if (book) this.queryCache.set(cacheKey, book);
+    return book;
   }
 
   async getBookFromAll(bookNumber: number): Promise<Book | null> {
@@ -201,9 +229,12 @@ class BibleDatabase {
     }, `getBookFromAll(${bookNumber})`);
   }
 
-  // In services/BibleDatabase.ts - Updated getVerses method (remove unused version param)
+  // REFACTOR: Added cache for getVerses (keyed by book+chapter)
   async getVerses(bookNumber: number, chapter: number): Promise<Verse[]> {
-    return this.withRetry(async () => {
+    const cacheKey = `getVerses:${bookNumber}:${chapter}`;
+    if (this.queryCache.has(cacheKey)) return this.queryCache.get(cacheKey)!;
+
+    const verses = await this.withRetry(async () => {
       await this.ensureInitialized();
       return await this.db!.getAllAsync<Verse>(
         `SELECT v.*, b.short_name as book_name, b.book_color 
@@ -214,6 +245,9 @@ class BibleDatabase {
         [bookNumber, chapter]
       );
     }, `getVerses(${bookNumber}, ${chapter})`);
+
+    this.queryCache.set(cacheKey, verses);
+    return verses;
   }
 
   async getVerse(
@@ -309,29 +343,49 @@ class BibleDatabase {
 
   // ==================== METADATA OPERATIONS ====================
 
+  // REFACTOR: Cached MAX chapter per book
   async getChapterCount(bookNumber: number): Promise<number> {
+    if (this.chapterCounts.has(bookNumber)) {
+      return this.chapterCounts.get(bookNumber)!;
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
       const result = await this.db!.getFirstAsync<{ max_chapter: number }>(
         "SELECT MAX(chapter) as max_chapter FROM verses WHERE book_number = ?",
         [bookNumber]
       );
-      return result?.max_chapter ?? 0;
+      const count = result?.max_chapter ?? 0;
+      this.chapterCounts.set(bookNumber, count);
+      return count;
     }, `getChapterCount(${bookNumber})`);
   }
 
+  // REFACTOR: Cached COUNT per book+chapter
   async getVerseCount(bookNumber: number, chapter: number): Promise<number> {
+    const key = `${bookNumber}:${chapter}`;
+    if (this.verseCounts.has(key)) {
+      return this.verseCounts.get(key)!;
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
       const result = await this.db!.getFirstAsync<{ count: number }>(
         "SELECT COUNT(*) as count FROM verses WHERE book_number = ? AND chapter = ?",
         [bookNumber, chapter]
       );
-      return result?.count ?? 0;
+      const count = result?.count ?? 0;
+      this.verseCounts.set(key, count);
+      return count;
     }, `getVerseCount(${bookNumber}, ${chapter})`);
   }
 
+  // REFACTOR: Cached stats (computed once)
   async getDatabaseStats(): Promise<DatabaseStats> {
+    if (this.statsCache) {
+      return this.statsCache;
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
 
@@ -356,13 +410,16 @@ class BibleDatabase {
           )
         : { count: 0 };
 
-      return {
+      const stats: DatabaseStats = {
         bookCount: bookCountRow?.count ?? 0,
         verseCount: verseCountRow?.count ?? 0,
         storyCount: storyCountRow?.count ?? 0,
         introductionCount: introCountRow?.count ?? 0,
         lastUpdated: new Date(),
       };
+
+      this.statsCache = stats;
+      return stats;
     }, "getDatabaseStats");
   }
 
@@ -380,6 +437,7 @@ class BibleDatabase {
       await this.runMigrations();
       await this.verifyDatabase();
       this.isInitialized = true;
+      // REFACTOR: Consolidated logging (remove duplicate from provider)
       console.log(`Bible database ${this.dbName} initialized ✅`);
     } catch (error) {
       // Enhanced logging for debugging (remove in production if needed)
@@ -617,6 +675,8 @@ class BibleDatabase {
         return require("../assets/esv.sqlite3");
       case "esvgsb.sqlite3":
         return require("../assets/esvgsb.sqlite3");
+      case "esvgsbcom.sqlite3": // REFACTOR: Added commentary database asset
+        return require("../assets/esvgsbcom.sqlite3");
       case "iesvth.sqlite3":
         return require("../assets/iesvth.sqlite3");
       case "rv1895.sqlite3":
@@ -646,15 +706,24 @@ class BibleDatabase {
     if (!this.isInitialized) await this.init();
   }
 
+  // REFACTOR: Cached table existence check
   private async tableExists(tableName: string): Promise<boolean> {
+    const key = tableName.toLowerCase();
+    if (this.tableExistsCache.has(key)) {
+      return this.tableExistsCache.get(key)!;
+    }
+
     if (!this.db) return false;
     try {
       const rows = await this.db.getAllAsync<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
         [tableName]
       );
-      return rows.length > 0;
+      const exists = rows.length > 0;
+      this.tableExistsCache.set(key, exists);
+      return exists;
     } catch {
+      this.tableExistsCache.set(key, false);
       return false;
     }
   }

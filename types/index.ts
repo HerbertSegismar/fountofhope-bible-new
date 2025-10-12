@@ -19,6 +19,11 @@ export interface Book {
   chapters?: number;
 }
 
+export interface ChapterInfo {
+  chapter: number;
+  verseCount: number;
+}
+
 export type RootStackParamList = {
   Home: undefined;
   BookList: undefined;

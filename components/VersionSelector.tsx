@@ -1,6 +1,6 @@
-// components/VersionSelector.tsx
+// Updated components/VersionSelector.tsx (add loading prop and spinner)
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, getColorClasses } from "../context/ThemeContext";
 import {
@@ -27,6 +27,7 @@ interface VersionSelectorProps {
   showCurrentVersion?: boolean;
   showActiveIndicator?: boolean;
   disabled?: boolean;
+  loading?: boolean; // Added loading prop
   colors?: Colors;
 }
 
@@ -40,6 +41,7 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
   showCurrentVersion = true,
   showActiveIndicator = false,
   disabled = false,
+  loading = false, // Default false
   colors, // Optional colors prop
 }) => {
   const { theme, navTheme } = useTheme();
@@ -111,8 +113,8 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
                   ? effectiveColors.primary
                   : undefined,
               }}
-              onPress={() => !disabled && onVersionSelect(version)}
-              disabled={disabled}
+              onPress={() => !disabled && !loading && onVersionSelect(version)} // Disable press during loading
+              disabled={disabled || loading}
             >
               <View className="flex-row justify-between items-center">
                 <View className="flex-1">
@@ -141,17 +143,25 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
                     </Text>
                   )}
                   {isSelected && (
-                    <Text
-                      className="text-xs mt-1"
-                      style={{ color: effectiveColors.primary }}
-                    >
-                      {disabled ? "Switching..." : "Selected"}
-                    </Text>
+                    <View className="flex-row items-center mt-1">
+                      <Text
+                        className="text-xs mr-2"
+                        style={{ color: effectiveColors.primary }}
+                      >
+                        {loading ? "Switching..." : "Selected"}
+                      </Text>
+                      {loading && (
+                        <ActivityIndicator
+                          size="small"
+                          color={effectiveColors.primary}
+                        />
+                      )}
+                    </View>
                   )}
                 </View>
 
                 <View className="ml-3">
-                  {isSelected && (
+                  {isSelected && !loading && (
                     <Ionicons
                       name="checkmark-circle"
                       size={24}
