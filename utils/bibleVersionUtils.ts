@@ -1,17 +1,17 @@
 // utils/bibleVersionUtils.ts
 
 export const VERSION_DISPLAY_NAMES: Record<string, string> = {
-  "niv11.sqlite3": "NIV (2011)",
-  "csb17.sqlite3": "CSB (2017)",
+  "niv11.sqlite3": "NIV11",
+  "csb17.sqlite3": "CSB17",
   "ylt.sqlite3": "YLT",
-  "nlt15.sqlite3": "NLT (2015)",
+  "nlt15.sqlite3": "NLT15",
   "nkjv.sqlite3": "NKJV",
   "nasb.sqlite3": "NASB",
   "logos.sqlite3": "Logos",
   "kj2.sqlite3": "KJ2",
   "esv.sqlite3": "ESV",
   "esvgsb.sqlite3": "ESVGSB",
-  "iesvth.sqlite3": "IESV NT",
+  "iesvth.sqlite3": "IESV",
   "rv1895.sqlite3": "RV1895",
   "cebB.sqlite3": "CEBB",
   "mbb05.sqlite3": "MBB05",

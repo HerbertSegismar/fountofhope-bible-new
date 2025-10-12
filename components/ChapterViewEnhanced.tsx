@@ -109,41 +109,306 @@ type ThemeColors = BaseThemeColors & {
   tagColor: string;
 };
 
+const commentaryDBMap: Record<string, string> = {
+  ESVGSB: "esvgsbcom.sqlite3",
+  NKJV: "nkjvcom.sqlite3",
+  CSB17: "csb17com.sqlite3",
+  ESV: "esvcom.sqlite3",
+  NIV11: "niv11com.sqlite3",
+  NLT15: "nlt15com.sqlite3",
+  RV1895: "rv1895com.sqlite3",
+  // Add more as needed, e.g., NASB: "nasbcom.sqlite3" (if exists)
+} as const;
+
+// Reverse mapping from display names to stems (e.g., "CSB (2017)" -> "csb17")
+const DISPLAY_TO_STEM_MAP: Record<string, string> = {
+  NIV11: "niv11",
+  CSB17: "csb17",
+  YLT: "ylt",
+  NLT15: "nlt15",
+  NKJV: "nkjv",
+  NASB: "nasb",
+  Logos: "logos",
+  KJ2: "kj2",
+  ESV: "esv",
+  ESVGSB: "esvgsb",
+  IESV: "iesvth",
+  RV1895: "rv1895",
+  CEBB: "cebB",
+  MBB05: "mbb05",
+  TAGAB01: "tagab01",
+  TAGMB12: "tagmb12",
+  HILAB82: "hilab82",
+} as const;
+
+// Normalization helper to handle displayVersion variations to map key
+const getVersionKey = (
+  displayVersion: string | undefined
+): string | undefined => {
+  if (!displayVersion) return undefined;
+
+  // First, try exact match in reverse map
+  let stem = DISPLAY_TO_STEM_MAP[displayVersion];
+  if (stem) {
+    return stem.toUpperCase();
+  }
+
+  // Fallback: Uppercase and remove year in parentheses, e.g., "CSB (2017)" -> "CSB"
+  let normalized = displayVersion
+    .toUpperCase()
+    .replace(/\s*\(\d{4}\)/g, "")
+    .trim();
+
+  // Manual mapping for common normalized forms
+  const normalizedToStem: Record<string, string> = {
+    CSB: "csb17",
+    NLT: "nlt15",
+    NIV: "niv11",
+    RV: "rv1895",
+    // Add more if needed
+  } as const;
+
+  const normKey = normalized.replace(/\s+/g, "");
+  stem = normalizedToStem[normKey];
+  return stem ? stem.toUpperCase() : undefined;
+};
+
 // Custom hook for commentary loading
 const useCommentary = (displayVersion: string | undefined) => {
+  const stripTags = useCallback((text: string): string => {
+    // Remove entire <script> blocks to filter out JavaScript code
+    let cleaned = text.replace(
+      /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi,
+      ""
+    );
+    // Remove other HTML tags
+    cleaned = cleaned.replace(/<[^>]*>/g, "");
+    // Filter out arrow HTML entities (e.g., &larr;, &rarr;, etc.)
+    cleaned = cleaned.replace(
+      /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
+      ""
+    );
+    // Normalize whitespace
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    return cleaned;
+  }, []);
+
   const loadCommentaryForVerse = useCallback(
     async (verse: Verse | null, tagContent: string): Promise<string> => {
-      if (!verse || !tagContent || displayVersion?.toUpperCase() !== "ESVGSB") {
+      if (!verse || !tagContent) {
         return `Marker: "${tagContent}"`;
+      }
+
+      // Use normalized key for better mapping
+      const versionKey = getVersionKey(displayVersion);
+      const dbName = versionKey
+        ? commentaryDBMap[versionKey as keyof typeof commentaryDBMap]
+        : undefined;
+
+      console.log(
+        `[Commentary] Attempting to load for version: ${displayVersion} (normalized key: ${versionKey}), DB: ${dbName}`
+      );
+
+      if (!dbName) {
+        console.log(
+          `[Commentary] No DB mapping for normalized key ${versionKey}`
+        );
+        return `Marker: "${tagContent}" (Commentary not available for ${displayVersion})`;
+      }
+
+      // Early check if tagContent looks like a commentary marker (short/symbol, not full phrase)
+      if (
+        tagContent.length > 20 ||
+        (tagContent.length > 5 && !/^[††ⓐ-ⓩ\[\]0-9\s\-–]+$/.test(tagContent))
+      ) {
+        console.log(
+          `[Commentary] Skipping query for long/phrase marker: "${tagContent}" (likely not a commentary tag)`
+        );
+        return `Marker: "${tagContent}" (Not a commentary reference)`;
       }
 
       let db: SQLite.SQLiteDatabase | null = null;
       try {
-        db = SQLite.openDatabaseSync("esvgsbcom.sqlite3", {
-          useNewConnection: true,
-        });
-        const result = await db.getFirstAsync<{ text: string }>(
-          `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
-          [verse.book_number, verse.chapter, verse.verse, tagContent]
+        console.log(`[Commentary] Opening DB: ${dbName}`);
+        db = SQLite.openDatabaseSync(dbName, { useNewConnection: true });
+
+        // Check if the commentaries table exists (case-sensitive check)
+        console.log(
+          `[Commentary] Checking for 'commentaries' table in ${dbName}`
         );
-        return (
+        const tableCheck = await db.getFirstAsync<{ name: string }>(`
+          SELECT name FROM sqlite_master WHERE type='table' AND name='commentaries';
+        `);
+
+        if (!tableCheck) {
+          console.log(
+            `[Commentary] No 'commentaries' table found in ${dbName}`
+          );
+
+          // Log all available tables for debugging
+          const allTables = await db.getAllAsync<{ name: string }>(`
+            SELECT name FROM sqlite_master WHERE type='table';
+          `);
+          console.log(
+            `[Commentary] Available tables in ${dbName}:`,
+            allTables.map((t) => t.name)
+          );
+
+          // Check for common alternative names
+          const altChecks = [
+            "notes",
+            "crossrefs",
+            "study_notes",
+            "annotations",
+            "Commentaries",
+            "COMMENTARIES",
+          ];
+          for (const altName of altChecks) {
+            const altCheck = await db.getFirstAsync<{ name: string }>(
+              `
+              SELECT name FROM sqlite_master WHERE type='table' AND name=?;
+            `,
+              [altName]
+            );
+            if (altCheck) {
+              console.log(
+                `[Commentary] Found alternative table: '${altName}' in ${dbName}`
+              );
+            }
+          }
+
+          await db.closeAsync();
+          db = null;
+          return `Marker: "${tagContent}" (No commentaries table in database for ${displayVersion})`;
+        }
+        console.log(`[Commentary] 'commentaries' table confirmed in ${dbName}`);
+
+        // Log the schema (columns) of the commentaries table
+        const columnsInfo = await db.getAllAsync<any>(
+          `PRAGMA table_info(commentaries);`
+        );
+        console.log(
+          `[Commentary] Schema for 'commentaries' table in ${dbName}:`,
+          columnsInfo.map((col: any) => ({
+            name: col.name,
+            type: col.type,
+            notnull: col.notnull,
+            pk: col.pk,
+          }))
+        );
+        // Specifically check/log if 'is_preceding' exists
+        const hasPreceding = columnsInfo.some(
+          (col: any) => col.name === "is_preceding"
+        );
+        console.log(
+          `[Commentary] 'is_preceding' column ${hasPreceding ? "EXISTS" : "MISSING"} in ${dbName}`
+        );
+
+        // Log total row count for debugging
+        const totalCount = await db.getFirstAsync<{ count: number }>(
+          `SELECT COUNT(*) as count FROM commentaries`
+        );
+        console.log(
+          `[Commentary] Total commentaries in ${dbName}: ${totalCount?.count || 0}`
+        );
+        if (totalCount?.count === 0) {
+          console.log(
+            `[Commentary] WARNING: Commentaries table is empty in ${dbName} - check file bundling/loading`
+          );
+          return `Marker: "${tagContent}" (Empty commentaries database for ${displayVersion})`;
+        }
+
+        // Check for rows matching book/chapter (ignoring verse/marker for broad check)
+        const bookChapterCount = await db.getFirstAsync<{ count: number }>(
+          `SELECT COUNT(*) as count FROM commentaries WHERE book_number = ? AND chapter_number_from = ?`,
+          [verse.book_number, verse.chapter]
+        );
+        console.log(
+          `[Commentary] Commentaries for book ${verse.book_number}, chapter ${verse.chapter} in ${dbName}: ${bookChapterCount?.count || 0}`
+        );
+
+        // Adaptive query for 'is_preceding' if it exists
+        let result: { text: string } | null = null;
+        if (hasPreceding) {
+          console.log(
+            `[Commentary] 'is_preceding' exists; trying query with filter (is_preceding = 0 for verse-specific)`
+          );
+          result = await db.getFirstAsync<{ text: string }>(
+            `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ? AND is_preceding = 0`,
+            [verse.book_number, verse.chapter, verse.verse, tagContent]
+          );
+          if (!result) {
+            console.log(
+              `[Commentary] No result with is_preceding=0; trying without filter`
+            );
+            result = await db.getFirstAsync<{ text: string }>(
+              `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
+              [verse.book_number, verse.chapter, verse.verse, tagContent]
+            );
+          }
+          if (!result) {
+            console.log(
+              `[Commentary] No result without filter; trying is_preceding=1 (preceding note)`
+            );
+            result = await db.getFirstAsync<{ text: string }>(
+              `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ? AND is_preceding = 1`,
+              [verse.book_number, verse.chapter, verse.verse, tagContent]
+            );
+          }
+        } else {
+          console.log(`[Commentary] No 'is_preceding'; using standard query`);
+          result = await db.getFirstAsync<{ text: string }>(
+            `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
+            [verse.book_number, verse.chapter, verse.verse, tagContent]
+          );
+        }
+
+        console.log(
+          `[Commentary] Querying for book: ${verse.book_number}, chapter: ${verse.chapter}, verse: ${verse.verse}, marker: "${tagContent}"`
+        );
+
+        if (!result?.text) {
+          console.log(
+            `[Commentary] No result found for the exact query in ${dbName}`
+          );
+          // Try a broader query without verse/marker for debugging
+          const broadResult = await db.getFirstAsync<{ text: string }>(
+            `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? LIMIT 1`,
+            [verse.book_number, verse.chapter]
+          );
+          if (broadResult?.text) {
+            console.log(
+              `[Commentary] But found a commentary for the book/chapter: ${broadResult.text.substring(0, 100)}...`
+            );
+          }
+        } else {
+          console.log(
+            `[Commentary] Found commentary in ${dbName} (length: ${result.text.length})`
+          );
+        }
+
+        return stripTags(
           result?.text || `No commentary found for marker "${tagContent}".`
         );
       } catch (error) {
-        console.error("Error querying commentary:", error);
+        console.error(`[Commentary] Error querying ${dbName}:`, error);
+        if (error instanceof Error) {
+          console.error(`[Commentary] Error message: ${error.message}`);
+          console.error(`[Commentary] Error stack: ${error.stack}`);
+        }
         return "Error loading commentary.";
       } finally {
         if (db) {
           await db.closeAsync();
+          console.log(`[Commentary] Closed DB: ${dbName}`);
         }
       }
     },
-    [displayVersion]
+    [displayVersion, stripTags]
   );
 
   return { loadCommentaryForVerse };
 };
-
 const parseXmlTags = (text: string): any[] => {
   if (!text) return [];
 
