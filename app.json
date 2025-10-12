@@ -33,7 +33,7 @@
     "web": {
       "favicon": "./assets/fountofhope-512x512.png"
     },
-    "plugins": ["expo-sqlite", "expo-asset", "expo-font"],
+    "plugins": ["expo-sqlite", "expo-asset", "expo-font", "./enableLargeHeap.js"],
     "extra": {
       "eas": {
         "projectId": "8655600c-f728-4a18-b204-41aeff1a964c"

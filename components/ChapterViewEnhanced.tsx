@@ -520,22 +520,18 @@ const renderTree = (
       const isNumber = /^\d+$/.test(content.trim());
       const tagContent = content.trim();
       return (
-        <TouchableOpacity
+        <Text
           key={`self-${key}`}
           onPress={() => onTagPress?.(tagContent)}
-          activeOpacity={0.7}
+          style={{
+            fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
+            color: themeColors.tagColor,
+            backgroundColor: themeColors.tagBg,
+            fontFamily,
+          }}
         >
-          <Text
-            style={{
-              fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
-              color: themeColors.tagColor,
-              backgroundColor: themeColors.tagBg,
-              fontFamily,
-            }}
-          >
-            {content}
-          </Text>
-        </TouchableOpacity>
+          {content}
+        </Text>
       );
     } else if (node.type === "element") {
       // Handle opening tags with children
@@ -555,21 +551,17 @@ const renderTree = (
         .trim();
 
       return (
-        <TouchableOpacity
+        <Text
           key={`elem-${key}`}
           onPress={() => onTagPress?.(tagContent)}
-          activeOpacity={0.7}
+          style={{
+            fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
+            color: themeColors.tagColor,
+            fontFamily,
+          }}
         >
-          <Text
-            style={{
-              fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
-              color: themeColors.tagColor,
-              fontFamily,
-            }}
-          >
-            {children}
-          </Text>
-        </TouchableOpacity>
+          {children}
+        </Text>
       );
     }
 
