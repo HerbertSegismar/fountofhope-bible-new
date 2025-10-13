@@ -462,7 +462,7 @@ class BibleDatabase {
             `Migrating legacy DB from root to ${this.sqliteDirectory}`
           );
           await FileSystem.copyAsync({ from: rootPath, to: this.dbPath });
-          // Optionally delete root: await FileSystem.deleteAsync(rootPath);
+          // Optionally: await FileSystem.deleteAsync(rootPath); // Clean up old file
         } else {
           console.log(`Copying ${this.dbName} from assets...`);
           await this.copyDatabaseFromAssets();
@@ -509,13 +509,9 @@ class BibleDatabase {
     try {
       console.log(`Starting database copy for: ${this.dbName}`);
 
-      // Get the asset module
       const assetModule = this.getDatabaseAsset();
-
-      // Use Expo Asset to load the database file properly
       const asset = Asset.fromModule(assetModule);
 
-      // For production builds, we need to ensure the asset is loaded
       let sourceUri = asset.localUri;
       if (!sourceUri) {
         console.log(`Downloading asset for: ${this.dbName}`);
@@ -529,59 +525,24 @@ class BibleDatabase {
         );
       }
 
-      console.log(`Chunked copy from: ${sourceUri} to: ${this.dbPath}`);
+      console.log(`Copying from: ${sourceUri} to: ${this.dbPath}`);
 
-      // Chunked copy for large files to avoid OOM on Android
-      const CHUNK_SIZE = 1024 * 1024; // 1MB chunks
-      const fileInfo = await FileSystem.getInfoAsync(sourceUri);
-      if (!fileInfo.exists) {
-        throw new Error(`Source asset does not exist: ${sourceUri}`);
-      }
-      const fileSize = fileInfo.size!;
-      if (fileSize === 0) {
-        throw new Error(`Source asset is empty: ${sourceUri}`);
-      }
-      console.log(`Source file size: ${fileSize} bytes`);
-
-      let fileBase64 = "";
-      const numberOfChunks = Math.ceil(fileSize / CHUNK_SIZE);
-      for (let i = 0; i < numberOfChunks; i++) {
-        const position = i * CHUNK_SIZE;
-        const currentChunkSize = Math.min(CHUNK_SIZE, fileSize - position);
-        let chunk = await FileSystem.readAsStringAsync(sourceUri, {
-          position,
-          length: currentChunkSize,
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        if (i < numberOfChunks - 1) {
-          chunk = chunk.replace(/=*$/, ""); // Remove padding for non-last chunks
-        }
-        fileBase64 += chunk;
-        console.log(
-          `Copied chunk ${i + 1}/${numberOfChunks} (${(((position + currentChunkSize) / fileSize) * 100).toFixed(1)}%)`
-        );
-      }
-
-      // Write the full Base64 (with largeHeap enabled, this should handle it)
-      await FileSystem.writeAsStringAsync(this.dbPath, fileBase64, {
-        encoding: FileSystem.EncodingType.Base64,
+      // Direct copy (handles large files efficiently)
+      await FileSystem.copyAsync({
+        from: sourceUri,
+        to: this.dbPath,
       });
 
-      // Verify the copy worked
+      // Verify the copy
       const copiedInfo = await FileSystem.getInfoAsync(this.dbPath);
-      if (!copiedInfo.exists) {
+      if (!copiedInfo.exists || copiedInfo.size === 0) {
         throw new Error(
-          `Chunked copy failed - file doesn't exist at ${this.dbPath}`
-        );
-      }
-      if (copiedInfo.size! !== fileSize) {
-        throw new Error(
-          `Chunked copy failed - size mismatch (expected ${fileSize}, got ${copiedInfo.size!}) at ${this.dbPath}`
+          `Copy failed - file missing or empty at ${this.dbPath}`
         );
       }
 
       console.log(
-        `Database copied successfully via chunks. Size: ${copiedInfo.size!} bytes`
+        `Database copied successfully. Size: ${copiedInfo.size} bytes`
       );
     } catch (error) {
       console.error(`Bundle copy failure for ${this.dbName}:`, {
@@ -709,50 +670,76 @@ class BibleDatabase {
     switch (this.dbName) {
       case "niv11.sqlite3":
         return require("../assets/niv11.sqlite3");
+
       case "niv11com.sqlite3":
-        return require("../assets/csb17com.sqlite3");
+        return require("../assets/niv11com.sqlite3");
+
       case "csb17.sqlite3":
-        return require("../assets/niv11.sqlite3");
+        return require("../assets/csb17.sqlite3");
+
       case "csb17com.sqlite3":
         return require("../assets/csb17com.sqlite3");
+
       case "ylt.sqlite3":
         return require("../assets/ylt.sqlite3");
+
       case "nlt15.sqlite3":
         return require("../assets/nlt15.sqlite3");
+
       case "nlt15com.sqlite3":
         return require("../assets/nlt15com.sqlite3");
+
       case "nkjv.sqlite3":
         return require("../assets/nkjv.sqlite3");
+
       case "nkjvcom.sqlite3":
         return require("../assets/nkjvcom.sqlite3");
+
       case "nasb.sqlite3":
         return require("../assets/nasb.sqlite3");
+
       case "logos.sqlite3":
         return require("../assets/logos.sqlite3");
+
       case "kj2.sqlite3":
         return require("../assets/kj2.sqlite3");
+
       case "esv.sqlite3":
         return require("../assets/esv.sqlite3");
+
+      case "esvcom.sqlite3":
+        return require("../assets/esvcom.sqlite3");
+
       case "esvgsb.sqlite3":
         return require("../assets/esvgsb.sqlite3");
+
       case "esvgsbcom.sqlite3":
         return require("../assets/esvgsbcom.sqlite3");
+
       case "iesvth.sqlite3":
         return require("../assets/iesvth.sqlite3");
+
       case "rv1895.sqlite3":
         return require("../assets/rv1895.sqlite3");
+
       case "rv1895com.sqlite3":
         return require("../assets/rv1895com.sqlite3");
+
       case "cebB.sqlite3":
         return require("../assets/cebB.sqlite3");
+
       case "hilab82.sqlite3":
         return require("../assets/hilab82.sqlite3");
+
       case "tagab01.sqlite3":
         return require("../assets/tagab01.sqlite3");
+
       case "tagmb12.sqlite3":
         return require("../assets/tagmb12.sqlite3");
+
       case "mbb05.sqlite3":
         return require("../assets/mbb05.sqlite3");
+
       default:
         throw new Error(`Database ${this.dbName} not found in assets`);
     }

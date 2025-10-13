@@ -73,15 +73,17 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     setIsInitializing(true);
     setInitializationError(null);
 
+    let db: BibleDatabase | null = null;
+
     try {
       console.log(`Initializing database: ${version}`);
 
       if (openDatabases.current.has(version)) {
-        const db = openDatabases.current.get(version)!;
+        db = openDatabases.current.get(version)!;
         setBibleDB(db);
         console.log(`Using existing database: ${version}`);
       } else {
-        const db = new BibleDatabase(version);
+        db = new BibleDatabase(version);
 
         // Add timeout to prevent hanging indefinitely
         const initPromise = db.init();
@@ -104,10 +106,13 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       console.error("Failed to initialize database:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown initialization error";
+      console.error(`Full error details:`, {
+        message: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined,
+        version,
+      });
       setInitializationError(errorMessage);
       setBibleDB(null);
-
-      // Clean up failed database
       openDatabases.current.delete(version);
       throw error;
     } finally {
