@@ -109,6 +109,433 @@ type ThemeColors = BaseThemeColors & {
   tagColor: string;
 };
 
+const bookToNumber: Record<string, number> = {
+  Genesis: 1,
+  "Gen.": 1,
+  "Ge.": 1,
+  "Gn.": 1,
+  Exodus: 2,
+  "Ex.": 2,
+  "Exod.": 2,
+  "Exo.": 2,
+  Leviticus: 3,
+  "Lev.": 3,
+  "Le.": 3,
+  "Lv.": 3,
+  Numbers: 4,
+  "Num.": 4,
+  "Nu.": 4,
+  "Nm.": 4,
+  "Nb.": 4,
+  Deuteronomy: 5,
+  "Deut.": 5,
+  "De.": 5,
+  "Dt.": 5,
+  Joshua: 6,
+  "Josh.": 6,
+  "Jos.": 6,
+  "Jsh.": 6,
+  Judges: 7,
+  "Judg.": 7,
+  "Jdg.": 7,
+  "Jg.": 7,
+  "Jdgs.": 7,
+  Ruth: 8,
+  "Rth.": 8,
+  "Ru.": 8,
+  "1 Samuel": 9,
+  "1 Sam.": 9,
+  "1 Sm.": 9,
+  "1 Sa.": 9,
+  "1 S.": 9,
+  "I Sam.": 9,
+  "I Sa.": 9,
+  "1Sam.": 9,
+  "1Sa.": 9,
+  "1S.": 9,
+  "1st Samuel": 9,
+  "1st Sam.": 9,
+  "First Samuel": 9,
+  "First Sam.": 9,
+  "2 Samuel": 10,
+  "2 Sam.": 10,
+  "2 Sm.": 10,
+  "2 Sa.": 10,
+  "2 S.": 10,
+  "II Sam.": 10,
+  "II Sa.": 10,
+  "2Sam.": 10,
+  "2Sa.": 10,
+  "2S.": 10,
+  "2nd Samuel": 10,
+  "2nd Sam.": 10,
+  "Second Samuel": 10,
+  "Second Sam.": 10,
+  "1 Kings": 11,
+  "1 Kgs": 11,
+  "1 Ki": 11,
+  "1Kgs": 11,
+  "1Kin": 11,
+  "1Ki": 11,
+  "1K": 11,
+  "I Kgs": 11,
+  "I Ki": 11,
+  "1st Kings": 11,
+  "1st Kgs": 11,
+  "First Kings": 11,
+  "First Kgs": 11,
+  "2 Kings": 12,
+  "2 Kgs.": 12,
+  "2 Ki.": 12,
+  "2Kgs.": 12,
+  "2Kin.": 12,
+  "2Ki.": 12,
+  "2K.": 12,
+  "II Kgs.": 12,
+  "II Ki.": 12,
+  "2nd Kings": 12,
+  "2nd Kgs.": 12,
+  "Second Kings": 12,
+  "Second Kgs.": 12,
+  "1 Chronicles": 13,
+  "1 Chron.": 13,
+  "1 Chr.": 13,
+  "1 Ch.": 13,
+  "1Chron.": 13,
+  "1Chr.": 13,
+  "1Ch.": 13,
+  "I Chron.": 13,
+  "I Chr.": 13,
+  "I Ch.": 13,
+  "1st Chronicles": 13,
+  "1st Chron.": 13,
+  "First Chronicles": 13,
+  "First Chron.": 13,
+  "2 Chronicles": 14,
+  "2 Chron.": 14,
+  "2 Chr.": 14,
+  "2 Ch.": 14,
+  "2Chron.": 14,
+  "2Chr.": 14,
+  "2Ch.": 14,
+  "II Chron.": 14,
+  "II Chr.": 14,
+  "II Ch.": 14,
+  "2nd Chronicles": 14,
+  "2nd Chron.": 14,
+  "Second Chronicles": 14,
+  "Second Chron.": 14,
+  Ezra: 15,
+  "Ezr.": 15,
+  "Ez.": 15,
+  Nehemiah: 16,
+  "Neh.": 16,
+  "Ne.": 16,
+  Esther: 17,
+  "Est.": 17,
+  "Esth.": 17,
+  "Es.": 17,
+  Job: 18,
+  "Jb.": 18,
+  Psalms: 19,
+  "Ps.": 19,
+  Psalm: 19,
+  "Pslm.": 19,
+  "Psa.": 19,
+  "Psm.": 19,
+  "Pss.": 19,
+  Proverbs: 20,
+  Prov: 20,
+  "Pro.": 20,
+  "Prv.": 20,
+  "Pr.": 20,
+  Ecclesiastes: 21,
+  "Eccles.": 21,
+  "Eccle.": 21,
+  "Ecc.": 21,
+  "Ec.": 21,
+  "Qoh.": 21,
+  "Song of Solomon": 22,
+  Song: 22,
+  "Song of Songs": 22,
+  "SOS.": 22,
+  "So.": 22,
+  "Canticle of Canticles": 22,
+  Canticles: 22,
+  "Cant.": 22,
+  Isaiah: 23,
+  "Isa.": 23,
+  "Is.": 23,
+  Jeremiah: 24,
+  "Jer.": 24,
+  "Je.": 24,
+  "Jr.": 24,
+  Lamentations: 25,
+  "Lam.": 25,
+  "La.": 25,
+  Ezekiel: 26,
+  "Ezek.": 26,
+  "Eze.": 26,
+  "Ezk.": 26,
+  Daniel: 27,
+  "Dan.": 27,
+  "Da.": 27,
+  "Dn.": 27,
+  Hosea: 28,
+  "Hos.": 28,
+  "Ho.": 28,
+  Joel: 29,
+  "Jl.": 29,
+  Amos: 30,
+  "Am.": 30,
+  Obadiah: 31,
+  "Obad.": 31,
+  "Ob.": 31,
+  Jonah: 32,
+  "Jnh.": 32,
+  "Jon.": 32,
+  Micah: 33,
+  "Mic.": 33,
+  "Mc.": 33,
+  Nahum: 34,
+  "Nah.": 34,
+  "Na.": 34,
+  Habakkuk: 35,
+  "Hab.": 35,
+  "Hb.": 35,
+  Zephaniah: 36,
+  "Zeph.": 36,
+  "Zep.": 36,
+  "Zp.": 36,
+  Haggai: 37,
+  "Hag.": 37,
+  "Hg.": 37,
+  Zechariah: 38,
+  "Zech.": 38,
+  "Zec.": 38,
+  "Zc.": 38,
+  Malachi: 39,
+  "Mal.": 39,
+  "Ml.": 39,
+  Matthew: 40,
+  "Matt.": 40,
+  "Mt.": 40,
+  Mark: 41,
+  Mrk: 41,
+  Mar: 41,
+  Mk: 41,
+  Mr: 41,
+  Luke: 42,
+  Luk: 42,
+  Lk: 42,
+  John: 43,
+  Joh: 43,
+  Jhn: 43,
+  Jn: 43,
+  Acts: 44,
+  Act: 44,
+  Ac: 44,
+  Romans: 45,
+  "Rom.": 45,
+  "Ro.": 45,
+  "Rm.": 45,
+  "1 Corinthians": 46,
+  "1 Cor.": 46,
+  "1 Co.": 46,
+  "I Cor.": 46,
+  "I Co.": 46,
+  "1Cor.": 46,
+  "1Co.": 46,
+  "I Corinthians": 46,
+  "1Corinthians": 46,
+  "1st Corinthians": 46,
+  "First Corinthians": 46,
+  "2 Corinthians": 47,
+  "2 Cor.": 47,
+  "2 Co.": 47,
+  "II Cor.": 47,
+  "II Co.": 47,
+  "2Cor.": 47,
+  "2Co.": 47,
+  "II Corinthians": 47,
+  "2Corinthians": 47,
+  "2nd Corinthians": 47,
+  "Second Corinthians": 47,
+  Galatians: 48,
+  "Gal.": 48,
+  "Ga.": 48,
+  Ephesians: 49,
+  "Eph.": 49,
+  "Ephes.": 49,
+  Philippians: 50,
+  "Phil.": 50,
+  "Php.": 50,
+  "Pp.": 50,
+  Colossians: 51,
+  "Col.": 51,
+  "Co.": 51,
+  "1 Thessalonians": 52,
+  "1 Thess.": 52,
+  "1 Thes.": 52,
+  "1 Th.": 52,
+  "I Thessalonians": 52,
+  "I Thess.": 52,
+  "I Thes.": 52,
+  "I Th.": 52,
+  "1Thessalonians": 52,
+  "1Thess.": 52,
+  "1Thes.": 52,
+  "1Th.": 52,
+  "1st Thessalonians": 52,
+  "1st Thess.": 52,
+  "First Thessalonians": 52,
+  "First Thess.": 52,
+  "2 Thessalonians": 53,
+  "2 Thess.": 53,
+  "2 Thes.": 53,
+  "2 Th.": 53,
+  "II Thessalonians": 53,
+  "II Thess.": 53,
+  "II Thes.": 53,
+  "II Th.": 53,
+  "2Thessalonians": 53,
+  "2Thess.": 53,
+  "2Thes.": 53,
+  "2Th.": 53,
+  "2nd Thessalonians": 53,
+  "2nd Thess.": 53,
+  "Second Thessalonians": 53,
+  "Second Thess.": 53,
+  "1 Timothy": 54,
+  "1 Tim.": 54,
+  "1 Ti.": 54,
+  "I Timothy": 54,
+  "I Tim.": 54,
+  "I Ti.": 54,
+  "1Timothy": 54,
+  "1Tim.": 54,
+  "1Ti.": 54,
+  "1st Timothy": 54,
+  "1st Tim.": 54,
+  "First Timothy": 54,
+  "First Tim.": 54,
+  "2 Timothy": 55,
+  "2 Tim.": 55,
+  "2 Ti.": 55,
+  "II Timothy": 55,
+  "II Tim.": 55,
+  "II Ti.": 55,
+  "2Timothy": 55,
+  "2Tim.": 55,
+  "2Ti.": 55,
+  "2nd Timothy": 55,
+  "2nd Tim.": 55,
+  "Second Timothy": 55,
+  "Second Tim.": 55,
+  Titus: 56,
+  Tit: 56,
+  ti: 56,
+  Philemon: 57,
+  "Philem.": 57,
+  "Phm.": 57,
+  "Pm.": 57,
+  Hebrews: 58,
+  "Heb.": 58,
+  James: 59,
+  Jas: 59,
+  Jm: 59,
+  "1 Peter": 60,
+  "1 Pet.": 60,
+  "1 Pe.": 60,
+  "1 Pt.": 60,
+  "1 P.": 60,
+  "I Pet.": 60,
+  "I Pt.": 60,
+  "I Pe.": 60,
+  "1Peter": 60,
+  "1Pet.": 60,
+  "1Pe.": 60,
+  "1Pt.": 60,
+  "1P.": 60,
+  "I Peter": 60,
+  "1st Peter": 60,
+  "First Peter": 60,
+  "2 Peter": 61,
+  "2 Pet.": 61,
+  "2 Pe.": 61,
+  "2 Pt.": 61,
+  "2 P.": 61,
+  "II Peter": 61,
+  "II Pet.": 61,
+  "II Pt.": 61,
+  "II Pe.": 61,
+  "2Peter": 61,
+  "2Pet.": 61,
+  "2Pe.": 61,
+  "2Pt.": 61,
+  "2P.": 61,
+  "2nd Peter": 61,
+  "Second Peter": 61,
+  "1 John": 62,
+  "1 Jhn.": 62,
+  "1 Jn.": 62,
+  "1 J.": 62,
+  "1John": 62,
+  "1Jhn.": 62,
+  "1Joh.": 62,
+  "1Jn.": 62,
+  "1Jo.": 62,
+  "1J.": 62,
+  "I John": 62,
+  "I Jhn.": 62,
+  "I Joh.": 62,
+  "I Jn.": 62,
+  "I Jo.": 62,
+  "1st John": 62,
+  "First John": 62,
+  "2 John": 63,
+  "2 Jhn.": 63,
+  "2 Jn.": 63,
+  "2 J.": 63,
+  "2John": 63,
+  "2Jhn.": 63,
+  "2Joh.": 63,
+  "2Jn.": 63,
+  "2Jo.": 63,
+  "2J.": 63,
+  "II John": 63,
+  "II Jhn.": 63,
+  "II Joh.": 63,
+  "II Jn.": 63,
+  "II Jo.": 63,
+  "2nd John": 63,
+  "Second John": 63,
+  "3 John": 64,
+  "3 Jhn.": 64,
+  "3 Jn.": 64,
+  "3 J.": 64,
+  "3John": 64,
+  "3Jhn.": 64,
+  "3Joh.": 64,
+  "3Jn.": 64,
+  "3Jo.": 64,
+  "3J.": 64,
+  "III John": 64,
+  "III Jhn.": 64,
+  "III Joh.": 64,
+  "III Jn.": 64,
+  "III Jo.": 64,
+  "3rd John": 64,
+  "Third John": 64,
+  Jude: 65,
+  "Jud.": 65,
+  "Jd.": 65,
+  Revelation: 66,
+  Rev: 66,
+  Re: 66,
+  "The Revelation": 66,
+};
+
 const commentaryDBMap: Record<string, string> = {
   ESVGSB: "esvgsbcom.sqlite3",
   NKJV: "nkjvcom.sqlite3",
@@ -232,63 +659,79 @@ const useCommentary = (displayVersion: string | undefined) => {
         console.log(`[Commentary] Opening DB: ${dbName}`);
         db = SQLite.openDatabaseSync(dbName, { useNewConnection: true });
 
-        // Check if the commentaries table exists (case-sensitive check)
         console.log(
-          `[Commentary] Checking for 'commentaries' table in ${dbName}`
+          `[Commentary] Searching for suitable commentary table in ${dbName}`
         );
-        const tableCheck = await db.getFirstAsync<{ name: string }>(`
+        let commentaryTable: string | null = null;
+        const requiredColumns = [
+          "book_number",
+          "chapter_number_from",
+          "verse_number_from",
+          "marker",
+          "text",
+        ];
+
+        // First, check for 'commentaries' table
+        let tableCheck = await db.getFirstAsync<{ name: string }>(`
           SELECT name FROM sqlite_master WHERE type='table' AND name='commentaries';
         `);
-
-        if (!tableCheck) {
-          console.log(
-            `[Commentary] No 'commentaries' table found in ${dbName}`
+        if (tableCheck) {
+          const cols = await db.getAllAsync<any>(
+            `PRAGMA table_info(commentaries);`
           );
+          const hasAll = requiredColumns.every((col) =>
+            cols.some((c: any) => c.name === col)
+          );
+          if (hasAll) {
+            commentaryTable = "commentaries";
+            console.log(`[Commentary] Using 'commentaries' table in ${dbName}`);
+          }
+        }
 
-          // Log all available tables for debugging
+        // If not found or doesn't have required columns, search other tables
+        if (!commentaryTable) {
           const allTables = await db.getAllAsync<{ name: string }>(`
-            SELECT name FROM sqlite_master WHERE type='table';
+            SELECT name FROM sqlite_master WHERE type='table' AND name != 'sqlite_sequence';
           `);
           console.log(
             `[Commentary] Available tables in ${dbName}:`,
             allTables.map((t) => t.name)
           );
 
-          // Check for common alternative names
-          const altChecks = [
-            "notes",
-            "crossrefs",
-            "study_notes",
-            "annotations",
-            "Commentaries",
-            "COMMENTARIES",
-          ];
-          for (const altName of altChecks) {
-            const altCheck = await db.getFirstAsync<{ name: string }>(
-              `
-              SELECT name FROM sqlite_master WHERE type='table' AND name=?;
-            `,
-              [altName]
-            );
-            if (altCheck) {
-              console.log(
-                `[Commentary] Found alternative table: '${altName}' in ${dbName}`
+          for (const t of allTables) {
+            try {
+              const cols = await db.getAllAsync<any>(
+                `PRAGMA table_info(${t.name});`
               );
+              const hasAll = requiredColumns.every((col) =>
+                cols.some((c: any) => c.name === col)
+              );
+              if (hasAll) {
+                commentaryTable = t.name;
+                console.log(
+                  `[Commentary] Found suitable table '${commentaryTable}' in ${dbName}`
+                );
+                break;
+              }
+            } catch (e) {
+              console.log(`[Commentary] Error checking table ${t.name}:`, e);
             }
           }
+        }
 
+        if (!commentaryTable) {
+          console.log(`[Commentary] No suitable table found in ${dbName}`);
           await db.closeAsync();
           db = null;
-          return `Marker: "${tagContent}" (No commentaries table in database for ${displayVersion})`;
+          return `Marker: "${tagContent}" (No suitable commentaries table in database for ${displayVersion})`;
         }
-        console.log(`[Commentary] 'commentaries' table confirmed in ${dbName}`);
 
-        // Log the schema (columns) of the commentaries table
+        // Get schema for the found table
         const columnsInfo = await db.getAllAsync<any>(
-          `PRAGMA table_info(commentaries);`
+          `PRAGMA table_info(${commentaryTable});`
         );
         console.log(
-          `[Commentary] Schema for 'commentaries' table in ${dbName}:`,
+          `[Commentary] Schema for '${commentaryTable}' table in ${dbName}:`,
           columnsInfo.map((col: any) => ({
             name: col.name,
             type: col.type,
@@ -306,21 +749,21 @@ const useCommentary = (displayVersion: string | undefined) => {
 
         // Log total row count for debugging
         const totalCount = await db.getFirstAsync<{ count: number }>(
-          `SELECT COUNT(*) as count FROM commentaries`
+          `SELECT COUNT(*) as count FROM ${commentaryTable}`
         );
         console.log(
           `[Commentary] Total commentaries in ${dbName}: ${totalCount?.count || 0}`
         );
         if (totalCount?.count === 0) {
           console.log(
-            `[Commentary] WARNING: Commentaries table is empty in ${dbName} - check file bundling/loading`
+            `[Commentary] WARNING: Commentary table is empty in ${dbName} - check file bundling/loading`
           );
           return `Marker: "${tagContent}" (Empty commentaries database for ${displayVersion})`;
         }
 
         // Check for rows matching book/chapter (ignoring verse/marker for broad check)
         const bookChapterCount = await db.getFirstAsync<{ count: number }>(
-          `SELECT COUNT(*) as count FROM commentaries WHERE book_number = ? AND chapter_number_from = ?`,
+          `SELECT COUNT(*) as count FROM ${commentaryTable} WHERE book_number = ? AND chapter_number_from = ?`,
           [verse.book_number, verse.chapter]
         );
         console.log(
@@ -334,7 +777,7 @@ const useCommentary = (displayVersion: string | undefined) => {
             `[Commentary] 'is_preceding' exists; trying query with filter (is_preceding = 0 for verse-specific)`
           );
           result = await db.getFirstAsync<{ text: string }>(
-            `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ? AND is_preceding = 0`,
+            `SELECT text FROM ${commentaryTable} WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ? AND is_preceding = 0`,
             [verse.book_number, verse.chapter, verse.verse, tagContent]
           );
           if (!result) {
@@ -342,7 +785,7 @@ const useCommentary = (displayVersion: string | undefined) => {
               `[Commentary] No result with is_preceding=0; trying without filter`
             );
             result = await db.getFirstAsync<{ text: string }>(
-              `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
+              `SELECT text FROM ${commentaryTable} WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
               [verse.book_number, verse.chapter, verse.verse, tagContent]
             );
           }
@@ -351,14 +794,14 @@ const useCommentary = (displayVersion: string | undefined) => {
               `[Commentary] No result without filter; trying is_preceding=1 (preceding note)`
             );
             result = await db.getFirstAsync<{ text: string }>(
-              `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ? AND is_preceding = 1`,
+              `SELECT text FROM ${commentaryTable} WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ? AND is_preceding = 1`,
               [verse.book_number, verse.chapter, verse.verse, tagContent]
             );
           }
         } else {
           console.log(`[Commentary] No 'is_preceding'; using standard query`);
           result = await db.getFirstAsync<{ text: string }>(
-            `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
+            `SELECT text FROM ${commentaryTable} WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
             [verse.book_number, verse.chapter, verse.verse, tagContent]
           );
         }
@@ -373,7 +816,7 @@ const useCommentary = (displayVersion: string | undefined) => {
           );
           // Try a broader query without verse/marker for debugging
           const broadResult = await db.getFirstAsync<{ text: string }>(
-            `SELECT text FROM commentaries WHERE book_number = ? AND chapter_number_from = ? LIMIT 1`,
+            `SELECT text FROM ${commentaryTable} WHERE book_number = ? AND chapter_number_from = ? LIMIT 1`,
             [verse.book_number, verse.chapter]
           );
           if (broadResult?.text) {
@@ -409,6 +852,7 @@ const useCommentary = (displayVersion: string | undefined) => {
 
   return { loadCommentaryForVerse };
 };
+
 const parseXmlTags = (text: string): any[] => {
   if (!text) return [];
 
@@ -668,6 +1112,115 @@ const renderVerseTextWithXmlHighlight = (
   }
 };
 
+// Render commentary text with clickable verse references
+const renderCommentaryWithVerseLinks = (
+  text: string,
+  themeColors: ThemeColors,
+  fontFamily: string | undefined,
+  onNavigate: (bookNum: number, chapter: number, verse: number) => void
+): React.ReactNode[] => {
+  if (!text) return [];
+
+  const bookKeys = Object.keys(bookToNumber);
+  const escapedKeys = bookKeys.map(escapeRegex);
+  const bookPattern = escapedKeys.join("|");
+  const verseRegex = new RegExp(
+    `\\b(${bookPattern})\\s+(\\d+)\\s*:\\s*(\\d+)(?:\\s*-\\s*(\\d+))?\\b`,
+    "gi"
+  );
+
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = verseRegex.exec(text)) !== null) {
+    // Add plain text before the match
+    if (match.index > lastIndex) {
+      const plainText = text.slice(lastIndex, match.index);
+      parts.push(
+        <Text
+          key={parts.length}
+          style={{
+            color: themeColors.textPrimary,
+            fontSize: 16,
+            lineHeight: 24,
+            fontFamily,
+          }}
+        >
+          {plainText}
+        </Text>
+      );
+    }
+
+    // The verse reference match
+    const bookStr = match[1];
+    const chapter = parseInt(match[2], 10);
+    const verseStart = parseInt(match[3], 10);
+    const verseEnd = match[4] ? parseInt(match[4], 10) : verseStart;
+    const refText = text.slice(match.index, verseRegex.lastIndex);
+
+    const bookNum = bookToNumber[bookStr];
+    if (bookNum !== undefined) {
+      parts.push(
+        <TouchableOpacity
+          key={parts.length}
+          onPress={() => onNavigate(bookNum, chapter, verseStart)}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={{
+              color: themeColors.primary,
+              textDecorationLine: "underline",
+              fontSize: 16,
+              lineHeight: 24,
+              fontFamily,
+            }}
+          >
+            {refText}
+          </Text>
+        </TouchableOpacity>
+      );
+    } else {
+      // Not a recognized reference, render as plain text
+      parts.push(
+        <Text
+          key={parts.length}
+          style={{
+            color: themeColors.textPrimary,
+            fontSize: 16,
+            lineHeight: 24,
+            fontFamily,
+          }}
+        >
+          {refText}
+        </Text>
+      );
+    }
+
+    lastIndex = verseRegex.lastIndex;
+  }
+
+  // Remaining plain text
+  if (lastIndex < text.length) {
+    const plainText = text.slice(lastIndex);
+    parts.push(
+      <Text
+        key={parts.length}
+        style={{
+          color: themeColors.textPrimary,
+          fontSize: 16,
+          lineHeight: 24,
+          fontFamily,
+        }}
+      >
+        {plainText}
+      </Text>
+    );
+  }
+
+  return parts;
+};
+
 // Helper function to determine text color based on background color
 const getContrastColor = (
   backgroundColor: string,
@@ -745,7 +1298,12 @@ interface ChapterViewProps {
   bookId?: number;
   isFullScreen?: boolean;
   displayVersion?: string;
-  colors?: any; // Retained for compatibility, but theme takes precedence
+  colors?: any;
+  onNavigateToVerse?: (
+    bookNumber: number,
+    chapter: number,
+    verse: number
+  ) => void;
 }
 
 export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
@@ -764,6 +1322,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   style,
   isFullScreen,
   displayVersion,
+  onNavigateToVerse,
 }) => {
   const { theme, colorScheme, fontFamily } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme);
@@ -1152,17 +1711,17 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
               <ActivityIndicator size="small" color={themeColors.primary} />
             ) : (
               <ScrollView style={{ maxHeight: 200, width: "100%" }}>
-                <Text
-                  style={{
-                    color: themeColors.textPrimary,
-                    fontSize: 16,
-                    lineHeight: 24,
-                    textAlign: "left",
-                    fontFamily: actualFontFamily,
-                  }}
-                >
-                  {commentaryText}
-                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+                  {renderCommentaryWithVerseLinks(
+                    commentaryText,
+                    themeColors,
+                    actualFontFamily,
+                    (bookNum, chapter, verse) => {
+                      setShowTagModal(false);
+                      onNavigateToVerse?.(bookNum, chapter, verse);
+                    }
+                  )}
+                </View>
               </ScrollView>
             )}
             <TouchableOpacity
