@@ -27,8 +27,12 @@ const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
 };
 
 const SettingsScreen = () => {
-  const { currentVersion, availableVersions, switchVersion, isInitializing } =
-    useBibleDatabase();
+  const {
+    currentVersion,
+    availableBibleVersions, // Changed from availableVersions
+    switchVersion,
+    isInitializing,
+  } = useBibleDatabase();
   const {
     theme,
     colorScheme,
@@ -406,7 +410,7 @@ const SettingsScreen = () => {
         <VersionSelector
           currentVersion={currentVersion}
           selectedVersion={selectedVersion}
-          availableVersions={availableVersions}
+          availableVersions={availableBibleVersions} // Changed
           onVersionSelect={handleVersionSelect}
           title=""
           description=""

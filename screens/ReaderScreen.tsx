@@ -31,7 +31,7 @@ import { useNavigationModal } from "../hooks/useNavigationModal";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
-import { RootStackParamList, Verse } from "../types";
+import { Verse } from "../types";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -49,8 +49,12 @@ export default function ReaderScreen({
     getChapterHighlights,
     loading: highlightedVersesLoading,
   } = useHighlights();
-  const { bibleDB, currentVersion, availableVersions, switchVersion } =
-    useBibleDatabase();
+  const {
+    bibleDB,
+    currentVersion,
+    availableBibleVersions, // Changed from availableVersions
+    switchVersion,
+  } = useBibleDatabase();
 
   // Hooks
   const themeColors = useThemeColors();
@@ -69,7 +73,7 @@ export default function ReaderScreen({
     scrollViewRef: primaryScrollViewRef,
     ...chapterProps
   } = chapterLoader;
-  const multiVersion = useMultiVersion(bookId, chapter, verses); // REFACTOR: Pass stable 'verses' to avoid unnecessary re-queries in multiVersion
+  const multiVersion = useMultiVersion(bookId, chapter, verses);
   const {
     showMultiVersion,
     secondaryVerses,
@@ -88,7 +92,7 @@ export default function ReaderScreen({
   const [fontSize, setFontSize] = useState(16);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
-  const [showEnd, setShowEnd] = useState(false);
+  const [_showEnd, setShowEnd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
@@ -691,7 +695,7 @@ export default function ReaderScreen({
         showMultiVersion={showMultiVersion}
         toggleMultiVersion={multiProps.toggleMultiVersion}
         currentVersion={currentVersion}
-        availableVersions={availableVersions}
+        availableBibleVersions={availableBibleVersions} // Fixed: Changed from availableVersions
         handleVersionSelect={handleVersionSelect}
         handleSecondaryVersionSelect={multiProps.handleSecondaryVersionSelect}
         secondaryVersion={multiProps.secondaryVersion}

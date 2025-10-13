@@ -24,22 +24,69 @@ class BibleDatabaseError extends Error {
   }
 }
 
+// Cache manager for better cache organization
+class DatabaseCache {
+  private queryCache = new Map<string, any>();
+  private tableExistsCache = new Map<string, boolean>();
+  private chapterCounts = new Map<number, number>();
+  private verseCounts = new Map<string, number>();
+  private statsCache?: DatabaseStats;
+
+  getQuery<T>(key: string): T | null {
+    return this.queryCache.get(key) || null;
+  }
+
+  setQuery<T>(key: string, value: T): void {
+    this.queryCache.set(key, value);
+  }
+
+  getTableExists(tableName: string): boolean | null {
+    return this.tableExistsCache.get(tableName.toLowerCase()) || null;
+  }
+
+  setTableExists(tableName: string, exists: boolean): void {
+    this.tableExistsCache.set(tableName.toLowerCase(), exists);
+  }
+
+  getChapterCount(bookNumber: number): number | null {
+    return this.chapterCounts.get(bookNumber) || null;
+  }
+
+  setChapterCount(bookNumber: number, count: number): void {
+    this.chapterCounts.set(bookNumber, count);
+  }
+
+  getVerseCount(key: string): number | null {
+    return this.verseCounts.get(key) || null;
+  }
+
+  setVerseCount(key: string, count: number): void {
+    this.verseCounts.set(key, count);
+  }
+
+  getStats(): DatabaseStats | null {
+    return this.statsCache || null;
+  }
+
+  setStats(stats: DatabaseStats): void {
+    this.statsCache = stats;
+  }
+
+  clear(): void {
+    this.queryCache.clear();
+    this.tableExistsCache.clear();
+    this.chapterCounts.clear();
+    this.verseCounts.clear();
+    this.statsCache = undefined;
+  }
+}
+
 class BibleDatabase {
-  private db: SQLite.SQLiteDatabase | null = null;
+  protected db: SQLite.SQLiteDatabase | null = null;
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
   private isClosing = false;
-
-  // REFACTOR: Simple in-memory cache for common queries (e.g., getBook, getVerses). Clear on close.
-  private queryCache = new Map<string, any>();
-  // REFACTOR: Cache for table existence checks to avoid repeated sqlite_master queries
-  private tableExistsCache = new Map<string, boolean>();
-  // REFACTOR: Cache for chapter counts (MAX chapter per book) to avoid repeated MAX queries
-  private chapterCounts = new Map<number, number>();
-  // REFACTOR: Cache for verse counts per chapter to avoid repeated COUNT queries
-  private verseCounts = new Map<string, number>();
-  // REFACTOR: Cache for database stats (computed once as data is static)
-  private statsCache?: DatabaseStats;
+  private cache = new DatabaseCache();
 
   private readonly dbName: string;
   private readonly sqliteDirectory = `${FileSystem.documentDirectory}SQLite`;
@@ -47,7 +94,7 @@ class BibleDatabase {
 
   private readonly maxRetries = 3;
   private readonly retryDelay = 1000;
-  private readonly slowQueryThreshold = 1000; // ms
+  private readonly slowQueryThreshold = 1000;
 
   private readonly migrations: DatabaseMigration[] = [
     {
@@ -67,37 +114,7 @@ class BibleDatabase {
     this.dbPath = `${this.sqliteDirectory}/${this.dbName}`;
   }
 
-  // ==================== PUBLIC METHODS ====================
-
-  async searchVerses(query: string, options?: SearchOptions): Promise<Verse[]> {
-    if (!this.db) {
-      throw new Error("Database not initialized");
-    }
-
-    let sql = `
-    SELECT v.*, b.short_name as book_name 
-    FROM verses v 
-    JOIN books b ON v.book_number = b.book_number 
-    WHERE v.text LIKE ?
-  `;
-
-    const params: any[] = [`%${query}%`];
-
-    // Add book range filter if provided
-    if (options?.bookRange) {
-      sql += ` AND v.book_number BETWEEN ? AND ?`;
-      params.push(options.bookRange.start, options.bookRange.end);
-    }
-
-    sql += ` ORDER BY v.book_number, v.chapter, v.verse`;
-
-    try {
-      return await this.db.getAllAsync<Verse>(sql, params);
-    } catch (error) {
-      console.error("Search error:", error);
-      throw error;
-    }
-  }
+  // ==================== PUBLIC INTERFACE ====================
 
   async init(): Promise<void> {
     if (this.isInitialized) return;
@@ -109,7 +126,6 @@ class BibleDatabase {
 
   async close(): Promise<void> {
     if (this.isClosing) return;
-
     this.isClosing = true;
 
     if (this.db) {
@@ -122,11 +138,7 @@ class BibleDatabase {
         this.db = null;
         this.isInitialized = false;
         this.initializationPromise = null;
-        this.queryCache.clear(); // REFACTOR: Clear cache on close
-        this.tableExistsCache.clear();
-        this.chapterCounts.clear();
-        this.verseCounts.clear();
-        this.statsCache = undefined;
+        this.cache.clear();
         this.isClosing = false;
       }
     }
@@ -140,42 +152,46 @@ class BibleDatabase {
     return this.dbName === dbName;
   }
 
-  // ==================== DATABASE OPERATIONS ====================
+  // ==================== CORE DATABASE OPERATIONS ====================
 
-  async getInfoValue(name: string): Promise<string | null> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
-      const result = await this.db!.getFirstAsync<{ value: string }>(
-        "SELECT value FROM info WHERE name = ?",
-        [name]
-      );
-      return result?.value ?? null;
-    }, `getInfoValue(${name})`);
-  }
+  async searchVerses(query: string, options?: SearchOptions): Promise<Verse[]> {
+    await this.ensureInitialized();
 
-  async getAllInfo(): Promise<DatabaseInfo[]> {
+    let sql = `
+      SELECT v.*, b.short_name as book_name 
+      FROM verses v 
+      JOIN books b ON v.book_number = b.book_number 
+      WHERE v.text LIKE ?
+    `;
+
+    const params: any[] = [`%${query}%`];
+
+    if (options?.bookRange) {
+      sql += ` AND v.book_number BETWEEN ? AND ?`;
+      params.push(options.bookRange.start, options.bookRange.end);
+    }
+
+    sql += ` ORDER BY v.book_number, v.chapter, v.verse`;
+
     return this.withRetry(async () => {
-      await this.ensureInitialized();
-      return await this.db!.getAllAsync<DatabaseInfo>(
-        "SELECT name, value FROM info ORDER BY name"
-      );
-    }, "getAllInfo");
+      return await this.db!.getAllAsync<Verse>(sql, params);
+    }, "searchVerses");
   }
 
   async getBooks(): Promise<Book[]> {
     const cacheKey = "getBooks";
-    if (this.queryCache.has(cacheKey)) return this.queryCache.get(cacheKey)!;
+    const cached = this.cache.getQuery<Book[]>(cacheKey);
+    if (cached) return cached;
 
     const books = await this.withRetry(async () => {
       await this.ensureInitialized();
       return await this.db!.getAllAsync<Book>(
         `SELECT book_number, short_name, long_name, book_color 
-         FROM books 
-         ORDER BY book_number`
+         FROM books ORDER BY book_number`
       );
     }, "getBooks");
 
-    this.queryCache.set(cacheKey, books);
+    this.cache.setQuery(cacheKey, books);
     return books;
   }
 
@@ -188,7 +204,6 @@ class BibleDatabase {
            FROM books_all ORDER BY book_number`
         );
       }
-      // fallback: map books -> books_all shape
       const books = await this.db!.getAllAsync<Book>(
         `SELECT book_number, short_name, long_name, book_color 
          FROM books ORDER BY book_number`
@@ -199,7 +214,8 @@ class BibleDatabase {
 
   async getBook(bookNumber: number): Promise<Book | null> {
     const cacheKey = `getBook:${bookNumber}`;
-    if (this.queryCache.has(cacheKey)) return this.queryCache.get(cacheKey)!;
+    const cached = this.cache.getQuery<Book>(cacheKey);
+    if (cached) return cached;
 
     const book = await this.withRetry(async () => {
       await this.ensureInitialized();
@@ -209,39 +225,28 @@ class BibleDatabase {
       );
     }, `getBook(${bookNumber})`);
 
-    if (book) this.queryCache.set(cacheKey, book);
+    if (book) this.cache.setQuery(cacheKey, book);
     return book;
   }
 
-  async getBookFromAll(bookNumber: number): Promise<Book | null> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
-      if (!(await this.tableExists("books_all"))) return null;
-      return await this.db!.getFirstAsync<Book>(
-        "SELECT * FROM books_all WHERE book_number = ?",
-        [bookNumber]
-      );
-    }, `getBookFromAll(${bookNumber})`);
-  }
-
-  // REFACTOR: Added cache for getVerses (keyed by book+chapter)
   async getVerses(bookNumber: number, chapter: number): Promise<Verse[]> {
     const cacheKey = `getVerses:${bookNumber}:${chapter}`;
-    if (this.queryCache.has(cacheKey)) return this.queryCache.get(cacheKey)!;
+    const cached = this.cache.getQuery<Verse[]>(cacheKey);
+    if (cached) return cached;
 
     const verses = await this.withRetry(async () => {
       await this.ensureInitialized();
       return await this.db!.getAllAsync<Verse>(
         `SELECT v.*, b.short_name as book_name, b.book_color 
-       FROM verses v 
-       JOIN books b ON v.book_number = b.book_number 
-       WHERE v.book_number = ? AND v.chapter = ? 
-       ORDER BY v.verse`,
+         FROM verses v 
+         JOIN books b ON v.book_number = b.book_number 
+         WHERE v.book_number = ? AND v.chapter = ? 
+         ORDER BY v.verse`,
         [bookNumber, chapter]
       );
     }, `getVerses(${bookNumber}, ${chapter})`);
 
-    this.queryCache.set(cacheKey, verses);
+    this.cache.setQuery(cacheKey, verses);
     return verses;
   }
 
@@ -262,126 +267,95 @@ class BibleDatabase {
     }, `getVerse(${bookNumber}, ${chapter}, ${verse})`);
   }
 
-  async getVerseRange(
+  // ==================== COMMENTARY OPERATIONS ====================
+
+  async getCommentary(
     bookNumber: number,
     chapter: number,
-    startVerse: number,
-    endVerse: number
-  ): Promise<Verse[]> {
+    verse: number,
+    marker: string
+  ): Promise<string | null> {
     return this.withRetry(async () => {
       await this.ensureInitialized();
-      return await this.db!.getAllAsync<Verse>(
-        `SELECT v.*, b.short_name as book_name, b.book_color 
-         FROM verses v 
-         JOIN books b ON v.book_number = b.book_number 
-         WHERE v.book_number = ? AND v.chapter = ? AND v.verse BETWEEN ? AND ? 
-         ORDER BY v.verse`,
-        [bookNumber, chapter, startVerse, endVerse]
-      );
-    }, `getVerseRange(${bookNumber}, ${chapter}, ${startVerse}-${endVerse})`);
-  }
 
-  async getStories(bookNumber: number, chapter?: number): Promise<Story[]> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
-      if (!(await this.tableExists("stories"))) return [];
-
-      if (chapter) {
-        return await this.db!.getAllAsync<Story>(
-          "SELECT * FROM stories WHERE book_number = ? AND chapter = ? ORDER BY verse, order_if_several",
-          [bookNumber, chapter]
-        );
-      } else {
-        return await this.db!.getAllAsync<Story>(
-          "SELECT * FROM stories WHERE book_number = ? ORDER BY chapter, verse, order_if_several",
-          [bookNumber]
-        );
+      if (!(await this.tableExists("commentaries"))) {
+        return null;
       }
-    }, `getStories(${bookNumber}, ${chapter})`);
+
+      const result = await this.db!.getFirstAsync<{ text: string }>(
+        `SELECT text FROM commentaries 
+         WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
+        [bookNumber, chapter, verse, marker]
+      );
+
+      return result?.text || null;
+    }, `getCommentary(${bookNumber}, ${chapter}, ${verse}, ${marker})`);
   }
 
-  async getStoryAtVerse(
+  async getAvailableCommentaryMarkers(
     bookNumber: number,
     chapter: number,
     verse: number
-  ): Promise<Story[]> {
+  ): Promise<string[]> {
     return this.withRetry(async () => {
       await this.ensureInitialized();
-      if (!(await this.tableExists("stories"))) return [];
-      return await this.db!.getAllAsync<Story>(
-        "SELECT * FROM stories WHERE book_number = ? AND chapter = ? AND verse = ? ORDER BY order_if_several",
+
+      if (!(await this.tableExists("commentaries"))) {
+        return [];
+      }
+
+      const results = await this.db!.getAllAsync<{ marker: string }>(
+        `SELECT marker FROM commentaries 
+         WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ?`,
         [bookNumber, chapter, verse]
       );
-    }, `getStoryAtVerse(${bookNumber}, ${chapter}, ${verse})`);
-  }
 
-  async getIntroduction(bookNumber: number): Promise<Introduction | null> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
-      if (!(await this.tableExists("introductions"))) return null;
-      return await this.db!.getFirstAsync<Introduction>(
-        "SELECT * FROM introductions WHERE book_number = ?",
-        [bookNumber]
-      );
-    }, `getIntroduction(${bookNumber})`);
-  }
-
-  async getAllIntroductions(): Promise<Introduction[]> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
-      if (!(await this.tableExists("introductions"))) return [];
-      return await this.db!.getAllAsync<Introduction>(
-        "SELECT * FROM introductions ORDER BY book_number"
-      );
-    }, "getAllIntroductions");
+      return results.map((r) => r.marker);
+    }, `getAvailableCommentaryMarkers(${bookNumber}, ${chapter}, ${verse})`);
   }
 
   // ==================== METADATA OPERATIONS ====================
 
-  // REFACTOR: Cached MAX chapter per book
   async getChapterCount(bookNumber: number): Promise<number> {
-    if (this.chapterCounts.has(bookNumber)) {
-      return this.chapterCounts.get(bookNumber)!;
-    }
+    const cached = this.cache.getChapterCount(bookNumber);
+    if (cached !== null) return cached;
 
-    return this.withRetry(async () => {
+    const count = await this.withRetry(async () => {
       await this.ensureInitialized();
       const result = await this.db!.getFirstAsync<{ max_chapter: number }>(
         "SELECT MAX(chapter) as max_chapter FROM verses WHERE book_number = ?",
         [bookNumber]
       );
-      const count = result?.max_chapter ?? 0;
-      this.chapterCounts.set(bookNumber, count);
-      return count;
+      return result?.max_chapter ?? 0;
     }, `getChapterCount(${bookNumber})`);
+
+    this.cache.setChapterCount(bookNumber, count);
+    return count;
   }
 
-  // REFACTOR: Cached COUNT per book+chapter
   async getVerseCount(bookNumber: number, chapter: number): Promise<number> {
     const key = `${bookNumber}:${chapter}`;
-    if (this.verseCounts.has(key)) {
-      return this.verseCounts.get(key)!;
-    }
+    const cached = this.cache.getVerseCount(key);
+    if (cached !== null) return cached;
 
-    return this.withRetry(async () => {
+    const count = await this.withRetry(async () => {
       await this.ensureInitialized();
       const result = await this.db!.getFirstAsync<{ count: number }>(
         "SELECT COUNT(*) as count FROM verses WHERE book_number = ? AND chapter = ?",
         [bookNumber, chapter]
       );
-      const count = result?.count ?? 0;
-      this.verseCounts.set(key, count);
-      return count;
+      return result?.count ?? 0;
     }, `getVerseCount(${bookNumber}, ${chapter})`);
+
+    this.cache.setVerseCount(key, count);
+    return count;
   }
 
-  // REFACTOR: Cached stats (computed once)
   async getDatabaseStats(): Promise<DatabaseStats> {
-    if (this.statsCache) {
-      return this.statsCache;
-    }
+    const cached = this.cache.getStats();
+    if (cached) return cached;
 
-    return this.withRetry(async () => {
+    const stats = await this.withRetry(async () => {
       await this.ensureInitialized();
 
       const [bookCountRow, verseCountRow] = await Promise.all([
@@ -405,17 +379,17 @@ class BibleDatabase {
           )
         : { count: 0 };
 
-      const stats: DatabaseStats = {
+      return {
         bookCount: bookCountRow?.count ?? 0,
         verseCount: verseCountRow?.count ?? 0,
         storyCount: storyCountRow?.count ?? 0,
         introductionCount: introCountRow?.count ?? 0,
         lastUpdated: new Date(),
       };
-
-      this.statsCache = stats;
-      return stats;
     }, "getDatabaseStats");
+
+    this.cache.setStats(stats);
+    return stats;
   }
 
   // ==================== PRIVATE METHODS ====================
@@ -423,19 +397,16 @@ class BibleDatabase {
   private async initializeDatabase(): Promise<void> {
     try {
       await this.setupDatabase();
-      // FIXED: Add dbLocation to match copy path
       this.db = await SQLite.openDatabaseAsync(
         this.dbName,
         undefined,
-        this.sqliteDirectory // <- This ensures it opens in /SQLite/
+        this.sqliteDirectory
       );
       await this.runMigrations();
       await this.verifyDatabase();
       this.isInitialized = true;
-      // REFACTOR: Consolidated logging (remove duplicate from provider)
       console.log(`Bible database ${this.dbName} initialized ✅`);
     } catch (error) {
-      // Enhanced logging for debugging (remove in production if needed)
       console.error(`Detailed init failure for ${this.dbName}:`, {
         error: error instanceof Error ? error.message : error,
         stack: error instanceof Error ? error.stack : undefined,
@@ -453,16 +424,16 @@ class BibleDatabase {
   private async setupDatabase(): Promise<void> {
     try {
       const fileInfo = await FileSystem.getInfoAsync(this.dbPath);
-      const rootPath = `${FileSystem.documentDirectory}${this.dbName}`; // Legacy root path
-      const rootInfo = await FileSystem.getInfoAsync(rootPath);
 
       if (!fileInfo.exists) {
+        const rootPath = `${FileSystem.documentDirectory}${this.dbName}`;
+        const rootInfo = await FileSystem.getInfoAsync(rootPath);
+
         if (rootInfo.exists && rootInfo.size! > 0) {
           console.log(
             `Migrating legacy DB from root to ${this.sqliteDirectory}`
           );
           await FileSystem.copyAsync({ from: rootPath, to: this.dbPath });
-          // Optionally: await FileSystem.deleteAsync(rootPath); // Clean up old file
         } else {
           console.log(`Copying ${this.dbName} from assets...`);
           await this.copyDatabaseFromAssets();
@@ -473,11 +444,6 @@ class BibleDatabase {
         );
       }
     } catch (error) {
-      // Enhanced logging
-      console.error(`Setup failure for ${this.dbName}:`, {
-        error: error instanceof Error ? error.message : error,
-        operation: "setupDatabase",
-      });
       throw new BibleDatabaseError(
         "Failed to setup database",
         error,
@@ -492,11 +458,6 @@ class BibleDatabase {
       await this.copyDatabaseFileFromBundle();
       console.log(`Copied ${this.dbName} successfully`);
     } catch (error) {
-      // Enhanced logging
-      console.error(`Copy failure for ${this.dbName}:`, {
-        error: error instanceof Error ? error.message : error,
-        operation: "copyDatabaseFromAssets",
-      });
       throw new BibleDatabaseError(
         "Failed to copy database from assets",
         error,
@@ -526,14 +487,8 @@ class BibleDatabase {
       }
 
       console.log(`Copying from: ${sourceUri} to: ${this.dbPath}`);
+      await FileSystem.copyAsync({ from: sourceUri, to: this.dbPath });
 
-      // Direct copy (handles large files efficiently)
-      await FileSystem.copyAsync({
-        from: sourceUri,
-        to: this.dbPath,
-      });
-
-      // Verify the copy
       const copiedInfo = await FileSystem.getInfoAsync(this.dbPath);
       if (!copiedInfo.exists || copiedInfo.size === 0) {
         throw new Error(
@@ -545,10 +500,6 @@ class BibleDatabase {
         `Database copied successfully. Size: ${copiedInfo.size} bytes`
       );
     } catch (error) {
-      console.error(`Bundle copy failure for ${this.dbName}:`, {
-        error: error instanceof Error ? error.message : error,
-        operation: "copyDatabaseFileFromBundle",
-      });
       throw new BibleDatabaseError(
         "Failed to copy database file from bundle",
         error,
@@ -597,6 +548,7 @@ class BibleDatabase {
       const pendingMigrations = this.migrations.filter(
         (m) => m.version > currentVersion
       );
+
       for (const migration of pendingMigrations) {
         try {
           await this.db.execAsync(migration.sql);
@@ -618,44 +570,10 @@ class BibleDatabase {
       throw new BibleDatabaseError("Database not open", null, "verifyDatabase");
 
     try {
-      const requiredTables = ["info", "books", "verses"];
-      const tableRows = await this.db.getAllAsync<{ name: string }>(
-        "SELECT name FROM sqlite_master WHERE type='table'"
-      );
-      const foundTables = tableRows.map((r) => r.name.toLowerCase());
-      const missingTables = requiredTables.filter(
-        (t) => !foundTables.includes(t)
-      );
-
-      if (missingTables.length)
-        throw new Error(`Missing required tables: ${missingTables.join(", ")}`);
-
-      const [bookCount, verseCount] = await Promise.all([
-        this.db.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM books"
-        ),
-        this.db.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM verses"
-        ),
-      ]);
-
-      if (!bookCount || bookCount.count === 0)
-        throw new Error("No books found in database");
-
-      // Optional: Add commentary-specific check
-      if (this.dbName.includes("com")) {
-        // For commentary DBs like esvgsbcom
-        const introCount = await this.db.getFirstAsync<{ count: number }>(
-          "SELECT COUNT(*) as count FROM introductions"
-        );
-        console.log(
-          `Commentary check for ${this.dbName}: ${introCount?.count || 0} introductions`
-        );
-        if (introCount?.count === 0) {
-          console.warn(
-            "Warning: No commentary data found - check DB integrity"
-          );
-        }
+      if (this.isCommentaryDatabase()) {
+        await this.verifyCommentaryDatabase();
+      } else {
+        await this.verifyMainDatabase();
       }
     } catch (error) {
       throw new BibleDatabaseError(
@@ -666,113 +584,116 @@ class BibleDatabase {
     }
   }
 
-  private getDatabaseAsset(): number {
-    switch (this.dbName) {
-      case "niv11.sqlite3":
-        return require("../assets/niv11.sqlite3");
+  private isCommentaryDatabase(): boolean {
+    return this.dbName.includes("com");
+  }
 
-      case "niv11com.sqlite3":
-        return require("../assets/niv11com.sqlite3");
+  private async verifyMainDatabase(): Promise<void> {
+    const requiredTables = ["info", "books", "verses"];
+    const tableRows = await this.db!.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table'"
+    );
+    const foundTables = tableRows.map((r) => r.name.toLowerCase());
+    const missingTables = requiredTables.filter(
+      (t) => !foundTables.includes(t)
+    );
 
-      case "csb17.sqlite3":
-        return require("../assets/csb17.sqlite3");
+    if (missingTables.length) {
+      throw new Error(`Missing required tables: ${missingTables.join(", ")}`);
+    }
 
-      case "csb17com.sqlite3":
-        return require("../assets/csb17com.sqlite3");
+    const [bookCount, verseCount] = await Promise.all([
+      this.db!.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM books"
+      ),
+      this.db!.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM verses"
+      ),
+    ]);
 
-      case "ylt.sqlite3":
-        return require("../assets/ylt.sqlite3");
-
-      case "nlt15.sqlite3":
-        return require("../assets/nlt15.sqlite3");
-
-      case "nlt15com.sqlite3":
-        return require("../assets/nlt15com.sqlite3");
-
-      case "nkjv.sqlite3":
-        return require("../assets/nkjv.sqlite3");
-
-      case "nkjvcom.sqlite3":
-        return require("../assets/nkjvcom.sqlite3");
-
-      case "nasb.sqlite3":
-        return require("../assets/nasb.sqlite3");
-
-      case "logos.sqlite3":
-        return require("../assets/logos.sqlite3");
-
-      case "kj2.sqlite3":
-        return require("../assets/kj2.sqlite3");
-
-      case "esv.sqlite3":
-        return require("../assets/esv.sqlite3");
-
-      case "esvcom.sqlite3":
-        return require("../assets/esvcom.sqlite3");
-
-      case "esvgsb.sqlite3":
-        return require("../assets/esvgsb.sqlite3");
-
-      case "esvgsbcom.sqlite3":
-        return require("../assets/esvgsbcom.sqlite3");
-
-      case "iesvth.sqlite3":
-        return require("../assets/iesvth.sqlite3");
-
-      case "rv1895.sqlite3":
-        return require("../assets/rv1895.sqlite3");
-
-      case "rv1895com.sqlite3":
-        return require("../assets/rv1895com.sqlite3");
-
-      case "cebB.sqlite3":
-        return require("../assets/cebB.sqlite3");
-
-      case "hilab82.sqlite3":
-        return require("../assets/hilab82.sqlite3");
-
-      case "tagab01.sqlite3":
-        return require("../assets/tagab01.sqlite3");
-
-      case "tagmb12.sqlite3":
-        return require("../assets/tagmb12.sqlite3");
-
-      case "mbb05.sqlite3":
-        return require("../assets/mbb05.sqlite3");
-
-      default:
-        throw new Error(`Database ${this.dbName} not found in assets`);
+    if (!bookCount || bookCount.count === 0) {
+      throw new Error("No books found in database");
     }
   }
 
-  private async ensureInitialized(): Promise<void> {
-    if (this.isClosing)
-      throw new BibleDatabaseError(
-        "Database is closing",
-        null,
-        "ensureInitialized"
+  private async verifyCommentaryDatabase(): Promise<void> {
+    const tableRows = await this.db!.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table'"
+    );
+    const foundTables = tableRows.map((r) => r.name.toLowerCase());
+
+    console.log(`Commentary database tables: ${foundTables.join(", ")}`);
+
+    // Check for commentaries table specifically
+    if (!foundTables.includes("commentaries")) {
+      // If no commentaries table, check if it's an empty/invalid commentary DB
+      const rowCount = await this.db!.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name != 'schema_version'`
       );
-    if (!this.isInitialized) await this.init();
+
+      if (rowCount?.count === 0) {
+        console.warn(
+          `Commentary database ${this.dbName} appears to be empty or invalid`
+        );
+        // Don't throw error - just warn and continue
+        return;
+      } else {
+        throw new Error("Commentaries table not found in commentary database");
+      }
+    }
+
+    // Verify commentaries table structure
+    const columnsInfo = await this.db!.getAllAsync<any>(
+      `PRAGMA table_info(commentaries);`
+    );
+    const columnNames = columnsInfo.map((col: any) => col.name);
+
+    console.log(`Commentaries table columns: ${columnNames.join(", ")}`);
+
+    const requiredColumns = [
+      "book_number",
+      "chapter_number_from",
+      "verse_number_from",
+      "marker",
+      "text",
+    ];
+    const missingColumns = requiredColumns.filter(
+      (col) => !columnNames.includes(col)
+    );
+
+    if (missingColumns.length > 0) {
+      throw new Error(
+        `Missing required columns in commentaries table: ${missingColumns.join(", ")}`
+      );
+    }
+
+    // Check data existence
+    const rowCount = await this.db!.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM commentaries`
+    );
+    console.log(`Commentaries table has ${rowCount?.count || 0} rows`);
+
+    if (rowCount?.count === 0) {
+      console.warn("Commentaries table is empty");
+    }
   }
 
-  // REFACTOR: Cached table existence check
   private async tableExists(tableName: string): Promise<boolean> {
-    const key = tableName.toLowerCase();
-    if (this.tableExistsCache.has(key)) {
-      return this.tableExistsCache.get(key)!;
-    }
+    const cached = this.cache.getTableExists(tableName);
+    if (cached !== null) return cached;
 
     if (!this.db) return false;
+
     try {
       const rows = await this.db.getAllAsync<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
         [tableName]
       );
       const exists = rows.length > 0;
-      this.tableExistsCache.set(key, exists);
+      this.cache.setTableExists(tableName, exists);
       return exists;
     } catch {
-      this.tableExistsCache.set(key, false);
+      this.cache.setTableExists(tableName, false);
       return false;
     }
   }
@@ -805,14 +726,82 @@ class BibleDatabase {
     try {
       const result = await operation();
       const duration = Date.now() - startTime;
-      if (duration > this.slowQueryThreshold)
+      if (duration > this.slowQueryThreshold) {
         console.warn(`Slow operation ${operationName}: ${duration}ms`);
+      }
       return result;
     } catch (error) {
       console.error(
         `Operation ${operationName} failed after ${Date.now() - startTime}ms`
       );
       throw error;
+    }
+  }
+
+  async ensureInitialized(): Promise<void> {
+    if (this.isClosing) {
+      throw new BibleDatabaseError(
+        "Database is closing",
+        null,
+        "ensureInitialized"
+      );
+    }
+    if (!this.isInitialized) await this.init();
+  }
+
+  // Keep the existing getDatabaseAsset method unchanged
+  private getDatabaseAsset(): number {
+    switch (this.dbName) {
+      case "niv11.sqlite3":
+        return require("../assets/niv11.sqlite3");
+      case "niv11com.sqlite3":
+        return require("../assets/niv11com.sqlite3");
+      case "csb17.sqlite3":
+        return require("../assets/csb17.sqlite3");
+      case "csb17com.sqlite3":
+        return require("../assets/csb17com.sqlite3");
+      case "ylt.sqlite3":
+        return require("../assets/ylt.sqlite3");
+      case "nlt15.sqlite3":
+        return require("../assets/nlt15.sqlite3");
+      case "nlt15com.sqlite3":
+        return require("../assets/nlt15com.sqlite3");
+      case "nkjv.sqlite3":
+        return require("../assets/nkjv.sqlite3");
+      case "nkjvcom.sqlite3":
+        return require("../assets/nkjvcom.sqlite3");
+      case "nasb.sqlite3":
+        return require("../assets/nasb.sqlite3");
+      case "logos.sqlite3":
+        return require("../assets/logos.sqlite3");
+      case "kj2.sqlite3":
+        return require("../assets/kj2.sqlite3");
+      case "esv.sqlite3":
+        return require("../assets/esv.sqlite3");
+      case "esvcom.sqlite3":
+        return require("../assets/esvcom.sqlite3");
+      case "esvgsb.sqlite3":
+        return require("../assets/esvgsb.sqlite3");
+      case "esvgsbcom.sqlite3":
+        return require("../assets/esvgsbcom.sqlite3");
+      case "iesvth.sqlite3":
+        return require("../assets/iesvth.sqlite3");
+      case "rv1895.sqlite3":
+        return require("../assets/rv1895.sqlite3");
+      case "rv1895com.sqlite3":
+        return require("../assets/rv1895com.sqlite3");
+      case "cebB.sqlite3":
+        return require("../assets/cebB.sqlite3");
+      case "hilab82.sqlite3":
+        return require("../assets/hilab82.sqlite3");
+      case "tagab01.sqlite3":
+        return require("../assets/tagab01.sqlite3");
+      case "tagmb12.sqlite3":
+        return require("../assets/tagmb12.sqlite3");
+      case "mbb05.sqlite3":
+        return require("../assets/mbb05.sqlite3");
+      default:
+        throw new Error(`Database ${this.dbName} not found in assets`);
     }
   }
 }

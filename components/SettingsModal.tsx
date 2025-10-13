@@ -1,12 +1,5 @@
-// Updated components/SettingsModal.tsx (remove full loader block)
 import React from "react";
-import {
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  View,
-  Text,
-} from "react-native";
+import { Modal, TouchableOpacity, ScrollView, View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { VersionSelector } from "./VersionSelector";
 
@@ -23,7 +16,7 @@ interface SettingsModalProps {
   showMultiVersion: boolean;
   toggleMultiVersion: () => void;
   currentVersion: string;
-  availableVersions: string[];
+  availableBibleVersions: string[]; // Changed from availableVersions
   handleVersionSelect: (version: string) => void;
   handleSecondaryVersionSelect: (version: string) => void;
   secondaryVersion: string | null;
@@ -43,14 +36,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   showMultiVersion,
   toggleMultiVersion,
   currentVersion,
-  availableVersions,
+  availableBibleVersions, // Changed from availableVersions
   handleVersionSelect,
   handleSecondaryVersionSelect,
   secondaryVersion,
   isSwitchingVersion,
 }) => {
-  // Removed the if (isSwitchingVersion) return loader; to keep modal open and show loading in selector
-
   return (
     <Modal
       visible={visible}
@@ -205,7 +196,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <View className="flex-1">
                   <VersionSelector
                     currentVersion={currentVersion}
-                    availableVersions={availableVersions}
+                    availableVersions={availableBibleVersions} // Changed
                     onVersionSelect={handleVersionSelect}
                     title="Primary Bible Version"
                     description="Choose your preferred Bible translation"
@@ -219,7 +210,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <VersionSelector
                     currentVersion={secondaryVersion || ""}
                     selectedVersion={secondaryVersion || ""}
-                    availableVersions={availableVersions.filter(
+                    availableVersions={availableBibleVersions.filter(
+                      // Changed
                       (v) => v !== currentVersion
                     )}
                     onVersionSelect={handleSecondaryVersionSelect}
@@ -234,7 +226,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <>
                 <VersionSelector
                   currentVersion={currentVersion}
-                  availableVersions={availableVersions}
+                  availableVersions={availableBibleVersions} // Changed
                   onVersionSelect={handleVersionSelect}
                   title="Primary Bible Version"
                   description="Choose your preferred Bible translation"
@@ -247,7 +239,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <VersionSelector
                     currentVersion={secondaryVersion || ""}
                     selectedVersion={secondaryVersion || ""}
-                    availableVersions={availableVersions.filter(
+                    availableVersions={availableBibleVersions.filter(
+                      // Changed
                       (v) => v !== currentVersion
                     )}
                     onVersionSelect={handleSecondaryVersionSelect}
