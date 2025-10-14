@@ -10,6 +10,7 @@ import {
   Modal,
   ScrollView,
   ActivityIndicator,
+  TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
@@ -22,6 +23,7 @@ import {
 import { Platform } from "react-native";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
 
 const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
@@ -226,7 +228,7 @@ const useCommentary = (displayVersion: string | undefined) => {
           return stripTags(commentaryText);
         } else {
           // Get available markers for better error message
-          const availableMarkers =
+          const availableMarkers: string[] =
             await commentaryDB.getAvailableCommentaryMarkers(
               verse.book_number,
               verse.chapter,
@@ -250,10 +252,54 @@ const useCommentary = (displayVersion: string | undefined) => {
   return { loadCommentaryForVerse };
 };
 
-const parseXmlTags = (text: string): any[] => {
+type ParsedNode = {
+  type: "text" | "opening-tag" | "closing-tag" | "self-closing-tag";
+  content?: string;
+  tag?: string;
+  fullTag?: string;
+};
+
+type TreeNode = {
+  type: "text" | "element" | "self-closing-tag";
+  content?: string;
+  tag?: string;
+  fullTag?: string;
+  children?: TreeNode[];
+};
+
+// Build a tree structure from parsed nodes to handle nesting
+const buildTree = (nodes: ParsedNode[]): TreeNode[] => {
+  const root: TreeNode[] = [];
+  let current: TreeNode[] = root;
+  const stack: TreeNode[][] = [];
+
+  for (const node of nodes) {
+    if (node.type === "opening-tag") {
+      const element: TreeNode = {
+        type: "element",
+        tag: node.tag,
+        fullTag: node.fullTag,
+        children: [],
+      };
+      current.push(element);
+      stack.push(current);
+      current = element.children!;
+    } else if (node.type === "closing-tag") {
+      if (stack.length > 0) {
+        current = stack.pop()!;
+      }
+    } else if (node.type === "self-closing-tag" || node.type === "text") {
+      current.push(node as TreeNode);
+    }
+  }
+
+  return root;
+};
+
+const parseXmlTags = (text: string): ParsedNode[] => {
   if (!text) return [];
 
-  const nodes = [];
+  const nodes: ParsedNode[] = [];
   let currentText = "";
   let i = 0;
 
@@ -302,62 +348,36 @@ const parseXmlTags = (text: string): any[] => {
   return nodes;
 };
 
-// Build a tree structure from parsed nodes to handle nesting
-const buildTree = (nodes: any[]): any[] => {
-  const stack: any[] = [];
-  const root: any[] = [];
-  let currentParent = { children: root };
-
-  for (const node of nodes) {
-    if (node.type === "opening-tag") {
-      const element = {
-        type: "element",
-        tag: node.tag,
-        fullTag: node.fullTag,
-        children: [],
-      };
-      currentParent.children.push(element);
-      stack.push(currentParent);
-      currentParent = element;
-    } else if (node.type === "closing-tag") {
-      if (stack.length > 0) {
-        currentParent = stack.pop()!;
-      }
-    } else if (node.type === "self-closing-tag") {
-      currentParent.children.push(node);
-    } else if (node.type === "text") {
-      currentParent.children.push(node);
-    }
-  }
-
-  return root;
-};
-
 // Render the tree to React elements
 const renderTree = (
-  tree: any[],
+  tree: TreeNode[],
   baseFontSize: number,
   themeColors: ThemeColors,
   highlight?: string,
   fontFamily?: string,
-  onTagPress?: (content: string) => void
+  onTagPress?: (content: string) => void,
+  textColor?: string
 ): React.ReactNode[] => {
   const elements: React.ReactNode[] = [];
   let key = 0;
 
-  const renderNode = (node: any): React.ReactNode => {
+  const renderNode = (
+    node: TreeNode,
+    overrideTextColor?: string
+  ): React.ReactNode => {
     key++;
 
     if (node.type === "text") {
       return renderTextWithHighlight(
-        node.content,
+        node.content || "",
         themeColors,
         highlight,
         `text-${key}`,
-        fontFamily
+        fontFamily,
+        overrideTextColor || textColor
       );
     } else if (node.type === "self-closing-tag") {
-      const content = extractContentFromTag(node.fullTag);
+      const content = extractContentFromTag(node.fullTag || "");
       const isNumber = /^\d+$/.test(content.trim());
       const tagContent = content.trim();
       return (
@@ -375,18 +395,21 @@ const renderTree = (
         </Text>
       );
     } else if (node.type === "element") {
-      const children = node.children.map((child: any, idx: number) =>
-        renderNode({ ...child, key: `${key}-${idx}` })
+      const ch = node.children || [];
+      const children = ch.map((child: TreeNode) =>
+        renderNode(child, themeColors.tagColor)
       );
 
       const isNumber =
         node.tag === "S" &&
-        node.children.length === 1 &&
-        node.children[0].type === "text" &&
-        /^\d+$/.test(node.children[0].content.trim());
+        ch.length === 1 &&
+        ch[0].type === "text" &&
+        /^\d+$/.test((ch[0].content || "").trim());
 
-      const tagContent = node.children
-        .map((child: any) => (child.type === "text" ? child.content : ""))
+      const tagContent = ch
+        .map((child: TreeNode) =>
+          child.type === "text" ? child.content || "" : ""
+        )
         .join("")
         .trim();
 
@@ -427,11 +450,14 @@ const renderTextWithHighlight = (
   themeColors: ThemeColors,
   highlight?: string,
   keyPrefix?: string,
-  fontFamily?: string
+  fontFamily?: string,
+  textColor?: string
 ): React.ReactNode => {
+  const innerStyle = { fontFamily, color: textColor };
+
   if (!highlight || !text)
     return (
-      <Text key={keyPrefix} style={{ fontFamily }}>
+      <Text key={keyPrefix} style={innerStyle}>
         {text}
       </Text>
     );
@@ -439,7 +465,7 @@ const renderTextWithHighlight = (
   const cleanText = text.replace(/<[^>]+>/g, "");
   if (!cleanText)
     return (
-      <Text key={keyPrefix} style={{ fontFamily }}>
+      <Text key={keyPrefix} style={innerStyle}>
         {text}
       </Text>
     );
@@ -448,17 +474,22 @@ const renderTextWithHighlight = (
   const parts = cleanText.split(regex);
 
   return (
-    <Text key={keyPrefix} style={{ fontFamily }}>
+    <Text key={keyPrefix} style={innerStyle}>
       {parts.map((part, i) =>
         part.toLowerCase() === highlight.toLowerCase() ? (
           <Text
             key={`${keyPrefix}-${i}`}
-            style={{ backgroundColor: themeColors.searchHighlightBg }}
+            style={{
+              ...innerStyle,
+              backgroundColor: themeColors.searchHighlightBg,
+            }}
           >
             {part}
           </Text>
         ) : (
-          <Text key={`${keyPrefix}-${i}`}>{part}</Text>
+          <Text key={`${keyPrefix}-${i}`} style={innerStyle}>
+            {part}
+          </Text>
         )
       )}
     </Text>
@@ -477,7 +508,8 @@ const renderVerseTextWithXmlHighlight = (
   themeColors: ThemeColors,
   highlight?: string,
   fontFamily?: string,
-  onTagPress?: (content: string) => void
+  onTagPress?: (content: string) => void,
+  textColor?: string
 ): React.ReactNode[] => {
   if (!text) return [];
 
@@ -490,7 +522,8 @@ const renderVerseTextWithXmlHighlight = (
       themeColors,
       highlight,
       fontFamily,
-      onTagPress
+      onTagPress,
+      textColor
     );
   } catch (error) {
     console.error("Error parsing XML tags:", error);
@@ -500,10 +533,38 @@ const renderVerseTextWithXmlHighlight = (
         themeColors,
         highlight,
         "fallback",
-        fontFamily
+        fontFamily,
+        textColor
       ),
     ];
   }
+};
+
+// Helper function to find book number with exact match or normalization for abbreviations and variations
+const findBookNumber = (
+  bookStr: string,
+  bookToNumber: Record<string, number>
+): number | undefined => {
+  if (!bookStr) return undefined;
+
+  // Try exact match first
+  const trimmed = bookStr.trim();
+  if (bookToNumber[trimmed]) {
+    return bookToNumber[trimmed];
+  }
+
+  // Fallback: normalize by removing non-alphanumeric, uppercase
+  const cleanQuery = trimmed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+
+  // Iterate over map keys and normalize them similarly
+  for (const [key, num] of Object.entries(bookToNumber)) {
+    const cleanKey = key.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    if (cleanQuery === cleanKey) {
+      return num;
+    }
+  }
+
+  return undefined;
 };
 
 // Render commentary text with clickable verse references
@@ -512,98 +573,238 @@ const renderCommentaryWithVerseLinks = (
   themeColors: ThemeColors,
   fontFamily: string | undefined,
   bookToNumber: Record<string, number>,
-  onNavigate: (bookNum: number, chapter: number, verse: number) => void
+  onNavigate: (
+    bookNum: number,
+    chapter: number,
+    verseStart: number,
+    verseEnd: number
+  ) => void,
+  currentBookNum?: number
 ): React.ReactNode[] => {
   if (!text) return [];
 
   const bookKeys = Object.keys(bookToNumber);
   const escapedKeys = bookKeys.map(escapeRegex);
   const bookPattern = escapedKeys.join("|");
-  const verseRegex = new RegExp(
-    `\\b(${bookPattern})\\s+(\\d+)\\s*:\\s*(\\d+)(?:\\s*-\\s*(\\d+))?\\b`,
+  const DASH_PATTERN = "[-–—]";
+
+  const fullRefRegex = new RegExp(
+    `(?:(${bookPattern})\\s+)?(\\d+)\\s*:\\s*(\\d+)(?:\\s*(?:${DASH_PATTERN}|\\bto\\b)\\s*(\\d+))?\\b`,
     "gi"
   );
 
+  const continuationRegex =
+    /[,;]\\s*(\\d+)(?:\\s*(?:${DASH_PATTERN}|\\bto\\b)\\s*(\\d+))?\\b/gi;
+
+  const chapterOnlyRegex = /(?:ch\\.|chapter)\\.\\s+(\\d+)\\b/gi;
+
+  const verseOnlyRegex =
+    /(?:v\\.|vv?\\.?|verse)s?\\s+(\\d+)(?:\\s*(?:${DASH_PATTERN}|\\bto\\b)\\s*(\\d+))?\\b/gi;
+
+  const plainStyle: TextStyle = {
+    color: themeColors.textPrimary,
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily,
+  };
+
+  const linkStyle: TextStyle = {
+    ...plainStyle,
+    color: themeColors.primary,
+    textDecorationLine: "underline",
+  };
+
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  let currentBook: number | undefined = currentBookNum;
+  let currentChapter: number | undefined = undefined;
 
-  while ((match = verseRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      const plainText = text.slice(lastIndex, match.index);
+  while (true) {
+    fullRefRegex.lastIndex = lastIndex;
+    const fullMatch = fullRefRegex.exec(text);
+    const fullPos = fullMatch ? fullMatch.index : Infinity;
+
+    continuationRegex.lastIndex = lastIndex;
+    const contMatch = continuationRegex.exec(text);
+    const contPos = contMatch ? contMatch.index : Infinity;
+
+    chapterOnlyRegex.lastIndex = lastIndex;
+    const chapMatch = chapterOnlyRegex.exec(text);
+    const chapPos = chapMatch ? chapMatch.index : Infinity;
+
+    verseOnlyRegex.lastIndex = lastIndex;
+    const verseMatch = verseOnlyRegex.exec(text);
+    const versePos = verseMatch ? verseMatch.index : Infinity;
+
+    let minPos = Infinity;
+    let selectedMatch: RegExpExecArray | null = null;
+    let matchType = "";
+
+    const candidates = [
+      { match: fullMatch, type: "full", pos: fullPos },
+      { match: contMatch, type: "cont", pos: contPos },
+      { match: chapMatch, type: "chap", pos: chapPos },
+      { match: verseMatch, type: "verse", pos: versePos },
+    ];
+
+    candidates.forEach(({ match, type, pos }) => {
+      if (pos < minPos && match !== null) {
+        minPos = pos;
+        selectedMatch = match;
+        matchType = type;
+      }
+    });
+
+    if (minPos === Infinity || selectedMatch === null) {
+      break;
+    }
+
+    const matchIndex = minPos;
+    const fullMatchStr = (selectedMatch as RegExpExecArray)[0];
+    const matchEnd = minPos + fullMatchStr.length;
+
+    // Add plain text before the match
+    if (lastIndex < matchIndex) {
       parts.push(
-        <Text
-          key={parts.length}
-          style={{
-            color: themeColors.textPrimary,
-            fontSize: 16,
-            lineHeight: 24,
-            fontFamily,
-          }}
-        >
-          {plainText}
+        <Text key={parts.length} style={plainStyle}>
+          {text.slice(lastIndex, matchIndex)}
         </Text>
       );
     }
 
-    const bookStr = match[1];
-    const chapter = parseInt(match[2], 10);
-    const verseStart = parseInt(match[3], 10);
-    const refText = text.slice(match.index, verseRegex.lastIndex);
+    if (matchType === "full") {
+      // Full reference
+      const bookStr = selectedMatch[1];
+      let bookNum = currentBook;
+      if (bookStr) {
+        bookNum = findBookNumber(bookStr, bookToNumber);
+        if (bookNum !== undefined) {
+          currentBook = bookNum;
+        }
+      }
+      const chapter = parseInt(selectedMatch[2] as string, 10);
+      const verseStart = parseInt(selectedMatch[3] as string, 10);
+      const verseEndStr = selectedMatch[4];
+      const verseEnd = verseEndStr ? parseInt(verseEndStr, 10) : verseStart;
+      const refText = fullMatchStr;
 
-    const bookNum = bookToNumber[bookStr];
-    if (bookNum !== undefined) {
-      parts.push(
-        <TouchableOpacity
-          key={parts.length}
-          onPress={() => onNavigate(bookNum, chapter, verseStart)}
-          activeOpacity={0.7}
-        >
+      if (bookNum !== undefined) {
+        currentChapter = chapter;
+        parts.push(
           <Text
-            style={{
-              color: themeColors.primary,
-              textDecorationLine: "underline",
-              fontSize: 16,
-              lineHeight: 24,
-              fontFamily,
-            }}
+            key={parts.length}
+            onPress={() => onNavigate(bookNum!, chapter, verseStart, verseEnd)}
+            style={linkStyle}
           >
             {refText}
           </Text>
-        </TouchableOpacity>
-      );
-    } else {
-      parts.push(
-        <Text
-          key={parts.length}
-          style={{
-            color: themeColors.textPrimary,
-            fontSize: 16,
-            lineHeight: 24,
-            fontFamily,
-          }}
-        >
-          {refText}
-        </Text>
-      );
+        );
+      } else {
+        parts.push(
+          <Text key={parts.length} style={plainStyle}>
+            {refText}
+          </Text>
+        );
+      }
+    } else if (matchType === "cont") {
+      // Continuation reference
+      if (currentBook !== undefined && currentChapter !== undefined) {
+        const vStartStr = selectedMatch[1] as string;
+        const vEndStr = selectedMatch[2];
+        const vStart = parseInt(vStartStr, 10);
+        const vEnd = vEndStr ? parseInt(vEndStr, 10) : vStart;
+
+        // Find the start of the verse number in the full match string
+        const rangeStartIndex = fullMatchStr.indexOf(vStartStr);
+        const prefix = fullMatchStr.slice(0, rangeStartIndex);
+        const rangeText = fullMatchStr.slice(rangeStartIndex);
+
+        if (prefix) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {prefix}
+            </Text>
+          );
+        }
+        parts.push(
+          <Text
+            key={parts.length}
+            onPress={() =>
+              onNavigate(currentBook!, currentChapter!, vStart, vEnd)
+            }
+            style={linkStyle}
+          >
+            {rangeText}
+          </Text>
+        );
+      } else {
+        // Treat as plain
+        parts.push(
+          <Text key={parts.length} style={plainStyle}>
+            {fullMatchStr}
+          </Text>
+        );
+      }
+    } else if (matchType === "chap") {
+      // Chapter only reference
+      if (currentBook !== undefined) {
+        const ch = parseInt(selectedMatch[1] as string, 10);
+        const refText = fullMatchStr;
+        parts.push(
+          <Text
+            key={parts.length}
+            onPress={() => onNavigate(currentBook!, ch, 1, 1)}
+            style={linkStyle}
+          >
+            {refText}
+          </Text>
+        );
+        currentChapter = ch;
+      } else {
+        // Treat as plain
+        parts.push(
+          <Text key={parts.length} style={plainStyle}>
+            {fullMatchStr}
+          </Text>
+        );
+      }
+    } else if (matchType === "verse") {
+      // Verse only reference
+      if (currentBook !== undefined && currentChapter !== undefined) {
+        const vStartStr = selectedMatch[1] as string;
+        const vEndStr = selectedMatch[2];
+        const vStart = parseInt(vStartStr, 10);
+        const vEnd = vEndStr ? parseInt(vEndStr, 10) : vStart;
+        const refText = fullMatchStr;
+        parts.push(
+          <Text
+            key={parts.length}
+            onPress={() =>
+              onNavigate(currentBook!, currentChapter!, vStart, vEnd)
+            }
+            style={linkStyle}
+          >
+            {refText}
+          </Text>
+        );
+      } else {
+        // Treat as plain
+        parts.push(
+          <Text key={parts.length} style={plainStyle}>
+            {fullMatchStr}
+          </Text>
+        );
+      }
     }
 
-    lastIndex = verseRegex.lastIndex;
+    lastIndex = matchEnd;
   }
 
+  // Add remaining plain text
   if (lastIndex < text.length) {
-    const plainText = text.slice(lastIndex);
     parts.push(
-      <Text
-        key={parts.length}
-        style={{
-          color: themeColors.textPrimary,
-          fontSize: 16,
-          lineHeight: 24,
-          fontFamily,
-        }}
-      >
-        {plainText}
+      <Text key={parts.length} style={plainStyle}>
+        {text.slice(lastIndex)}
       </Text>
     );
   }
@@ -707,21 +908,37 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   style,
   isFullScreen,
   displayVersion,
-  onNavigateToVerse,
 }) => {
   const { theme, colorScheme, fontFamily } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme);
   const actualFontFamily = getFontFamily(fontFamily);
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
+  const { bibleDB } = useBibleDatabase();
 
   const bookToNumber = useMemo(() => {
     const map: Record<string, number> = {};
     Object.entries(BIBLE_BOOKS_MAP).forEach(([dbNumStr, { long, short }]) => {
       const dbNum = parseInt(dbNumStr, 10);
+      // Add full name
       map[long] = dbNum;
+      // Add standard short
       map[short] = dbNum;
+      // Add additional abbreviations
+      const abbrevs = BOOK_ABBREVS[long] || [];
+      abbrevs.forEach((abb) => {
+        if (!map[abb]) {
+          map[abb] = dbNum;
+        }
+      });
     });
     return map;
+  }, []);
+
+  const getBookName = useCallback((bookNum: number) => {
+    const entry = Object.entries(BIBLE_BOOKS_MAP).find(
+      ([key, value]) => parseInt(key) === bookNum
+    );
+    return entry ? entry[1].long : "Unknown Book";
   }, []);
 
   const [showTagModal, setShowTagModal] = useState(false);
@@ -729,10 +946,26 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
   const [commentaryText, setCommentaryText] = useState("");
+  const [modalView, setModalView] = useState<"commentary" | "verse">(
+    "commentary"
+  );
+  const [currentVerseRef, setCurrentVerseRef] = useState<{
+    bookNum: number;
+    chapter: number;
+    verseStart: number;
+    verseEnd: number;
+  } | null>(null);
+  const [verseLoading, setVerseLoading] = useState(false);
+  const [verseVerses, setVerseVerses] = useState<Verse[]>([]);
 
   // Load commentary when modal opens
   useEffect(() => {
-    if (showTagModal && selectedVerse && tagContent) {
+    if (
+      showTagModal &&
+      selectedVerse &&
+      tagContent &&
+      modalView === "commentary"
+    ) {
       const load = async () => {
         setCommentaryLoading(true);
         const text = await loadCommentaryForVerse(selectedVerse, tagContent);
@@ -740,16 +973,61 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         setCommentaryLoading(false);
       };
       load();
-    } else if (showTagModal) {
+    } else if (showTagModal && modalView === "commentary") {
       setCommentaryText(`Marker: "${tagContent}"`);
       setCommentaryLoading(false);
     }
-  }, [showTagModal, selectedVerse, tagContent, loadCommentaryForVerse]);
+  }, [
+    showTagModal,
+    selectedVerse,
+    tagContent,
+    loadCommentaryForVerse,
+    modalView,
+  ]);
 
   const handleTagPress = useCallback((content: string, verse: Verse) => {
     setTagContent(content);
     setSelectedVerse(verse);
+    setModalView("commentary");
+    setCurrentVerseRef(null);
+    setVerseVerses([]);
     setShowTagModal(true);
+  }, []);
+
+  const handleVerseLinkPress = useCallback(
+    async (bookNum: number, ch: number, vStart: number, vEnd: number) => {
+      setCurrentVerseRef({
+        bookNum,
+        chapter: ch,
+        verseStart: vStart,
+        verseEnd: vEnd,
+      });
+      setVerseLoading(true);
+      setModalView("verse");
+      if (bibleDB) {
+        try {
+          const loadedVerses = await bibleDB.getVerses(bookNum, ch);
+          const targetVerses = loadedVerses.filter(
+            (verse) => verse.verse >= vStart && verse.verse <= vEnd
+          );
+          setVerseVerses(targetVerses);
+        } catch (e) {
+          console.error("Error loading verses:", e);
+          setVerseVerses([]);
+        }
+      } else {
+        setVerseVerses([]);
+      }
+      setVerseLoading(false);
+    },
+    [bibleDB]
+  );
+
+  const handleCloseModal = useCallback(() => {
+    setShowTagModal(false);
+    setModalView("commentary");
+    setCurrentVerseRef(null);
+    setVerseVerses([]);
   }, []);
 
   // Sort verses by verse number
@@ -789,6 +1067,21 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const bookColor = sortedVerses[0]?.book_color || themeColors.primary;
   const headerTextColor = getContrastColor(bookColor, themeColors);
 
+  const modalVerseTextColor =
+    theme === "dark" ? "#FFFFFF" : themeColors.textPrimary;
+
+  const commentaryModalStyle: TextStyle = {
+    color: themeColors.textPrimary,
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: actualFontFamily,
+  };
+
+  const verseModalStyle: TextStyle = {
+    ...commentaryModalStyle,
+    color: modalVerseTextColor,
+  };
+
   if (sortedVerses.length === 0) {
     return (
       <View
@@ -820,6 +1113,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const renderVerseItem = (verse: Verse) => {
     const isHighlighted =
       highlightedVerses.has(verse.verse) || verse.verse === highlightVerse;
+    const verseTextColor = isHighlighted
+      ? themeColors.highlightText
+      : themeColors.textPrimary;
 
     const localOnTagPress = useCallback(
       (content: string) => {
@@ -836,9 +1132,17 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           themeColors,
           undefined,
           actualFontFamily,
-          localOnTagPress
+          localOnTagPress,
+          verseTextColor
         ),
-      [verse.text, fontSize, themeColors, actualFontFamily, localOnTagPress]
+      [
+        verse.text,
+        fontSize,
+        themeColors,
+        actualFontFamily,
+        localOnTagPress,
+        verseTextColor,
+      ]
     );
 
     return (
@@ -912,9 +1216,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   lineHeight: fontSize * 1.4,
                   flexShrink: 1,
                   flexWrap: "wrap",
-                  color: isHighlighted
-                    ? themeColors.highlightText
-                    : themeColors.textPrimary,
+                  color: verseTextColor,
                   fontFamily: actualFontFamily,
                 }}
                 numberOfLines={0}
@@ -1058,7 +1360,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         visible={showTagModal}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowTagModal(false)}
+        onRequestClose={handleCloseModal}
       >
         <View
           style={{
@@ -1077,69 +1379,195 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
               maxHeight: "80%",
             }}
           >
-            <Text
-              style={{
-                color: themeColors.textPrimary,
-                fontSize: 18,
-                fontWeight: "bold",
-                marginBottom: 10,
-                textAlign: "center",
-                fontFamily: actualFontFamily,
-              }}
-            >
-              Commentary for marker "{tagContent}"
-            </Text>
-            {selectedVerse && (
-              <Text
-                style={{
-                  color: themeColors.textMuted,
-                  fontSize: 14,
-                  marginBottom: 10,
-                  textAlign: "center",
-                  fontFamily: actualFontFamily,
-                }}
-              >
-                {selectedVerse.book_name} {selectedVerse.chapter}:
-                {selectedVerse.verse}
-              </Text>
-            )}
-            {commentaryLoading ? (
-              <ActivityIndicator size="small" color={themeColors.primary} />
+            {modalView === "verse" && currentVerseRef ? (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={() => setModalView("commentary")}
+                    activeOpacity={0.7}
+                    style={{ padding: 5 }}
+                  >
+                    <Ionicons
+                      name="arrow-back"
+                      size={20}
+                      color={themeColors.primary}
+                    />
+                  </TouchableOpacity>
+                  <Text
+                    style={{
+                      color: themeColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: "bold",
+                      flex: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    {getBookName(currentVerseRef.bookNum)}{" "}
+                    {currentVerseRef.chapter}:{currentVerseRef.verseStart}
+                    {currentVerseRef.verseEnd !== currentVerseRef.verseStart
+                      ? `-${currentVerseRef.verseEnd}`
+                      : ""}
+                  </Text>
+                  <View style={{ width: 20 }} />
+                </View>
+                {verseLoading ? (
+                  <ActivityIndicator size="small" color={themeColors.primary} />
+                ) : (
+                  <ScrollView
+                    contentContainerStyle={{ padding: 16 }}
+                    style={{ maxHeight: 300 }}
+                  >
+                    {verseVerses.map((verse) => (
+                      <View key={verse.verse} style={{ marginBottom: 8 }}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "flex-start",
+                          }}
+                        >
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              minWidth: 20,
+                              marginRight: 2,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: "600",
+                                color: themeColors.verseNumber,
+                                fontFamily: actualFontFamily,
+                              }}
+                            >
+                              {verse.verse}
+                            </Text>
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text
+                              style={{
+                                fontSize: 16,
+                                lineHeight: 24,
+                                flexShrink: 1,
+                                flexWrap: "wrap",
+                                color: modalVerseTextColor,
+                                fontFamily: actualFontFamily,
+                              }}
+                              numberOfLines={0}
+                            >
+                              {renderVerseTextWithXmlHighlight(
+                                verse.text,
+                                16,
+                                themeColors,
+                                undefined,
+                                actualFontFamily,
+                                undefined,
+                                modalVerseTextColor
+                              )}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={{
+                    backgroundColor: themeColors.primary,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: 5,
+                    marginTop: 10,
+                    alignSelf: "center",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </>
             ) : (
-              <ScrollView style={{ maxHeight: 400 }}>
+              <>
                 <Text
                   style={{
                     color: themeColors.textPrimary,
-                    fontSize: 16,
-                    lineHeight: 24,
+                    fontSize: 18,
+                    fontWeight: "bold",
+                    marginBottom: 10,
+                    textAlign: "center",
                     fontFamily: actualFontFamily,
                   }}
                 >
-                  {commentaryText}
+                  Commentary for marker "{tagContent}"
                 </Text>
-              </ScrollView>
+                {selectedVerse && (
+                  <Text
+                    style={{
+                      color: themeColors.textMuted,
+                      fontSize: 14,
+                      marginBottom: 10,
+                      textAlign: "center",
+                      fontFamily: actualFontFamily,
+                    }}
+                  >
+                    {selectedVerse.book_name} {selectedVerse.chapter}:
+                    {selectedVerse.verse}
+                  </Text>
+                )}
+                {commentaryLoading ? (
+                  <ActivityIndicator size="small" color={themeColors.primary} />
+                ) : (
+                  <ScrollView style={{ maxHeight: 400 }}>
+                    <Text style={commentaryModalStyle}>
+                      {renderCommentaryWithVerseLinks(
+                        commentaryText,
+                        themeColors,
+                        actualFontFamily,
+                        bookToNumber,
+                        handleVerseLinkPress,
+                        selectedVerse?.book_number
+                      )}
+                    </Text>
+                  </ScrollView>
+                )}
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={{
+                    backgroundColor: themeColors.primary,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: 5,
+                    marginTop: 10,
+                    alignSelf: "center",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={{
+                      color: "#FFFFFF",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
-            <TouchableOpacity
-              onPress={() => setShowTagModal(false)}
-              style={{
-                backgroundColor: themeColors.primary,
-                paddingHorizontal: 20,
-                paddingVertical: 10,
-                borderRadius: 5,
-                marginTop: 10,
-                alignSelf: "center",
-              }}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={{
-                  color: "#FFFFFF",
-                  fontWeight: "600",
-                }}
-              >
-                Close
-              </Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>

@@ -1,6 +1,7 @@
 // utils/bibleVersionUtils.ts
 
 export const VERSION_DISPLAY_NAMES: Record<string, string> = {
+  "ampc.sqlite3": "AMPC",
   "niv11.sqlite3": "NIV11",
   "csb17.sqlite3": "CSB17",
   "ylt.sqlite3": "YLT",
@@ -21,6 +22,7 @@ export const VERSION_DISPLAY_NAMES: Record<string, string> = {
 };
 
 export const VERSION_DESCRIPTIONS: Record<string, string> = {
+  "ampc.sqlite3": "Amplified Bible Classic Edition",
   "niv11.sqlite3": "New International Version",
   "csb17.sqlite3": "Christian Standard Bible",
   "ylt.sqlite3": "Young's Literal Translation",

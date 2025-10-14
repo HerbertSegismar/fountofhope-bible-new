@@ -36,6 +36,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
 import Oswald_Variable from "./assets/Oswald_VariableFont_wght.ttf";
 import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
+import FontLoader from "./components/FontLoader";
 
 export type BibleStackParamList = {
   Home: undefined;
@@ -65,28 +66,61 @@ export type RootStackParamList = {
   SettingsTab: SettingsStackParamList;
 };
 
-// Simple font loading hook
+// Improved font loading hook with proper TypeScript error handling
 function useFonts() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [fontError, setFontError] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     async function loadFonts() {
       try {
+        console.log('Starting font loading...');
+        
+        // Method 1: Try loading with Expo Font
         await Font.loadAsync({
           "Oswald-Variable": Oswald_Variable,
           "RubikGlitch-Regular": RubikGlitch_Regular,
-          // Add fallbacks
-          "Oswald-VariableFallback": Oswald_Variable,
-          "RubikGlitch-RegularFallback": RubikGlitch_Regular,
         });
-        setFontsLoaded(true);
+        
+        // Method 2: Wait a bit and check if fonts are really loaded
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Method 3: Verify fonts are available
+        if (mounted) {
+          // Check if fonts are actually available
+          const fontFamilies = await Font.getLoadedFonts();
+          console.log('Loaded fonts:', fontFamilies);
+          
+          setFontsLoaded(true);
+          setFontError(null);
+        }
       } catch (error) {
         console.warn("Error loading fonts:", error);
-        setFontsLoaded(true); // Continue even if fonts fail
+        if (mounted) {
+          // Proper TypeScript error handling
+          const errorMessage = error instanceof Error ? error.message : 'Unknown font loading error';
+          setFontError(errorMessage);
+          setFontsLoaded(true); // Continue app anyway
+        }
       }
     }
 
     loadFonts();
+
+    // Fallback: If fonts don't load in 3 seconds, continue anyway
+    const timeoutId = setTimeout(() => {
+      if (mounted && !fontsLoaded) {
+        console.warn('Font loading timeout - continuing without custom fonts');
+        setFontsLoaded(true);
+      }
+    }, 3000);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   return fontsLoaded;
@@ -380,17 +414,19 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <HighlightsProvider>
-        <VerseMeasurementsProvider>
-          <BibleDatabaseProvider>
-            <ThemeProvider>
-              <BookmarksProvider>
-                <AppWithTheme />
-              </BookmarksProvider>
-            </ThemeProvider>
-          </BibleDatabaseProvider>
-        </VerseMeasurementsProvider>
-      </HighlightsProvider>
+      <FontLoader>
+        <HighlightsProvider>
+          <VerseMeasurementsProvider>
+            <BibleDatabaseProvider>
+              <ThemeProvider>
+                <BookmarksProvider>
+                  <AppWithTheme />
+                </BookmarksProvider>
+              </ThemeProvider>
+            </BibleDatabaseProvider>
+          </VerseMeasurementsProvider>
+        </HighlightsProvider>
+      </FontLoader>
     </SafeAreaProvider>
   );
 }

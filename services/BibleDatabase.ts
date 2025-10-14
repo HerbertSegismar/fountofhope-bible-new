@@ -752,6 +752,10 @@ class BibleDatabase {
   // Keep the existing getDatabaseAsset method unchanged
   private getDatabaseAsset(): number {
     switch (this.dbName) {
+      case "ampc.sqlite3":
+        return require("../assets/ampc.sqlite3");
+      case "ampccom.sqlite3":
+        return require("../assets/ampccom.sqlite3");
       case "niv11.sqlite3":
         return require("../assets/niv11.sqlite3");
       case "niv11com.sqlite3":

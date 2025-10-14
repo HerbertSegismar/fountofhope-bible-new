@@ -38,6 +38,7 @@ const STORAGE_KEY = "selected_bible_version";
 
 // Map main Bible versions to their commentary versions
 const BIBLE_TO_COMMENTARY_MAP: Record<string, string> = {
+  "ampc.sqlite3": "ampccom.sqlite3",
   "niv11.sqlite3": "niv11com.sqlite3",
   "csb17.sqlite3": "csb17com.sqlite3",
   "nlt15.sqlite3": "nlt15com.sqlite3",
@@ -59,6 +60,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
   // Separate arrays for better organization
   const availableBibleVersions = [
+    "ampc.sqlite3",
     "niv11.sqlite3",
     "csb17.sqlite3",
     "ylt.sqlite3",
@@ -79,6 +81,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   ];
 
   const availableCommentaryVersions = [
+    "ampccom.sqlite3",
     "niv11com.sqlite3",
     "csb17com.sqlite3",
     "nlt15com.sqlite3",
