@@ -113,6 +113,7 @@ type ThemeColors = BaseThemeColors & {
 };
 
 const commentaryDBMap: Record<string, string> = {
+  AMPC: "ampccom.sqlite3",
   ESVGSB: "esvgsbcom.sqlite3",
   NKJV: "nkjvcom.sqlite3",
   CSB17: "csb17com.sqlite3",
@@ -124,6 +125,7 @@ const commentaryDBMap: Record<string, string> = {
 
 // Reverse mapping from display names to stems (e.g., "CSB (2017)" -> "csb17")
 const DISPLAY_TO_STEM_MAP: Record<string, string> = {
+  AMPC: "ampc",
   NIV11: "niv11",
   CSB17: "csb17",
   YLT: "ylt",
@@ -396,10 +398,7 @@ const renderTree = (
       );
     } else if (node.type === "element") {
       const ch = node.children || [];
-      const children = ch.map((child: TreeNode) =>
-        renderNode(child, themeColors.tagColor)
-      );
-
+      const isTextContainer = node.tag === "t";
       const isNumber =
         node.tag === "S" &&
         ch.length === 1 &&
@@ -413,19 +412,41 @@ const renderTree = (
         .join("")
         .trim();
 
-      return (
-        <Text
-          key={`elem-${key}`}
-          onPress={() => onTagPress?.(tagContent)}
-          style={{
-            fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
-            color: themeColors.tagColor,
-            fontFamily,
-          }}
-        >
-          {children}
-        </Text>
-      );
+      if (isTextContainer) {
+        // For text containers like <t>, do not colorize plain text, render children with outer textColor
+        const children = ch.map((child: TreeNode) =>
+          renderNode(child, textColor)
+        );
+        return (
+          <Text
+            key={`elem-${key}`}
+            style={{
+              fontSize: baseFontSize * 0.95,
+              fontFamily,
+            }}
+          >
+            {children}
+          </Text>
+        );
+      } else {
+        // For marker elements, colorize and make clickable
+        const children = ch.map((child: TreeNode) =>
+          renderNode(child, themeColors.tagColor)
+        );
+        return (
+          <Text
+            key={`elem-${key}`}
+            onPress={() => onTagPress?.(tagContent)}
+            style={{
+              fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
+              color: themeColors.tagColor,
+              fontFamily,
+            }}
+          >
+            {children}
+          </Text>
+        );
+      }
     }
 
     return null;
@@ -567,6 +588,23 @@ const findBookNumber = (
   return undefined;
 };
 
+const parseVerseList = (verseStr: string): { start: number; end: number }[] => {
+  if (!verseStr) return [];
+  const parts = verseStr.split(",").map((p) => p.trim());
+  const ranges: { start: number; end: number }[] = [];
+  const rangeRegex = /(\d+)(?:\s*(?:[-–—]|\s*to\s*)\s*(\d+))?/gi;
+  parts.forEach((part) => {
+    rangeRegex.lastIndex = 0;
+    const match = rangeRegex.exec(part);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = match[2] ? parseInt(match[2], 10) : start;
+      ranges.push({ start, end });
+    }
+  });
+  return ranges;
+};
+
 // Render commentary text with clickable verse references
 const renderCommentaryWithVerseLinks = (
   text: string,
@@ -576,8 +614,7 @@ const renderCommentaryWithVerseLinks = (
   onNavigate: (
     bookNum: number,
     chapter: number,
-    verseStart: number,
-    verseEnd: number
+    ranges: { start: number; end: number }[]
   ) => void,
   currentBookNum?: number
 ): React.ReactNode[] => {
@@ -588,18 +625,22 @@ const renderCommentaryWithVerseLinks = (
   const bookPattern = escapedKeys.join("|");
   const DASH_PATTERN = "[-–—]";
 
+  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\\s*\\d+)?`;
+  const VERSE_LIST = `(${VERSE_RANGE}(?:\\s*,\\s*${VERSE_RANGE})*)`;
+
   const fullRefRegex = new RegExp(
-    `(?:(${bookPattern})\\s+)?(\\d+)\\s*:\\s*(\\d+)(?:\\s*(?:${DASH_PATTERN}|\\bto\\b)\\s*(\\d+))?\\b`,
+    `(?:(${bookPattern})\\s+)?(\\d+)\\s*:\\s*${VERSE_LIST}\\b`,
     "gi"
   );
 
-  const continuationRegex =
-    /[,;]\\s*(\\d+)(?:\\s*(?:${DASH_PATTERN}|\\bto\\b)\\s*(\\d+))?\\b/gi;
+  const continuationRegex = new RegExp(/[,;]\s*(${VERSE_LIST})\b/gi);
 
-  const chapterOnlyRegex = /(?:ch\\.|chapter)\\.\\s+(\\d+)\\b/gi;
+  const chapterOnlyRegex = /(?:ch\.|chapter)\.\s+(\d+)\b/gi;
 
-  const verseOnlyRegex =
-    /(?:v\\.|vv?\\.?|verse)s?\\s+(\\d+)(?:\\s*(?:${DASH_PATTERN}|\\bto\\b)\\s*(\\d+))?\\b/gi;
+  const verseOnlyRegex = new RegExp(
+    `(?:v\\.|vv?\\.?|verse)s?\\s+${VERSE_LIST}\\b`,
+    "gi"
+  );
 
   const plainStyle: TextStyle = {
     color: themeColors.textPrimary,
@@ -683,17 +724,16 @@ const renderCommentaryWithVerseLinks = (
         }
       }
       const chapter = parseInt(selectedMatch[2] as string, 10);
-      const verseStart = parseInt(selectedMatch[3] as string, 10);
-      const verseEndStr = selectedMatch[4];
-      const verseEnd = verseEndStr ? parseInt(verseEndStr, 10) : verseStart;
+      const verseListStr = selectedMatch[3] as string;
+      const ranges = parseVerseList(verseListStr);
       const refText = fullMatchStr;
 
-      if (bookNum !== undefined) {
+      if (bookNum !== undefined && ranges.length > 0) {
         currentChapter = chapter;
         parts.push(
           <Text
             key={parts.length}
-            onPress={() => onNavigate(bookNum!, chapter, verseStart, verseEnd)}
+            onPress={() => onNavigate(bookNum!, chapter, ranges)}
             style={linkStyle}
           >
             {refText}
@@ -709,15 +749,11 @@ const renderCommentaryWithVerseLinks = (
     } else if (matchType === "cont") {
       // Continuation reference
       if (currentBook !== undefined && currentChapter !== undefined) {
-        const vStartStr = selectedMatch[1] as string;
-        const vEndStr = selectedMatch[2];
-        const vStart = parseInt(vStartStr, 10);
-        const vEnd = vEndStr ? parseInt(vEndStr, 10) : vStart;
-
-        // Find the start of the verse number in the full match string
-        const rangeStartIndex = fullMatchStr.indexOf(vStartStr);
-        const prefix = fullMatchStr.slice(0, rangeStartIndex);
-        const rangeText = fullMatchStr.slice(rangeStartIndex);
+        const verseListStr = selectedMatch[1] as string;
+        const ranges = parseVerseList(verseListStr);
+        const prefixMatch = fullMatchStr.match(/^[,;]\s*/);
+        const prefix = prefixMatch ? prefixMatch[0] : "";
+        const rangeText = fullMatchStr.slice(prefix.length);
 
         if (prefix) {
           parts.push(
@@ -726,17 +762,23 @@ const renderCommentaryWithVerseLinks = (
             </Text>
           );
         }
-        parts.push(
-          <Text
-            key={parts.length}
-            onPress={() =>
-              onNavigate(currentBook!, currentChapter!, vStart, vEnd)
-            }
-            style={linkStyle}
-          >
-            {rangeText}
-          </Text>
-        );
+        if (ranges.length > 0) {
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={() => onNavigate(currentBook!, currentChapter!, ranges)}
+              style={linkStyle}
+            >
+              {rangeText}
+            </Text>
+          );
+        } else {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {rangeText}
+            </Text>
+          );
+        }
       } else {
         // Treat as plain
         parts.push(
@@ -753,7 +795,9 @@ const renderCommentaryWithVerseLinks = (
         parts.push(
           <Text
             key={parts.length}
-            onPress={() => onNavigate(currentBook!, ch, 1, 1)}
+            onPress={() =>
+              onNavigate(currentBook!, ch, [{ start: 1, end: 9999 }])
+            }
             style={linkStyle}
           >
             {refText}
@@ -771,22 +815,26 @@ const renderCommentaryWithVerseLinks = (
     } else if (matchType === "verse") {
       // Verse only reference
       if (currentBook !== undefined && currentChapter !== undefined) {
-        const vStartStr = selectedMatch[1] as string;
-        const vEndStr = selectedMatch[2];
-        const vStart = parseInt(vStartStr, 10);
-        const vEnd = vEndStr ? parseInt(vEndStr, 10) : vStart;
+        const verseListStr = selectedMatch[1] as string;
+        const ranges = parseVerseList(verseListStr);
         const refText = fullMatchStr;
-        parts.push(
-          <Text
-            key={parts.length}
-            onPress={() =>
-              onNavigate(currentBook!, currentChapter!, vStart, vEnd)
-            }
-            style={linkStyle}
-          >
-            {refText}
-          </Text>
-        );
+        if (ranges.length > 0) {
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={() => onNavigate(currentBook!, currentChapter!, ranges)}
+              style={linkStyle}
+            >
+              {refText}
+            </Text>
+          );
+        } else {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+        }
       } else {
         // Treat as plain
         parts.push(
@@ -952,8 +1000,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [currentVerseRef, setCurrentVerseRef] = useState<{
     bookNum: number;
     chapter: number;
-    verseStart: number;
-    verseEnd: number;
+    ranges: { start: number; end: number }[];
   } | null>(null);
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseVerses, setVerseVerses] = useState<Verse[]>([]);
@@ -995,20 +1042,23 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   }, []);
 
   const handleVerseLinkPress = useCallback(
-    async (bookNum: number, ch: number, vStart: number, vEnd: number) => {
+    async (
+      bookNum: number,
+      ch: number,
+      ranges: { start: number; end: number }[]
+    ) => {
       setCurrentVerseRef({
         bookNum,
         chapter: ch,
-        verseStart: vStart,
-        verseEnd: vEnd,
+        ranges,
       });
       setVerseLoading(true);
       setModalView("verse");
       if (bibleDB) {
         try {
           const loadedVerses = await bibleDB.getVerses(bookNum, ch);
-          const targetVerses = loadedVerses.filter(
-            (verse) => verse.verse >= vStart && verse.verse <= vEnd
+          const targetVerses = loadedVerses.filter((verse) =>
+            ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
           );
           setVerseVerses(targetVerses);
         } catch (e) {
@@ -1410,10 +1460,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     }}
                   >
                     {getBookName(currentVerseRef.bookNum)}{" "}
-                    {currentVerseRef.chapter}:{currentVerseRef.verseStart}
-                    {currentVerseRef.verseEnd !== currentVerseRef.verseStart
-                      ? `-${currentVerseRef.verseEnd}`
-                      : ""}
+                    {currentVerseRef.chapter}:
+                    {currentVerseRef.ranges
+                      .map((r) =>
+                        r.start === r.end
+                          ? r.start.toString()
+                          : `${r.start}-${r.end}`
+                      )
+                      .join(",")}
                   </Text>
                   <View style={{ width: 20 }} />
                 </View>

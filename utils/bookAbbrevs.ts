@@ -322,5 +322,5 @@ export const BOOK_ABBREVS: Record<string, string[]> = {
     "Third John",
   ],
   Jude: ["Jude", "Jud.", "Jd."],
-  Revelation: ["Rev", "Re", "The Revelation"],
+  Revelation: ["Rev", "Rev.", "Re", "The Revelation"],
 } as const;

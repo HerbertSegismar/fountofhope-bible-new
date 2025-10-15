@@ -75,7 +75,7 @@ export const colorSchemes = [
 const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
   green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#c64141ff", dark: "#d44545ff" },
+  red: { light: "#c64141", dark: "#d44545" },
   yellow: { light: "#F59E0B", dark: "#D97706" },
 };
 

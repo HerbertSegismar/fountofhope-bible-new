@@ -90,13 +90,16 @@ export default function ReaderScreen({
   );
   const { showNavigation, ...navProps } = navModal;
   const [fontSize, setFontSize] = useState(16);
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  const [uiMode, setUiMode] = useState(0);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
   const [_showEnd, setShowEnd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const isFullScreen = uiMode === 3;
+  const hideHeader = uiMode === 1 || uiMode === 2 || uiMode === 3;
+  const hideFooter = uiMode === 2 || uiMode === 3;
   const scrollSync = useScrollSync(
     showMultiVersion,
     chapterProps.scrollViewHeight,
@@ -108,7 +111,7 @@ export default function ReaderScreen({
     multiProps.secondaryVerseMeasurements,
     isLandscape,
     isFullScreen,
-    setIsFullScreen,
+    () => {}, // Placeholder, no longer used for setting full screen
     scrollThreshold,
     lastScrollYRef,
     scrollY,
@@ -243,8 +246,7 @@ export default function ReaderScreen({
       const { width, height } = Dimensions.get("window");
       const currentIsLandscape = width > height;
       setIsLandscape(currentIsLandscape);
-      if (!currentIsLandscape && isFullScreen) setIsFullScreen(false);
-    }, [isFullScreen])
+    }, [])
   );
 
   useEffect(() => {
@@ -252,12 +254,24 @@ export default function ReaderScreen({
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
       const newIsLandscape = newWidth > newHeight;
       setIsLandscape(newIsLandscape);
-      if (!newIsLandscape && isFullScreen) setIsFullScreen(false);
     };
     updateLayout();
     const subscription = Dimensions.addEventListener("change", updateLayout);
     return () => subscription?.remove();
-  }, [isFullScreen]);
+  }, []);
+
+  // Hide tab bar in full screen mode
+  useEffect(() => {
+    const parent = navigation.getParent();
+    if (parent) {
+      parent.setOptions({
+        tabBarStyle: {
+          backgroundColor: colors.primary,
+          display: isFullScreen ? "none" : "flex",
+        },
+      });
+    }
+  }, [isFullScreen, navigation, colors.primary]);
 
   const renderMultiVersionContent = () => {
     const primaryDisplay = getVersionDisplayName(currentVersion);
@@ -476,7 +490,7 @@ export default function ReaderScreen({
   return (
     <View style={{ flex: 1, backgroundColor: colors.background?.default }}>
       {/* Header */}
-      {!isFullScreen && (
+      {!hideHeader && (
         <View
           style={{
             backgroundColor: colors.primary,
@@ -496,7 +510,7 @@ export default function ReaderScreen({
               Bible Reader
             </Text>
             <View
-              className={`flex-row ${isLandscape ? "mr-40 top-2 gap-4" : "mr-0 gap-2"}`}
+              className={`flex-row mr-0 ${isLandscape ? "top-2 gap-4" : "gap-2"}`}
             >
               <TouchableOpacity onPress={toggleTheme} className="p-2">
                 <Ionicons
@@ -558,7 +572,7 @@ export default function ReaderScreen({
       )}
 
       {/* Chapter Navigation */}
-      {!isFullScreen && (
+      {!hideHeader && (
         <View
           style={{
             backgroundColor: colors.primary,
@@ -637,7 +651,7 @@ export default function ReaderScreen({
       )}
 
       {/* Font Size Controls */}
-      {!isFullScreen && (
+      {!hideHeader && (
         <View
           className="flex-row justify-between items-center px-4 py-2"
           style={{
@@ -713,7 +727,7 @@ export default function ReaderScreen({
       {renderMultiVersionContent()}
 
       {/* Quick Navigation Footer */}
-      {!isFullScreen && (
+      {!hideFooter && (
         <View
           className="flex-row justify-between items-center px-4 py-3"
           style={{
@@ -758,24 +772,22 @@ export default function ReaderScreen({
         </View>
       )}
 
-      {/* Full screen toggle button */}
-      {isLandscape && (
-        <TouchableOpacity
-          onPress={() => setIsFullScreen((prev) => !prev)}
-          className="absolute top-12 right-18 size-12 rounded-full items-center justify-center z-50"
-          style={{ backgroundColor: colors.background?.default + "80" }}
+      {/* Full screen toggle button - always visible, positioned absolutely */}
+      <TouchableOpacity
+        onPress={() => setUiMode((prev) => (prev + 1) % 4)}
+        className={`absolute ${isFullScreen ? "bottom-36" : "bottom-20"} right-6 size-12 rounded-full items-center justify-center z-50`}
+        style={{ backgroundColor: colors.primary + "33"}}
+      >
+        <Text
+          style={{
+            color: "white",
+            fontSize: 24,
+            fontWeight: "bold",
+          }}
         >
-          <Text
-            style={{
-              color: colors.text?.primary,
-              fontSize: 24,
-              fontWeight: "bold",
-            }}
-          >
-            {isFullScreen ? "◱" : "◲"}
-          </Text>
-        </TouchableOpacity>
-      )}
+          {isFullScreen ? "◱" : "◲"}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
