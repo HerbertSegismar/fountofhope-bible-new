@@ -594,63 +594,6 @@ const escapeRegex = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
-// Render definition text with colored color names (hiding hex values in parens)
-const renderDefinitionWithColors = (
-  text: string,
-  fontFamily?: string,
-  baseTextColor?: string
-): React.ReactNode => {
-  if (!text) {
-    return <Text style={{ fontFamily, color: baseTextColor }}>{text}</Text>;
-  }
-
-  const colorPattern = /([a-zA-Z]+)\s*\(\s*#([0-9a-fA-F]{6})\s*\)/gi;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let key = 0;
-
-  let match;
-  while ((match = colorPattern.exec(text)) !== null) {
-    const colorName = match[1];
-    const hex = `#${match[2]}`;
-    const matchIndex = match.index;
-    const matchEnd = colorPattern.lastIndex;
-
-    // Add plain text before the match
-    if (lastIndex < matchIndex) {
-      parts.push(
-        <Text key={`def-${key++}`} style={{ fontFamily, color: baseTextColor }}>
-          {text.slice(lastIndex, matchIndex)}
-        </Text>
-      );
-    }
-
-    // Render the color name with the hex color applied
-    parts.push(
-      <Text key={`color-${key++}`} style={{ fontFamily, color: hex }}>
-        {colorName}
-      </Text>
-    );
-
-    lastIndex = matchEnd;
-  }
-
-  // Add remaining plain text
-  if (lastIndex < text.length) {
-    parts.push(
-      <Text key={`def-${key++}`} style={{ fontFamily, color: baseTextColor }}>
-        {text.slice(lastIndex)}
-      </Text>
-    );
-  }
-
-  return parts.length > 0 ? (
-    <Text style={{ fontFamily }}>{parts}</Text>
-  ) : (
-    <Text style={{ fontFamily, color: baseTextColor }}>{text}</Text>
-  );
-};
-
 // Improved verse text rendering
 const renderVerseTextWithXmlHighlight = (
   text: string,
@@ -1727,12 +1670,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     {modalView === "commentary" &&
                     displayVersion === "NASB" &&
                     /^\d+$/.test(tagContent) ? (
-                      // Dictionary content - with colored text for color names (hiding hex)
-                      renderDefinitionWithColors(
-                        commentaryText,
-                        actualFontFamily,
-                        themeColors.textPrimary
-                      )
+                      // Dictionary content - with proper text wrapping
+                      <Text style={commentaryModalStyle}>{commentaryText}</Text>
                     ) : (
                       // Commentary content - with verse links
                       <Text style={commentaryModalStyle}>
