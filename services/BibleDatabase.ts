@@ -229,25 +229,43 @@ class BibleDatabase {
     return book;
   }
 
+  // In BibleDatabase class, update the getVerses method with better error handling
   async getVerses(bookNumber: number, chapter: number): Promise<Verse[]> {
     const cacheKey = `getVerses:${bookNumber}:${chapter}`;
     const cached = this.cache.getQuery<Verse[]>(cacheKey);
     if (cached) return cached;
 
-    const verses = await this.withRetry(async () => {
+    return this.withRetry(async () => {
       await this.ensureInitialized();
-      return await this.db!.getAllAsync<Verse>(
+
+      // Add additional validation
+      if (!this.db) {
+        throw new BibleDatabaseError(
+          "Database not available",
+          null,
+          "getVerses"
+        );
+      }
+
+      console.log(`Fetching verses for book ${bookNumber}, chapter ${chapter}`);
+
+      const verses = await this.db!.getAllAsync<Verse>(
         `SELECT v.*, b.short_name as book_name, b.book_color 
-         FROM verses v 
-         JOIN books b ON v.book_number = b.book_number 
-         WHERE v.book_number = ? AND v.chapter = ? 
-         ORDER BY v.verse`,
+       FROM verses v 
+       JOIN books b ON v.book_number = b.book_number 
+       WHERE v.book_number = ? AND v.chapter = ? 
+       ORDER BY v.verse`,
         [bookNumber, chapter]
       );
-    }, `getVerses(${bookNumber}, ${chapter})`);
 
-    this.cache.setQuery(cacheKey, verses);
-    return verses;
+      if (!verses || verses.length === 0) {
+        console.warn(
+          `No verses found for book ${bookNumber}, chapter ${chapter}`
+        );
+      }
+
+      return verses;
+    }, `getVerses(${bookNumber}, ${chapter})`);
   }
 
   async getVerse(
@@ -565,6 +583,7 @@ class BibleDatabase {
     }
   }
 
+  // In BibleDatabase class, update the verifyDatabase method
   private async verifyDatabase(): Promise<void> {
     if (!this.db)
       throw new BibleDatabaseError("Database not open", null, "verifyDatabase");
@@ -572,6 +591,8 @@ class BibleDatabase {
     try {
       if (this.isCommentaryDatabase()) {
         await this.verifyCommentaryDatabase();
+      } else if (this.isDictionaryDatabase()) {
+        await this.verifyDictionaryDatabase();
       } else {
         await this.verifyMainDatabase();
       }
@@ -581,6 +602,68 @@ class BibleDatabase {
         error,
         "verifyDatabase"
       );
+    }
+  }
+
+  // Add this method to check if it's a dictionary database
+  private isDictionaryDatabase(): boolean {
+    return this.dbName.toLowerCase().includes("dictionary");
+  }
+
+  // In BibleDatabase class, update verifyDictionaryDatabase
+  private async verifyDictionaryDatabase(): Promise<void> {
+    const tableRows = await this.db!.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table'"
+    );
+    const foundTables = tableRows.map((r) => r.name.toLowerCase());
+
+    console.log(`Dictionary database tables: ${foundTables.join(", ")}`);
+
+    // Check for dictionary table
+    if (!foundTables.includes("dictionary")) {
+      // If no dictionary table, check if it's an empty/invalid dictionary DB
+      const rowCount = await this.db!.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name != 'schema_version'`
+      );
+
+      if (rowCount?.count === 0) {
+        console.warn(
+          `Dictionary database ${this.dbName} appears to be empty or invalid`
+        );
+        // Don't throw error - just warn and continue
+        return;
+      } else {
+        throw new Error("Dictionary table not found in dictionary database");
+      }
+    }
+
+    // Verify dictionary table structure - now checking for 'topic' column
+    const columnsInfo = await this.db!.getAllAsync<any>(
+      `PRAGMA table_info(dictionary);`
+    );
+    const columnNames = columnsInfo.map((col: any) => col.name);
+
+    console.log(`Dictionary table columns: ${columnNames.join(", ")}`);
+
+    const requiredColumns = ["topic", "definition"];
+    const missingColumns = requiredColumns.filter(
+      (col) => !columnNames.includes(col)
+    );
+
+    if (missingColumns.length > 0) {
+      throw new Error(
+        `Missing required columns in dictionary table: ${missingColumns.join(", ")}`
+      );
+    }
+
+    // Check data existence
+    const rowCount = await this.db!.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM dictionary`
+    );
+    console.log(`Dictionary table has ${rowCount?.count || 0} rows`);
+
+    if (rowCount?.count === 0) {
+      console.warn("Dictionary table is empty");
     }
   }
 
@@ -749,6 +832,24 @@ class BibleDatabase {
     if (!this.isInitialized) await this.init();
   }
 
+  // In BibleDatabase class, update the getDictionaryDefinition method
+  async getDictionaryDefinition(strongNumber: string): Promise<string | null> {
+    return this.withRetry(async () => {
+      await this.ensureInitialized();
+
+      if (!(await this.tableExists("dictionary"))) {
+        return null;
+      }
+
+      const result = await this.db!.getFirstAsync<{ definition: string }>(
+        `SELECT definition FROM dictionary WHERE topic = ?`,
+        [strongNumber]
+      );
+
+      return result?.definition || null;
+    }, `getDictionaryDefinition(${strongNumber})`);
+  }
+
   // Keep the existing getDatabaseAsset method unchanged
   private getDatabaseAsset(): number {
     switch (this.dbName) {
@@ -776,6 +877,8 @@ class BibleDatabase {
         return require("../assets/nkjvcom.sqlite3");
       case "nasb.sqlite3":
         return require("../assets/nasb.sqlite3");
+      case "secedictionary.sqlite3":
+        return require("../assets/secedictionary.sqlite3");
       case "logos.sqlite3":
         return require("../assets/logos.sqlite3");
       case "kj2.sqlite3":

@@ -24,6 +24,7 @@ import { Platform } from "react-native";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
+import { getTestament, getBookInfo } from "../utils/testamentUtils";
 
 const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
@@ -176,6 +177,71 @@ const getVersionKey = (
   return stem ? stem.toUpperCase() : undefined;
 };
 
+const useDictionary = (displayVersion: string | undefined) => {
+  const { getDatabase } = useBibleDatabase();
+
+  const loadDictionaryDefinition = useCallback(
+    async (verse: Verse | null, tagContent: string): Promise<string> => {
+      if (!verse || !tagContent) {
+        return `Strong's: "${tagContent}"`;
+      }
+
+      // Check if this is NASB version
+      const versionKey = getVersionKey(displayVersion);
+      if (versionKey !== "NASB") {
+        return `Strong's: "${tagContent}" (Dictionary only available for NASB)`;
+      }
+
+      // Only handle numeric tags for Strong's numbers
+      if (!/^\d+$/.test(tagContent)) {
+        return `Strong's: "${tagContent}" (Not a valid Strong's number)`;
+      }
+
+      try {
+        // Load dictionary database
+        const dictionaryDB = getDatabase("secedictionary.sqlite3");
+        if (!dictionaryDB) {
+          return `Strong's: "${tagContent}" (Dictionary database not loaded)`;
+        }
+
+        // Determine prefix based on testament using your testamentUtils
+        const testament = getTestament(
+          verse.book_number,
+          verse.book_name || ""
+        );
+        const isNewTestament = testament === "NT";
+        const prefix = isNewTestament ? "G" : "H";
+        const strongNumber = `${prefix}${tagContent}`;
+
+        console.log(
+          `Looking up Strong's number in dictionary: ${strongNumber} for ${verse.book_name} (${testament})`
+        );
+
+        const definition =
+          await dictionaryDB.getDictionaryDefinition(strongNumber);
+
+        if (definition) {
+          // Clean up the definition text - remove HTML tags and extra whitespace but preserve line breaks
+          const cleanedDefinition = stripTags(definition)
+            .replace(/\.\s+/g, ".\n\n")
+            .trim();
+
+          return `Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"}):\n\n${cleanedDefinition}`;
+        } else {
+          console.log(`No definition found for Strong's ${strongNumber}`);
+          return `No definition found for Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"})`;
+        }
+      } catch (error) {
+        console.error(`[Dictionary] Error loading definition:`, error);
+        return `Error loading definition for Strong's "${tagContent}". Please try again.`;
+      }
+    },
+    [displayVersion, getDatabase]
+  );
+
+  return { loadDictionaryDefinition };
+};
+
 const stripTags = (text: string): string => {
   // Remove entire <script> blocks to filter out JavaScript code
   let cleaned = text.replace(
@@ -194,9 +260,9 @@ const stripTags = (text: string): string => {
   return cleaned;
 };
 
-// Updated useCommentary hook using the main BibleDatabase context
 const useCommentary = (displayVersion: string | undefined) => {
   const { getDatabase } = useBibleDatabase();
+  const { loadDictionaryDefinition } = useDictionary(displayVersion);
 
   const loadCommentaryForVerse = useCallback(
     async (verse: Verse | null, tagContent: string): Promise<string> => {
@@ -205,6 +271,13 @@ const useCommentary = (displayVersion: string | undefined) => {
       }
 
       const versionKey = getVersionKey(displayVersion);
+
+      // For NASB, check if this is a Strong's number (numeric tag)
+      if (versionKey === "NASB" && /^\d+$/.test(tagContent)) {
+        return await loadDictionaryDefinition(verse, tagContent);
+      }
+
+      // Original commentary logic for other versions
       const dbName = versionKey
         ? commentaryDBMap[versionKey as keyof typeof commentaryDBMap]
         : undefined;
@@ -229,7 +302,6 @@ const useCommentary = (displayVersion: string | undefined) => {
         if (commentaryText) {
           return stripTags(commentaryText);
         } else {
-          // Get available markers for better error message
           const availableMarkers: string[] =
             await commentaryDB.getAvailableCommentaryMarkers(
               verse.book_number,
@@ -248,7 +320,7 @@ const useCommentary = (displayVersion: string | undefined) => {
         return `Error loading commentary for marker "${tagContent}".`;
       }
     },
-    [displayVersion, getDatabase]
+    [displayVersion, getDatabase, loadDictionaryDefinition]
   );
 
   return { loadCommentaryForVerse };
@@ -520,6 +592,63 @@ const renderTextWithHighlight = (
 // Helper to escape regex special characters
 const escapeRegex = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+// Render definition text with colored color names (hiding hex values in parens)
+const renderDefinitionWithColors = (
+  text: string,
+  fontFamily?: string,
+  baseTextColor?: string
+): React.ReactNode => {
+  if (!text) {
+    return <Text style={{ fontFamily, color: baseTextColor }}>{text}</Text>;
+  }
+
+  const colorPattern = /([a-zA-Z]+)\s*\(\s*#([0-9a-fA-F]{6})\s*\)/gi;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let key = 0;
+
+  let match;
+  while ((match = colorPattern.exec(text)) !== null) {
+    const colorName = match[1];
+    const hex = `#${match[2]}`;
+    const matchIndex = match.index;
+    const matchEnd = colorPattern.lastIndex;
+
+    // Add plain text before the match
+    if (lastIndex < matchIndex) {
+      parts.push(
+        <Text key={`def-${key++}`} style={{ fontFamily, color: baseTextColor }}>
+          {text.slice(lastIndex, matchIndex)}
+        </Text>
+      );
+    }
+
+    // Render the color name with the hex color applied
+    parts.push(
+      <Text key={`color-${key++}`} style={{ fontFamily, color: hex }}>
+        {colorName}
+      </Text>
+    );
+
+    lastIndex = matchEnd;
+  }
+
+  // Add remaining plain text
+  if (lastIndex < text.length) {
+    parts.push(
+      <Text key={`def-${key++}`} style={{ fontFamily, color: baseTextColor }}>
+        {text.slice(lastIndex)}
+      </Text>
+    );
+  }
+
+  return parts.length > 0 ? (
+    <Text style={{ fontFamily }}>{parts}</Text>
+  ) : (
+    <Text style={{ fontFamily, color: baseTextColor }}>{text}</Text>
+  );
 };
 
 // Improved verse text rendering
@@ -1032,6 +1161,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     modalView,
   ]);
 
+  const testament = selectedVerse
+    ? getTestament(selectedVerse.book_number, selectedVerse.book_name || "")
+    : null;
+  const isNewTestament = testament === "NT";
+  const language = isNewTestament ? "Greek" : "Hebrew";
+
   const handleTagPress = useCallback((content: string, verse: Verse) => {
     setTagContent(content);
     setSelectedVerse(verse);
@@ -1115,7 +1250,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   // Get book color and calculate contrast text color
   const bookColor = sortedVerses[0]?.book_color || themeColors.primary;
-  const headerTextColor = getContrastColor(bookColor, themeColors);
 
   const modalVerseTextColor =
     theme === "dark" ? "#FFFFFF" : themeColors.textPrimary;
@@ -1125,11 +1259,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     fontSize: 16,
     lineHeight: 24,
     fontFamily: actualFontFamily,
-  };
-
-  const verseModalStyle: TextStyle = {
-    ...commentaryModalStyle,
-    color: modalVerseTextColor,
   };
 
   if (sortedVerses.length === 0) {
@@ -1567,7 +1696,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     fontFamily: actualFontFamily,
                   }}
                 >
-                  Commentary for marker "{tagContent}"
+                  {displayVersion === "NASB" && /^\d+$/.test(tagContent)
+                    ? `Strong's ${isNewTestament ? "G" : "H"}${tagContent} (${language})`
+                    : `Commentary for marker "${tagContent}"`}
                 </Text>
                 {selectedVerse && (
                   <Text
@@ -1581,22 +1712,40 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   >
                     {selectedVerse.book_name} {selectedVerse.chapter}:
                     {selectedVerse.verse}
+                    {displayVersion === "NASB" && /^\d+$/.test(tagContent) && (
+                      <Text> • {language}</Text>
+                    )}
                   </Text>
                 )}
                 {commentaryLoading ? (
                   <ActivityIndicator size="small" color={themeColors.primary} />
                 ) : (
-                  <ScrollView style={{ maxHeight: 400 }}>
-                    <Text style={commentaryModalStyle}>
-                      {renderCommentaryWithVerseLinks(
+                  <ScrollView
+                    style={{ maxHeight: 400 }}
+                    contentContainerStyle={{ paddingHorizontal: 8 }}
+                  >
+                    {modalView === "commentary" &&
+                    displayVersion === "NASB" &&
+                    /^\d+$/.test(tagContent) ? (
+                      // Dictionary content - with colored text for color names (hiding hex)
+                      renderDefinitionWithColors(
                         commentaryText,
-                        themeColors,
                         actualFontFamily,
-                        bookToNumber,
-                        handleVerseLinkPress,
-                        selectedVerse?.book_number
-                      )}
-                    </Text>
+                        themeColors.textPrimary
+                      )
+                    ) : (
+                      // Commentary content - with verse links
+                      <Text style={commentaryModalStyle}>
+                        {renderCommentaryWithVerseLinks(
+                          commentaryText,
+                          themeColors,
+                          actualFontFamily,
+                          bookToNumber,
+                          handleVerseLinkPress,
+                          selectedVerse?.book_number
+                        )}
+                      </Text>
+                    )}
                   </ScrollView>
                 )}
                 <TouchableOpacity

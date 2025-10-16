@@ -24,6 +24,7 @@ interface BibleDatabaseContextType {
   getDatabase: (version: string) => BibleDatabase | undefined;
   retryInitialization: () => Promise<void>;
   preloadCurrentCommentary: () => Promise<void>;
+  recoverDatabaseConnection: () => Promise<void>; // Add this line
 }
 
 const BibleDatabaseContext = createContext<
@@ -164,31 +165,71 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   }, []);
 
   // Preload only the commentary for the current main Bible version
-  const preloadCurrentCommentary = useCallback(async () => {
-    const commentaryVersion = BIBLE_TO_COMMENTARY_MAP[currentVersion];
+  const preloadCurrentCommentary = useCallback(async (version: string) => {
+    const commentaryVersion = BIBLE_TO_COMMENTARY_MAP[version];
 
-    if (!commentaryVersion) {
-      console.log(`No commentary available for ${currentVersion}`);
-      return;
+    if (commentaryVersion) {
+      // Skip if already loaded
+      if (openDatabases.current.has(commentaryVersion)) {
+        console.log(`Commentary already loaded: ${commentaryVersion}`);
+        // Still proceed to check dictionary
+      } else {
+        try {
+          console.log(`Preloading commentary: ${commentaryVersion}`);
+          const db = new BibleDatabase(commentaryVersion);
+          await db.init();
+          openDatabases.current.set(commentaryVersion, db);
+          console.log(
+            `Successfully preloaded commentary: ${commentaryVersion}`
+          );
+        } catch (error) {
+          console.warn(
+            `Failed to preload commentary ${commentaryVersion}:`,
+            error
+          );
+          // Don't throw - commentary databases are optional
+        }
+      }
+    } else {
+      console.log(`No commentary available for ${version}`);
     }
 
-    // Skip if already loaded
-    if (openDatabases.current.has(commentaryVersion)) {
-      console.log(`Commentary already loaded: ${commentaryVersion}`);
-      return;
-    }
+    if (version === "nasb.sqlite3") {
+      const dictionaryVersion = "secedictionary.sqlite3";
+      if (!openDatabases.current.has(dictionaryVersion)) {
+        try {
+          console.log(`Preloading dictionary: ${dictionaryVersion}`);
+          const db = new BibleDatabase(dictionaryVersion);
 
-    try {
-      console.log(`Preloading commentary: ${commentaryVersion}`);
-      const db = new BibleDatabase(commentaryVersion);
-      await db.init();
-      openDatabases.current.set(commentaryVersion, db);
-      console.log(`Successfully preloaded commentary: ${commentaryVersion}`);
-    } catch (error) {
-      console.warn(`Failed to preload commentary ${commentaryVersion}:`, error);
-      // Don't throw - commentary databases are optional
+          // Add timeout for dictionary loading
+          const initPromise = db.init();
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error("Dictionary loading timeout after 30s")),
+              30000
+            )
+          );
+
+          await Promise.race([initPromise, timeoutPromise]);
+          openDatabases.current.set(dictionaryVersion, db);
+          console.log(
+            `Successfully preloaded dictionary: ${dictionaryVersion}`
+          );
+        } catch (error) {
+          console.warn(
+            `Failed to preload dictionary ${dictionaryVersion}:`,
+            error
+          );
+          // Don't throw - dictionary databases are optional
+        }
+      }
     }
-  }, [currentVersion]);
+  }, []);
+
+  // Public wrapper for preloadCurrentCommentary that uses currentVersion
+  const preloadCurrentCommentaryPublic = useCallback(async () => {
+    await preloadCurrentCommentary(currentVersion);
+  }, [currentVersion, preloadCurrentCommentary]);
 
   // Retry initialization
   const retryInitialization = useCallback(async () => {
@@ -207,9 +248,14 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         setCurrentVersion(versionToLoad);
 
         // Preload current commentary in background
-        setTimeout(() => {
-          preloadCurrentCommentary();
-        }, 1000);
+        if (versionToLoad === "nasb.sqlite3") {
+          // Immediate preload for NASB to ensure dictionary is loaded without delay
+          await preloadCurrentCommentary(versionToLoad);
+        } else {
+          setTimeout(() => {
+            preloadCurrentCommentary(versionToLoad);
+          }, 1000);
+        }
       } catch (err) {
         console.error("Failed to load persisted version:", err);
         setInitializationError("Failed to load Bible database");
@@ -242,9 +288,14 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         console.log(`Successfully switched to: ${newVersion}`);
 
         // Preload commentary for the new version
-        setTimeout(() => {
-          preloadCurrentCommentary();
-        }, 500);
+        if (newVersion === "nasb.sqlite3") {
+          // Immediate preload for NASB to ensure dictionary is loaded without delay
+          await preloadCurrentCommentary(newVersion);
+        } else {
+          setTimeout(() => {
+            preloadCurrentCommentary(newVersion);
+          }, 500);
+        }
       } catch (err) {
         console.error("Failed to switch version:", err);
         await AsyncStorage.setItem(STORAGE_KEY, currentVersion);
@@ -290,6 +341,23 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     [initializeDatabase]
   );
 
+  const recoverDatabaseConnection = useCallback(async () => {
+    console.log("Attempting to recover database connection...");
+
+    // Close all existing databases
+    openDatabases.current.forEach((db, version) => {
+      try {
+        db.close();
+      } catch (error) {
+        console.error(`Error closing database ${version}:`, error);
+      }
+    });
+    openDatabases.current.clear();
+
+    // Reinitialize current version
+    await initializeDatabase(currentVersion);
+  }, [currentVersion, initializeDatabase]);
+
   const value: BibleDatabaseContextType = {
     bibleDB,
     currentVersion,
@@ -303,7 +371,8 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     searchVerses,
     getDatabase,
     retryInitialization,
-    preloadCurrentCommentary,
+    preloadCurrentCommentary: preloadCurrentCommentaryPublic,
+    recoverDatabaseConnection,
   };
 
   React.useEffect(() => {
