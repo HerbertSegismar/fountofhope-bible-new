@@ -153,14 +153,15 @@ export const useScrollSync = (
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
-      scrollY.setValue(offsetY);
+      lastPrimaryOffset.current = offsetY;
       if (isLandscape) {
         const scrollDelta = offsetY - lastScrollYRef.current;
         if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100)
           setIsFullScreen(true);
         lastScrollYRef.current = offsetY;
       }
-      lastPrimaryOffset.current = offsetY;
+      scrollY.setValue(offsetY);
+      if (isSyncing.current) return;
       if (primarySyncTimeout.current) clearTimeout(primarySyncTimeout.current);
       primarySyncTimeout.current = setTimeout(syncToSecondary, 150);
     },
@@ -179,15 +180,16 @@ export const useScrollSync = (
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
       lastSecondaryOffset.current = offsetY;
-      if (secondarySyncTimeout.current)
-        clearTimeout(secondarySyncTimeout.current);
-      secondarySyncTimeout.current = setTimeout(syncToPrimary, 150);
       if (isLandscape) {
         const scrollDelta = offsetY - lastScrollYRef.current;
         if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100)
           setIsFullScreen(true);
         lastScrollYRef.current = offsetY;
       }
+      if (isSyncing.current) return;
+      if (secondarySyncTimeout.current)
+        clearTimeout(secondarySyncTimeout.current);
+      secondarySyncTimeout.current = setTimeout(syncToPrimary, 150);
     },
     [
       isLandscape,

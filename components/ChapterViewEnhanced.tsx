@@ -177,6 +177,15 @@ const getVersionKey = (
   return stem ? stem.toUpperCase() : undefined;
 };
 
+// Get database filename from displayVersion (e.g., "ESV" -> "esv.sqlite3")
+const getDatabaseFilename = (
+  displayVersion: string | undefined
+): string | undefined => {
+  const stem = getVersionKey(displayVersion);
+  if (!stem) return undefined;
+  return `${stem.toLowerCase()}.sqlite3`;
+};
+
 const stripTags = (text: string): string => {
   // Remove entire <script> blocks to filter out JavaScript code
   let cleaned = text.replace(
@@ -1238,7 +1247,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const themeColors = getThemeColors(theme, colorScheme);
   const actualFontFamily = getFontFamily(fontFamily);
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
-  const { bibleDB } = useBibleDatabase();
+  const { bibleDB, getDatabase } = useBibleDatabase();
 
   const bookToNumber = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1495,32 +1504,44 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       };
       setModalStack((prev) => [...prev, newState]);
       setVerseLoading(true);
-      if (bibleDB) {
-        try {
-          const loadedVerses = await bibleDB.getVerses(bookNum, ch);
-          const targetVerses = loadedVerses.filter((verse) =>
-            ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
-          );
-          setVerseLoading(false);
-          setModalStack((prev) => {
-            if (prev.length === 0 || prev[prev.length - 1].view !== "verse") {
-              return prev;
+
+      let loadedVerses: Verse[] = [];
+      try {
+        // Use secondary DB if displayVersion is provided, else fallback to primary
+        if (displayVersion) {
+          const dbFilename = getDatabaseFilename(displayVersion);
+          if (dbFilename) {
+            const secondaryDB = await getDatabase(dbFilename);
+            if (secondaryDB) {
+              loadedVerses = await secondaryDB.getVerses(bookNum, ch);
+            } else {
+              console.warn(
+                `Secondary DB not available for ${displayVersion}, falling back to primary`
+              );
             }
-            const last = prev[prev.length - 1] as VerseState;
-            const newTop: VerseState = { ...last, verseVerses: targetVerses };
-            return [...prev.slice(0, -1), newTop];
-          });
-        } catch (e) {
-          console.error("Error loading verses:", e);
-          setVerseVerses([]);
-          setVerseLoading(false);
+          }
         }
-      } else {
-        setVerseVerses([]);
-        setVerseLoading(false);
+        if (loadedVerses.length === 0 && bibleDB) {
+          loadedVerses = await bibleDB.getVerses(bookNum, ch);
+        }
+      } catch (e) {
+        console.error("Error loading verses:", e);
       }
+
+      const targetVerses = loadedVerses.filter((verse) =>
+        ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
+      );
+      setVerseLoading(false);
+      setModalStack((prev) => {
+        if (prev.length === 0 || prev[prev.length - 1].view !== "verse") {
+          return prev;
+        }
+        const last = prev[prev.length - 1] as VerseState;
+        const newTop: VerseState = { ...last, verseVerses: targetVerses };
+        return [...prev.slice(0, -1), newTop];
+      });
     },
-    [bibleDB]
+    [bibleDB, getDatabase, displayVersion]
   );
 
   const handleCloseModal = useCallback(() => {
