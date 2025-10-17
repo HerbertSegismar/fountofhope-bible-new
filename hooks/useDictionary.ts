@@ -2,11 +2,8 @@
 import { useCallback } from "react";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
-import {
-  getVersionKey,
-  stripTags,
-  getTestament,
-} from "../utils/bibleDatabaseUtils";
+import { getVersionKey, stripTags } from "../utils/bibleDatabaseUtils";
+import { getTestament } from "../utils/testamentUtils";
 
 export const useDictionary = (displayVersion: string | undefined) => {
   const { getDatabase } = useBibleDatabase();

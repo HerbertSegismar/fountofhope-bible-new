@@ -25,326 +25,18 @@ import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
 import { getTestament } from "../utils/testamentUtils";
-
-const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
-  purple: { light: "#A855F7", dark: "#9333EA" },
-  green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#EF4444", dark: "#DC2626" },
-  yellow: { light: "#F59E0B", dark: "#D97706" },
-};
-
-const BASE_LIGHT_THEME_COLORS = {
-  card: "#FFFFFF",
-  background: "#FFFFFF",
-  surface: "#F8F9FA",
-  textPrimary: "#1F2937",
-  textSecondary: "#374151",
-  textMuted: "#6C757D",
-  highlightBg: "#FFF3CD",
-  highlightBorder: "#FFD700",
-  highlightText: "#8B4513",
-  highlightIcon: "#B8860B",
-  tagBg: "rgba(0,255,0,0.1)",
-  searchHighlightBg: "#FFFF99",
-  border: "#E9ECEF",
-} as const;
-
-const BASE_DARK_THEME_COLORS = {
-  card: "#111827",
-  background: "#111827",
-  surface: "#1F2937",
-  textPrimary: "#F9FAFB",
-  textSecondary: "#D1D5DB",
-  textMuted: "#9CA3AF",
-  highlightBg: "#1F2937",
-  highlightBorder: "#FCD34D",
-  highlightText: "#FECACA",
-  highlightIcon: "#FCD34D",
-  tagBg: "rgba(255,255,0.1)",
-  searchHighlightBg: "#374151",
-  border: "#374151",
-} as const;
-
-type BaseThemeColors =
-  | typeof BASE_LIGHT_THEME_COLORS
-  | typeof BASE_DARK_THEME_COLORS;
-
-const getThemeColors = (
-  theme: Theme,
-  colorScheme: ColorScheme
-): ThemeColors => {
-  const primary =
-    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
-  const baseColors =
-    theme === "dark" ? BASE_DARK_THEME_COLORS : BASE_LIGHT_THEME_COLORS;
-
-  const getLighterColor = (hex: string, amount: number = 50): string => {
-    const num = parseInt(hex.replace("#", ""), 16);
-    const amt = Math.round(2.55 * amount);
-    const R = (num >> 16) + amt;
-    const G = ((num >> 8) & 0x00ff) + amt;
-    const B = (num & 0x0000ff) + amt;
-    return (
-      "#" +
-      (
-        0x1000000 +
-        (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-        (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-        (B < 255 ? (B < 1 ? 0 : B) : 255)
-      )
-        .toString(16)
-        .slice(1)
-    );
-  };
-
-  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 40 : -10);
-
-  return {
-    ...baseColors,
-    primary,
-    verseNumber: lighterPrimary,
-    tagColor: primary,
-  } as const;
-};
-
-type ThemeColors = BaseThemeColors & {
-  primary: string;
-  verseNumber: string;
-  tagColor: string;
-};
-
-const commentaryDBMap: Record<string, string> = {
-  AMPC: "ampccom.sqlite3",
-  ESVGSB: "esvgsbcom.sqlite3",
-  NKJV: "nkjvcom.sqlite3",
-  CSB17: "csb17com.sqlite3",
-  ESV: "esvcom.sqlite3",
-  NIV11: "niv11com.sqlite3",
-  NLT15: "nlt15com.sqlite3",
-  RV1895: "rv1895com.sqlite3",
-} as const;
-
-// Reverse mapping from display names to stems (e.g., "CSB (2017)" -> "csb17")
-const DISPLAY_TO_STEM_MAP: Record<string, string> = {
-  AMPC: "ampc",
-  NIV11: "niv11",
-  CSB17: "csb17",
-  YLT: "ylt",
-  NLT15: "nlt15",
-  NKJV: "nkjv",
-  NASB: "nasb",
-  Logos: "logos",
-  KJ2: "kj2",
-  ESV: "esv",
-  ESVGSB: "esvgsb",
-  IESV: "iesvth",
-  RV1895: "rv1895",
-  CEBB: "cebB",
-  MBB05: "mbb05",
-  TAGAB01: "tagab01",
-  TAGMB12: "tagmb12",
-  HILAB82: "hilab82",
-} as const;
-
-// Normalization helper to handle displayVersion variations to map key
-const getVersionKey = (
-  displayVersion: string | undefined
-): string | undefined => {
-  if (!displayVersion) return undefined;
-
-  // First, try exact match in reverse map
-  let stem = DISPLAY_TO_STEM_MAP[displayVersion];
-  if (stem) {
-    return stem.toUpperCase();
-  }
-
-  // Fallback: Uppercase and remove year in parentheses, e.g., "CSB (2017)" -> "CSB"
-  let normalized = displayVersion
-    .toUpperCase()
-    .replace(/\s*\(\d{4}\)/g, "")
-    .trim();
-
-  // Manual mapping for common normalized forms
-  const normalizedToStem: Record<string, string> = {
-    CSB: "csb17",
-    NLT: "nlt15",
-    NIV: "niv11",
-    RV: "rv1895",
-  } as const;
-
-  const normKey = normalized.replace(/\s+/g, "");
-  stem = normalizedToStem[normKey];
-  return stem ? stem.toUpperCase() : undefined;
-};
-
-// Get database filename from displayVersion (e.g., "ESV" -> "esv.sqlite3")
-const getDatabaseFilename = (
-  displayVersion: string | undefined
-): string | undefined => {
-  const stem = getVersionKey(displayVersion);
-  if (!stem) return undefined;
-  return `${stem.toLowerCase()}.sqlite3`;
-};
-
-const stripTags = (text: string): string => {
-  // Remove entire <script> blocks to filter out JavaScript code
-  let cleaned = text.replace(
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi,
-    ""
-  );
-  // Remove other HTML tags
-  cleaned = cleaned.replace(/<[^>]*>/g, "");
-  // Filter out arrow HTML entities (e.g., &larr;, &rarr;, etc.)
-  cleaned = cleaned.replace(
-    /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
-    ""
-  );
-  // Normalize whitespace
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return cleaned;
-};
-
-const useDictionary = (displayVersion: string | undefined) => {
-  const { getDatabase } = useBibleDatabase();
-
-  const loadDictionaryDefinition = useCallback(
-    async (verse: Verse | null, tagContent: string): Promise<string> => {
-      if (!verse || !tagContent) {
-        return `Strong's: "${tagContent}"`;
-      }
-
-      // Check if this is NASB version
-      const versionKey = getVersionKey(displayVersion);
-      if (versionKey !== "NASB") {
-        return `Strong's: "${tagContent}" (Dictionary only available for NASB)`;
-      }
-
-      // Only handle numeric tags for Strong's numbers
-      if (!/^\d+$/.test(tagContent)) {
-        return `Strong's: "${tagContent}" (Not a valid Strong's number)`;
-      }
-
-      try {
-        // Load dictionary database
-        const dictionaryDB = await getDatabase("secedictionary.sqlite3");
-        if (!dictionaryDB) {
-          return `Strong's: "${tagContent}" (Dictionary database not loaded)`;
-        }
-
-        // Determine prefix based on testament using your testamentUtils
-        const testament = getTestament(
-          verse.book_number,
-          verse.book_name || ""
-        );
-        const isNewTestament = testament === "NT";
-        const prefix = isNewTestament ? "G" : "H";
-        const strongNumber = `${prefix}${tagContent}`;
-
-        console.log(
-          `Looking up Strong's number in dictionary: ${strongNumber} for ${verse.book_name} (${testament})`
-        );
-
-        const definition =
-          await dictionaryDB.getDictionaryDefinition(strongNumber);
-
-        if (definition) {
-          // Clean up the definition text - remove HTML tags and extra whitespace but preserve line breaks
-          let cleanedDefinition = stripTags(definition)
-            .replace(/\u200e/g, "") // remove LRM
-            .replace(/&#x200e;/gi, "") // remove entity if present
-            .replace(/\.\s+/g, ".\n\n")
-            .trim();
-
-          cleanedDefinition = cleanedDefinition.replace(
-            /LN:\s*\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*\s*(?:;)?\s*(?=[A-Za-z]|$)/gi,
-            ""
-          );
-
-          cleanedDefinition = cleanedDefinition
-            .replace(/([a-zA-Z])(KJV)/gi, "$1 KJV")
-            .replace(/([a-zA-Z])(Derivation)/gi, "$1 Derivation");
-
-          return `Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"}):\n\n${cleanedDefinition}`;
-        } else {
-          console.log(`No definition found for Strong's ${strongNumber}`);
-          return `No definition found for Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"})`;
-        }
-      } catch (error) {
-        console.error(`[Dictionary] Error loading definition:`, error);
-        return `Error loading definition for Strong's "${tagContent}". Please try again.`;
-      }
-    },
-    [displayVersion, getDatabase]
-  );
-
-  return { loadDictionaryDefinition };
-};
-
-const useCommentary = (displayVersion: string | undefined) => {
-  const { getDatabase } = useBibleDatabase();
-  const { loadDictionaryDefinition } = useDictionary(displayVersion);
-
-  const loadCommentaryForVerse = useCallback(
-    async (verse: Verse | null, tagContent: string): Promise<string> => {
-      if (!verse || !tagContent) {
-        return `Marker: "${tagContent}"`;
-      }
-
-      const versionKey = getVersionKey(displayVersion);
-
-      // For NASB, check if this is a Strong's number (numeric tag)
-      if (versionKey === "NASB" && /^\d+$/.test(tagContent)) {
-        return await loadDictionaryDefinition(verse, tagContent);
-      }
-
-      // Original commentary logic for other versions
-      const dbName = versionKey
-        ? commentaryDBMap[versionKey as keyof typeof commentaryDBMap]
-        : undefined;
-
-      if (!dbName) {
-        return `Marker: "${tagContent}" (Commentary not available for ${displayVersion})`;
-      }
-
-      try {
-        const commentaryDB = await getDatabase(dbName);
-        if (!commentaryDB) {
-          return `Marker: "${tagContent}" (Commentary database not loaded)`;
-        }
-
-        const commentaryText = await commentaryDB.getCommentary(
-          verse.book_number,
-          verse.chapter,
-          verse.verse,
-          tagContent
-        );
-
-        if (commentaryText) {
-          return stripTags(commentaryText);
-        } else {
-          const availableMarkers: string[] =
-            await commentaryDB.getAvailableCommentaryMarkers(
-              verse.book_number,
-              verse.chapter,
-              verse.verse
-            );
-
-          if (availableMarkers.length > 0) {
-            return `No commentary found for marker "${tagContent}" in ${displayVersion}. Available markers: ${availableMarkers.join(", ")}`;
-          } else {
-            return `No commentary found for marker "${tagContent}" in ${displayVersion}.`;
-          }
-        }
-      } catch (error) {
-        console.error(`[Commentary] Error loading commentary:`, error);
-        return `Error loading commentary for marker "${tagContent}".`;
-      }
-    },
-    [displayVersion, getDatabase, loadDictionaryDefinition]
-  );
-
-  return { loadCommentaryForVerse };
-};
+import {
+  commentaryDBMap,
+  DISPLAY_TO_STEM_MAP,
+  getVersionKey,
+  getDatabaseFilename,
+  stripTags,
+} from "../utils/bibleDatabaseUtils";
+import { parseVerseList } from "../utils/verseUtils";
+import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
+import { getFontFamily } from "../utils/fontUtils";
+import { useDictionary } from "../hooks/useDictionary";
+import { useCommentary } from "../hooks/useCommentary";
 
 type ParsedNode = {
   type: "text" | "opening-tag" | "closing-tag" | "self-closing-tag";
@@ -678,23 +370,6 @@ const findBookNumber = (
   }
 
   return undefined;
-};
-
-const parseVerseList = (verseStr: string): { start: number; end: number }[] => {
-  if (!verseStr) return [];
-  const parts = verseStr.split(",").map((p) => p.trim());
-  const ranges: { start: number; end: number }[] = [];
-  const rangeRegex = /(\d+)(?:\s*(?:[-–—]|\s*to\s*)\s*(\d+))?/gi;
-  parts.forEach((part) => {
-    rangeRegex.lastIndex = 0;
-    const match = rangeRegex.exec(part);
-    if (match) {
-      const start = parseInt(match[1], 10);
-      const end = match[2] ? parseInt(match[2], 10) : start;
-      ranges.push({ start, end });
-    }
-  });
-  return ranges;
 };
 
 // Render commentary text with clickable verse references
@@ -1135,19 +810,6 @@ const renderDictionaryText = (
   return parts;
 };
 
-// Map fontFamily to actual font family string
-const getFontFamily = (fontFamily: FontFamily): string | undefined => {
-  switch (fontFamily) {
-    case "serif":
-      return Platform.OS === "ios" ? "Georgia" : "serif";
-    case "sans-serif":
-      return Platform.OS === "ios" ? "Helvetica Neue" : "sans-serif";
-    case "system":
-    default:
-      return undefined;
-  }
-};
-
 const STYLES = {
   container: {
     borderRadius: 8,
@@ -1414,7 +1076,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       currentDictIndex >= 0
         ? dictHistory[currentDictIndex]?.full
         : `${prefix}${tagContent}`;
-    return `Strong's ${full} (${language})`;
+    return `Strong's ${full}`;
   }, [
     tagContent,
     displayVersion,
@@ -1452,17 +1114,67 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     []
   );
 
-  const handleStrongPress = useCallback((digits: string) => {
-    setTagContent(digits);
-    setModalStack((prev) => {
-      if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
-        return prev;
+  const handleStrongPress = useCallback(
+    async (digits: string) => {
+      if (!selectedVerse) return;
+
+      setCommentaryLoading(true);
+      const text = await loadCommentaryForVerse(selectedVerse, digits);
+      setCommentaryLoading(false);
+
+      const prefix =
+        getTestament(
+          selectedVerse.book_number,
+          selectedVerse.book_name || ""
+        ) === "NT"
+          ? "G"
+          : "H";
+      const full = `${prefix}${digits}`;
+      const entry: DictHistoryEntry = { digits, text, full };
+
+      let newHistory: DictHistoryEntry[] = dictHistory;
+      let newIndex = currentDictIndex;
+      if (
+        currentDictIndex < 0 ||
+        dictHistory[currentDictIndex]?.digits !== digits
+      ) {
+        newHistory = [...dictHistory.slice(0, currentDictIndex + 1), entry];
+        newIndex = currentDictIndex < 0 ? 0 : currentDictIndex + 1;
+      } else {
+        newHistory = dictHistory.map((item, idx) =>
+          idx === currentDictIndex ? entry : item
+        );
+        newIndex = currentDictIndex;
       }
-      const last = prev[prev.length - 1] as CommentaryState;
-      const newTop: CommentaryState = { ...last, tagContent: digits };
-      return [...prev.slice(0, -1), newTop];
-    });
-  }, []);
+
+      setTagContent(digits);
+      setDictHistory(newHistory);
+      setCurrentDictIndex(newIndex);
+      setCommentaryText(text);
+
+      setModalStack((prev) => {
+        if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
+          return prev;
+        }
+        const last = prev[prev.length - 1] as CommentaryState;
+        const newTop: CommentaryState = {
+          ...last,
+          tagContent: digits,
+          dictHistory: newHistory,
+          dictIndex: newIndex,
+          commentaryText: text,
+        };
+        return [...prev.slice(0, -1), newTop];
+      });
+    },
+    [
+      selectedVerse,
+      loadCommentaryForVerse,
+      dictHistory,
+      currentDictIndex,
+      getTestament,
+    ]
+  );
 
   const handleBack = useCallback(() => {
     if (currentDictIndex > 0) {
@@ -1497,12 +1209,16 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       ch: number,
       ranges: { start: number; end: number }[]
     ) => {
+      const newRef = { bookNum, chapter: ch, ranges };
       const newState: VerseState = {
         view: "verse",
-        currentVerseRef: { bookNum, chapter: ch, ranges },
+        currentVerseRef: newRef,
         verseVerses: [],
       };
       setModalStack((prev) => [...prev, newState]);
+      setModalView("verse");
+      setCurrentVerseRef(newRef);
+      setVerseVerses([]);
       setVerseLoading(true);
 
       let loadedVerses: Verse[] = [];
@@ -1532,6 +1248,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
       );
       setVerseLoading(false);
+      setVerseVerses(targetVerses);
       setModalStack((prev) => {
         if (prev.length === 0 || prev[prev.length - 1].view !== "verse") {
           return prev;
@@ -1879,6 +1596,21 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         .join(",")}`
     : "";
 
+  const showCommentaryBack = hasViewBack || hasDictBack;
+  const commentaryBackOnPress = hasViewBack ? handleViewBack : handleBack;
+
+  const commentaryLeftContent = showCommentaryBack ? (
+    <TouchableOpacity
+      onPress={commentaryBackOnPress}
+      activeOpacity={0.7}
+      style={{ padding: 5 }}
+    >
+      <Ionicons name="arrow-back" size={20} color={themeColors.primary} />
+    </TouchableOpacity>
+  ) : (
+    <View style={{ width: 30 }} />
+  );
+
   return (
     <>
       {chapterContent}
@@ -1933,11 +1665,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                       fontWeight: "bold",
                       flex: 1,
                       textAlign: "center",
+                      fontFamily: actualFontFamily,
                     }}
                   >
                     {verseTitle}
                   </Text>
-                  <View style={{ width: 20 }} />
+                  <View style={{ width: 30 }} />
                 </View>
                 {verseLoading ? (
                   <ActivityIndicator size="small" color={themeColors.primary} />
@@ -2029,36 +1762,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 <View
                   style={{
                     flexDirection: "row",
+                    justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: 10,
                   }}
                 >
-                  {hasViewBack && (
-                    <TouchableOpacity
-                      onPress={handleViewBack}
-                      style={{ padding: 5, marginRight: 10 }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="arrow-back"
-                        size={20}
-                        color={themeColors.primary}
-                      />
-                    </TouchableOpacity>
-                  )}
-                  {hasDictBack && !hasViewBack && (
-                    <TouchableOpacity
-                      onPress={handleBack}
-                      style={{ padding: 5, marginRight: 10 }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons
-                        name="arrow-back"
-                        size={20}
-                        color={themeColors.primary}
-                      />
-                    </TouchableOpacity>
-                  )}
+                  {commentaryLeftContent}
                   <Text
                     style={{
                       flex: 1,
@@ -2071,9 +1780,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   >
                     {currentTitle}
                   </Text>
-                  {!(hasViewBack || hasDictBack) && (
-                    <View style={{ width: 30 }} />
-                  )}
+                  <View style={{ width: 30 }} />
                 </View>
                 {selectedVerse && (
                   <Text
