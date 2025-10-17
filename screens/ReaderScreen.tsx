@@ -325,7 +325,10 @@ export default function ReaderScreen({
         <ScrollView
           ref={primaryScrollViewRef}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: 40 }}
+          contentContainerStyle={{
+            paddingBottom: 40,
+            paddingTop: hideHeader ? 40 : 0,
+          }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
           onContentSizeChange={chapterProps.handleContentSizeChange}
@@ -334,7 +337,7 @@ export default function ReaderScreen({
           <View
             ref={chapterProps.chapterContainerRef}
             onLayout={chapterProps.handleChapterContainerLayout}
-            style={{ paddingTop: isFullScreen ? 16 : 0 }}
+            style={{}}
           >
             <ChapterViewEnhanced
               verses={verses}
@@ -440,7 +443,10 @@ export default function ReaderScreen({
             <ScrollView
               ref={secondaryScrollViewRef}
               showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 40 }}
+              contentContainerStyle={{
+                paddingBottom: 40,
+                paddingTop: hideHeader ? 10 : 0,
+              }}
               onScroll={handleSecondaryScroll}
               scrollEventThrottle={16}
               onContentSizeChange={multiProps.handleSecondaryContentSizeChange}
@@ -775,8 +781,8 @@ export default function ReaderScreen({
       {/* Full screen toggle button - always visible, positioned absolutely */}
       <TouchableOpacity
         onPress={() => setUiMode((prev) => (prev + 1) % 4)}
-        className={`absolute ${isFullScreen ? "bottom-36" : "bottom-20"} right-6 size-12 rounded-full items-center justify-center z-50`}
-        style={{ backgroundColor: colors.primary + "33"}}
+        className={`absolute ${isFullScreen ? "bottom-32" : "bottom-20"} ${isLandscape ? "right-16 " : "right-6"} size-12 rounded-full items-center justify-center z-50`}
+        style={{ backgroundColor: colors.primary + "33" }}
       >
         <Text
           style={{

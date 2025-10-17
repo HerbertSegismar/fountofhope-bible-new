@@ -24,7 +24,7 @@ import { Platform } from "react-native";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
-import { getTestament, getBookInfo } from "../utils/testamentUtils";
+import { getTestament } from "../utils/testamentUtils";
 
 const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
@@ -60,7 +60,7 @@ const BASE_DARK_THEME_COLORS = {
   highlightBorder: "#FCD34D",
   highlightText: "#FECACA",
   highlightIcon: "#FCD34D",
-  tagBg: "rgba(255,255,255,0.1)",
+  tagBg: "rgba(255,255,0.1)",
   searchHighlightBg: "#374151",
   border: "#374151",
 } as const;
@@ -177,6 +177,24 @@ const getVersionKey = (
   return stem ? stem.toUpperCase() : undefined;
 };
 
+const stripTags = (text: string): string => {
+  // Remove entire <script> blocks to filter out JavaScript code
+  let cleaned = text.replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi,
+    ""
+  );
+  // Remove other HTML tags
+  cleaned = cleaned.replace(/<[^>]*>/g, "");
+  // Filter out arrow HTML entities (e.g., &larr;, &rarr;, etc.)
+  cleaned = cleaned.replace(
+    /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
+    ""
+  );
+  // Normalize whitespace
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  return cleaned;
+};
+
 const useDictionary = (displayVersion: string | undefined) => {
   const { getDatabase } = useBibleDatabase();
 
@@ -199,7 +217,7 @@ const useDictionary = (displayVersion: string | undefined) => {
 
       try {
         // Load dictionary database
-        const dictionaryDB = getDatabase("secedictionary.sqlite3");
+        const dictionaryDB = await getDatabase("secedictionary.sqlite3");
         if (!dictionaryDB) {
           return `Strong's: "${tagContent}" (Dictionary database not loaded)`;
         }
@@ -222,9 +240,20 @@ const useDictionary = (displayVersion: string | undefined) => {
 
         if (definition) {
           // Clean up the definition text - remove HTML tags and extra whitespace but preserve line breaks
-          const cleanedDefinition = stripTags(definition)
+          let cleanedDefinition = stripTags(definition)
+            .replace(/\u200e/g, "") // remove LRM
+            .replace(/&#x200e;/gi, "") // remove entity if present
             .replace(/\.\s+/g, ".\n\n")
             .trim();
+
+          cleanedDefinition = cleanedDefinition.replace(
+            /LN:\s*\d+(?:\.\d+)?(?:\s*,\s*\d+(?:\.\d+)?)*\s*(?:;)?\s*(?=[A-Za-z]|$)/gi,
+            ""
+          );
+
+          cleanedDefinition = cleanedDefinition
+            .replace(/([a-zA-Z])(KJV)/gi, "$1 KJV")
+            .replace(/([a-zA-Z])(Derivation)/gi, "$1 Derivation");
 
           return `Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"}):\n\n${cleanedDefinition}`;
         } else {
@@ -240,24 +269,6 @@ const useDictionary = (displayVersion: string | undefined) => {
   );
 
   return { loadDictionaryDefinition };
-};
-
-const stripTags = (text: string): string => {
-  // Remove entire <script> blocks to filter out JavaScript code
-  let cleaned = text.replace(
-    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi,
-    ""
-  );
-  // Remove other HTML tags
-  cleaned = cleaned.replace(/<[^>]*>/g, "");
-  // Filter out arrow HTML entities (e.g., &larr;, &rarr;, etc.)
-  cleaned = cleaned.replace(
-    /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
-    ""
-  );
-  // Normalize whitespace
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
-  return cleaned;
 };
 
 const useCommentary = (displayVersion: string | undefined) => {
@@ -287,7 +298,7 @@ const useCommentary = (displayVersion: string | undefined) => {
       }
 
       try {
-        const commentaryDB = getDatabase(dbName);
+        const commentaryDB = await getDatabase(dbName);
         if (!commentaryDB) {
           return `Marker: "${tagContent}" (Commentary database not loaded)`;
         }
@@ -697,7 +708,7 @@ const renderCommentaryWithVerseLinks = (
   const bookPattern = escapedKeys.join("|");
   const DASH_PATTERN = "[-–—]";
 
-  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\\s*\\d+)?`;
+  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\s*)\s*\\d+)?`;
   const VERSE_LIST = `(${VERSE_RANGE}(?:\\s*,\\s*${VERSE_RANGE})*)`;
 
   const fullRefRegex = new RegExp(
@@ -932,20 +943,187 @@ const renderCommentaryWithVerseLinks = (
   return parts;
 };
 
-// Helper function to determine text color based on background color
-const getContrastColor = (
-  backgroundColor: string,
-  themeColors: ThemeColors
-): string => {
-  if (!backgroundColor) return themeColors.textPrimary;
+// Render dictionary text with colored non-alphabets and numbers
+const renderDictionaryText = (
+  text: string,
+  baseStyle: TextStyle,
+  themeColors: ThemeColors,
+  fontFamily?: string,
+  onStrongPress?: (number: string) => void
+): React.ReactNode[] => {
+  const parts: React.ReactNode[] = [];
+  let i = 0;
+  let key = 0;
+  const excludeChars = new Set([
+    "(",
+    ")",
+    ",",
+    ":",
+    ";",
+    "-",
+    "'",
+    "[",
+    "]",
+    "|",
+    ".",
+    '"',
+  ]);
+  const noSpaceAfterPunctChars = new Set(["(", "'", "["]);
+  let previousType: string | null = null;
+  let lastPunctChar: string | null = null;
 
-  const hex = backgroundColor.replace("#", "");
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
+  const isAlpha = (char: string) => /[a-zA-Z\u00C0-\u00FF]/.test(char);
 
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5 ? themeColors.textSecondary : themeColors.textPrimary;
+  const pushSpaceIfNeeded = () => {
+    if (i < text.length && isAlpha(text[i])) {
+      const needsSpace =
+        previousType === "num" ||
+        (previousType === "punct" &&
+          !noSpaceAfterPunctChars.has(lastPunctChar || ""));
+      if (needsSpace) {
+        parts.push(
+          <Text key={`space-${key++}`} style={baseStyle}>
+            {" "}
+          </Text>
+        );
+      }
+    }
+  };
+
+  while (i < text.length) {
+    const char = text[i];
+
+    if (isAlpha(char)) {
+      // Check for Strong's pattern: H or G followed by digits
+      if (
+        (char === "H" || char === "G") &&
+        i + 1 < text.length &&
+        /\d/.test(text[i + 1])
+      ) {
+        // Strong's number - treat like num for spacing
+        let strong = char;
+        i++; // move past H/G
+        while (i < text.length && /\d/.test(text[i])) {
+          strong += text[i];
+          i++;
+        }
+        let content = strong;
+        if (previousType === "alpha") {
+          content = " " + content;
+        }
+        parts.push(
+          <Text
+            key={`strong-${key++}`}
+            onPress={() => onStrongPress?.(strong.substring(1))}
+            style={{
+              ...baseStyle,
+              color: themeColors.tagColor,
+              fontWeight: "bold" as const,
+              textDecorationLine: "underline",
+              fontFamily,
+            }}
+          >
+            {content}
+          </Text>
+        );
+        // After strong/num, check if next is alpha and add space
+        pushSpaceIfNeeded();
+        previousType = "num";
+        continue;
+      } else {
+        // Normal alphabetic word
+        let word = char;
+        i++; // move past current char
+        while (i < text.length && isAlpha(text[i])) {
+          word += text[i];
+          i++;
+        }
+        // No prepend for alpha
+        parts.push(
+          <Text key={`alpha-${key++}`} style={{ ...baseStyle, fontFamily }}>
+            {word}
+          </Text>
+        );
+        previousType = "alpha";
+      }
+    } else if (/\d/.test(char)) {
+      // Number sequence - treat like strong/num
+      let num = char;
+      i++; // move past current char
+      while (i < text.length && /\d/.test(text[i])) {
+        num += text[i];
+        i++;
+      }
+      let content = num;
+      if (previousType === "alpha") {
+        content = " " + content;
+      }
+      parts.push(
+        <Text
+          key={`num-${key++}`}
+          style={{
+            ...baseStyle,
+            color: themeColors.tagColor,
+            fontWeight: "bold" as const,
+            fontFamily,
+          }}
+        >
+          {content}
+        </Text>
+      );
+      // After num, check if next is alpha and add space
+      pushSpaceIfNeeded();
+      previousType = "num";
+    } else if (/[^\s]/.test(char)) {
+      // Non-space character (punctuation/symbols)
+      let content = char;
+      i++; // move past current char
+      while (
+        i < text.length &&
+        /[^\s]/.test(text[i]) &&
+        !isAlpha(text[i]) &&
+        !/\d/.test(text[i])
+      ) {
+        content += text[i];
+        i++;
+      }
+      const firstChar = char;
+      const isExcluded = excludeChars.has(firstChar);
+      let punctStyle = isExcluded
+        ? { ...baseStyle, fontFamily }
+        : {
+            ...baseStyle,
+            color: themeColors.tagColor,
+            fontFamily,
+          };
+      // No prepend for punct (attaches to previous alpha)
+      parts.push(
+        <Text key={`punct-${key++}`} style={punctStyle}>
+          {content}
+        </Text>
+      );
+      // After punct, check if next is alpha and add space
+      pushSpaceIfNeeded();
+      previousType = "punct";
+      lastPunctChar = content.length > 0 ? content[content.length - 1] : null;
+    } else {
+      // Whitespace including newlines
+      let ws = char;
+      i++; // move past current char
+      while (i < text.length && /[\s\n\r]/.test(text[i])) {
+        ws += text[i];
+        i++;
+      }
+      parts.push(
+        <Text key={`ws-${key++}`} style={{ ...baseStyle, fontFamily }}>
+          {ws}
+        </Text>
+      );
+      previousType = "ws";
+    }
+  }
+
+  return parts;
 };
 
 // Map fontFamily to actual font family string
@@ -1012,6 +1190,33 @@ interface ChapterViewProps {
   ) => void;
 }
 
+type DictHistoryEntry = {
+  digits: string;
+  text: string;
+  full: string;
+};
+
+type CommentaryState = {
+  view: "commentary";
+  tagContent: string;
+  selectedVerse: Verse | null;
+  dictHistory: DictHistoryEntry[];
+  dictIndex: number;
+  commentaryText: string;
+};
+
+type VerseState = {
+  view: "verse";
+  currentVerseRef: {
+    bookNum: number;
+    chapter: number;
+    ranges: { start: number; end: number }[];
+  };
+  verseVerses: Verse[];
+};
+
+type ModalState = CommentaryState | VerseState;
+
 export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   verses,
   bookName,
@@ -1062,13 +1267,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   }, []);
 
   const [showTagModal, setShowTagModal] = useState(false);
+  const [modalStack, setModalStack] = useState<ModalState[]>([]);
+  const [modalView, setModalView] = useState<"commentary" | "verse">(
+    "commentary"
+  );
   const [tagContent, setTagContent] = useState("");
   const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
   const [commentaryText, setCommentaryText] = useState("");
-  const [modalView, setModalView] = useState<"commentary" | "verse">(
-    "commentary"
-  );
   const [currentVerseRef, setCurrentVerseRef] = useState<{
     bookNum: number;
     chapter: number;
@@ -1076,33 +1282,34 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   } | null>(null);
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseVerses, setVerseVerses] = useState<Verse[]>([]);
+  const [dictHistory, setDictHistory] = useState<DictHistoryEntry[]>([]);
+  const [currentDictIndex, setCurrentDictIndex] = useState<number>(-1);
 
-  // Load commentary when modal opens
+  // Sync states from top of stack
   useEffect(() => {
-    if (
-      showTagModal &&
-      selectedVerse &&
-      tagContent &&
-      modalView === "commentary"
-    ) {
-      const load = async () => {
-        setCommentaryLoading(true);
-        const text = await loadCommentaryForVerse(selectedVerse, tagContent);
-        setCommentaryText(text);
-        setCommentaryLoading(false);
-      };
-      load();
-    } else if (showTagModal && modalView === "commentary") {
-      setCommentaryText(`Marker: "${tagContent}"`);
-      setCommentaryLoading(false);
+    if (modalStack.length === 0) {
+      setShowTagModal(false);
+      return;
     }
-  }, [
-    showTagModal,
-    selectedVerse,
-    tagContent,
-    loadCommentaryForVerse,
-    modalView,
-  ]);
+
+    const top = modalStack[modalStack.length - 1];
+    setModalView(top.view);
+
+    if (top.view === "commentary") {
+      setTagContent(top.tagContent);
+      setSelectedVerse(top.selectedVerse);
+      setCurrentVerseRef(null);
+      setDictHistory(top.dictHistory);
+      setCurrentDictIndex(top.dictIndex);
+      setCommentaryText(top.commentaryText);
+      setVerseVerses([]);
+    } else {
+      setCurrentVerseRef(top.currentVerseRef);
+      setVerseVerses(top.verseVerses);
+      setTagContent("");
+      setSelectedVerse(null);
+    }
+  }, [modalStack]);
 
   const testament = selectedVerse
     ? getTestament(selectedVerse.book_number, selectedVerse.book_name || "")
@@ -1110,13 +1317,169 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const isNewTestament = testament === "NT";
   const language = isNewTestament ? "Greek" : "Hebrew";
 
+  // Load commentary when modal opens or changes
+  useEffect(() => {
+    if (!showTagModal || modalView !== "commentary") return;
+
+    if (!selectedVerse || !tagContent) {
+      setCommentaryLoading(false);
+      return;
+    }
+
+    const versionKey = getVersionKey(displayVersion);
+    const isDict = versionKey === "NASB" && /^\d+$/.test(tagContent);
+
+    if (
+      isDict &&
+      currentDictIndex >= 0 &&
+      dictHistory[currentDictIndex]?.digits === tagContent
+    ) {
+      setCommentaryLoading(false);
+      return;
+    }
+
+    const loadAsync = async () => {
+      setCommentaryLoading(true);
+      const text = await loadCommentaryForVerse(selectedVerse, tagContent);
+      setCommentaryLoading(false);
+
+      const updates: Partial<CommentaryState> = { commentaryText: text };
+
+      if (isDict) {
+        const prefix =
+          getTestament(
+            selectedVerse.book_number,
+            selectedVerse.book_name || ""
+          ) === "NT"
+            ? "G"
+            : "H";
+        const full = `${prefix}${tagContent}`;
+        const entry: DictHistoryEntry = { digits: tagContent, text, full };
+
+        let newHistory: DictHistoryEntry[] = dictHistory;
+        let newIndex = currentDictIndex;
+        if (
+          currentDictIndex < 0 ||
+          dictHistory[currentDictIndex]?.digits !== tagContent
+        ) {
+          newHistory = [...dictHistory.slice(0, currentDictIndex + 1), entry];
+          newIndex = currentDictIndex < 0 ? 0 : currentDictIndex + 1;
+        } else {
+          newHistory = dictHistory.map((item, idx) =>
+            idx === currentDictIndex ? entry : item
+          );
+          newIndex = currentDictIndex;
+        }
+        updates.dictHistory = newHistory;
+        updates.dictIndex = newIndex;
+      }
+
+      setModalStack((prev) => {
+        if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
+          return prev;
+        }
+        const last = prev[prev.length - 1] as CommentaryState;
+        const newTop: CommentaryState = { ...last, ...updates };
+        return [...prev.slice(0, -1), newTop];
+      });
+    };
+
+    loadAsync();
+  }, [
+    showTagModal,
+    selectedVerse,
+    tagContent,
+    modalView,
+    displayVersion,
+    loadCommentaryForVerse,
+    currentDictIndex,
+    dictHistory,
+  ]);
+
+  const currentTitle = useMemo(() => {
+    const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
+    if (!isDictMode) return `Commentary for marker "${tagContent}"`;
+
+    const prefix = isNewTestament ? "G" : "H";
+    const full =
+      currentDictIndex >= 0
+        ? dictHistory[currentDictIndex]?.full
+        : `${prefix}${tagContent}`;
+    return `Strong's ${full} (${language})`;
+  }, [
+    tagContent,
+    displayVersion,
+    isNewTestament,
+    currentDictIndex,
+    dictHistory,
+    language,
+  ]);
+
   const handleTagPress = useCallback((content: string, verse: Verse) => {
-    setTagContent(content);
-    setSelectedVerse(verse);
-    setModalView("commentary");
-    setCurrentVerseRef(null);
-    setVerseVerses([]);
+    const initialState: CommentaryState = {
+      view: "commentary",
+      tagContent: content,
+      selectedVerse: verse,
+      dictHistory: [],
+      dictIndex: -1,
+      commentaryText: "",
+    };
+    setModalStack([initialState]);
     setShowTagModal(true);
+  }, []);
+
+  const handleTagPressFromModal = useCallback(
+    (content: string, verse: Verse) => {
+      const newState: CommentaryState = {
+        view: "commentary",
+        tagContent: content,
+        selectedVerse: verse,
+        dictHistory: [],
+        dictIndex: -1,
+        commentaryText: "",
+      };
+      setModalStack((prev) => [...prev, newState]);
+    },
+    []
+  );
+
+  const handleStrongPress = useCallback((digits: string) => {
+    setTagContent(digits);
+    setModalStack((prev) => {
+      if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
+        return prev;
+      }
+      const last = prev[prev.length - 1] as CommentaryState;
+      const newTop: CommentaryState = { ...last, tagContent: digits };
+      return [...prev.slice(0, -1), newTop];
+    });
+  }, []);
+
+  const handleBack = useCallback(() => {
+    if (currentDictIndex > 0) {
+      const newIndex = currentDictIndex - 1;
+      const entry = dictHistory[newIndex];
+      setCurrentDictIndex(newIndex);
+      setTagContent(entry.digits);
+      setCommentaryText(entry.text);
+      setModalStack((prev) => {
+        if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
+          return prev;
+        }
+        const last = prev[prev.length - 1] as CommentaryState;
+        const newTop: CommentaryState = {
+          ...last,
+          dictIndex: newIndex,
+          tagContent: entry.digits,
+          commentaryText: entry.text,
+        };
+        return [...prev.slice(0, -1), newTop];
+      });
+    }
+  }, [currentDictIndex, dictHistory]);
+
+  const handleViewBack = useCallback(() => {
+    setModalStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   }, []);
 
   const handleVerseLinkPress = useCallback(
@@ -1125,37 +1488,43 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       ch: number,
       ranges: { start: number; end: number }[]
     ) => {
-      setCurrentVerseRef({
-        bookNum,
-        chapter: ch,
-        ranges,
-      });
+      const newState: VerseState = {
+        view: "verse",
+        currentVerseRef: { bookNum, chapter: ch, ranges },
+        verseVerses: [],
+      };
+      setModalStack((prev) => [...prev, newState]);
       setVerseLoading(true);
-      setModalView("verse");
       if (bibleDB) {
         try {
           const loadedVerses = await bibleDB.getVerses(bookNum, ch);
           const targetVerses = loadedVerses.filter((verse) =>
             ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
           );
-          setVerseVerses(targetVerses);
+          setVerseLoading(false);
+          setModalStack((prev) => {
+            if (prev.length === 0 || prev[prev.length - 1].view !== "verse") {
+              return prev;
+            }
+            const last = prev[prev.length - 1] as VerseState;
+            const newTop: VerseState = { ...last, verseVerses: targetVerses };
+            return [...prev.slice(0, -1), newTop];
+          });
         } catch (e) {
           console.error("Error loading verses:", e);
           setVerseVerses([]);
+          setVerseLoading(false);
         }
       } else {
         setVerseVerses([]);
+        setVerseLoading(false);
       }
-      setVerseLoading(false);
     },
     [bibleDB]
   );
 
   const handleCloseModal = useCallback(() => {
-    setShowTagModal(false);
-    setModalView("commentary");
-    setCurrentVerseRef(null);
-    setVerseVerses([]);
+    setModalStack([]);
   }, []);
 
   // Sort verses by verse number
@@ -1203,6 +1572,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     lineHeight: 24,
     fontFamily: actualFontFamily,
   };
+
+  const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
+
+  const hasViewBack = modalStack.length > 1;
+  const hasDictBack =
+    modalView === "commentary" && isDictMode && currentDictIndex > 0;
 
   if (sortedVerses.length === 0) {
     return (
@@ -1475,6 +1850,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     );
   }
 
+  const verseTitle = currentVerseRef
+    ? `${getBookName(currentVerseRef.bookNum)} ${currentVerseRef.chapter}:${currentVerseRef.ranges
+        .map((r) =>
+          r.start === r.end ? r.start.toString() : `${r.start}-${r.end}`
+        )
+        .join(",")}`
+    : "";
+
   return (
     <>
       {chapterContent}
@@ -1512,7 +1895,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   }}
                 >
                   <TouchableOpacity
-                    onPress={() => setModalView("commentary")}
+                    onPress={handleViewBack}
                     activeOpacity={0.7}
                     style={{ padding: 5 }}
                   >
@@ -1531,15 +1914,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                       textAlign: "center",
                     }}
                   >
-                    {getBookName(currentVerseRef.bookNum)}{" "}
-                    {currentVerseRef.chapter}:
-                    {currentVerseRef.ranges
-                      .map((r) =>
-                        r.start === r.end
-                          ? r.start.toString()
-                          : `${r.start}-${r.end}`
-                      )
-                      .join(",")}
+                    {verseTitle}
                   </Text>
                   <View style={{ width: 20 }} />
                 </View>
@@ -1595,7 +1970,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                                 themeColors,
                                 undefined,
                                 actualFontFamily,
-                                undefined,
+                                (content: string) =>
+                                  handleTagPressFromModal(content, verse),
                                 modalVerseTextColor
                               )}
                             </Text>
@@ -1629,20 +2005,55 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
               </>
             ) : (
               <>
-                <Text
+                <View
                   style={{
-                    color: themeColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: "bold",
+                    flexDirection: "row",
+                    alignItems: "center",
                     marginBottom: 10,
-                    textAlign: "center",
-                    fontFamily: actualFontFamily,
                   }}
                 >
-                  {displayVersion === "NASB" && /^\d+$/.test(tagContent)
-                    ? `Strong's ${isNewTestament ? "G" : "H"}${tagContent} (${language})`
-                    : `Commentary for marker "${tagContent}"`}
-                </Text>
+                  {hasViewBack && (
+                    <TouchableOpacity
+                      onPress={handleViewBack}
+                      style={{ padding: 5, marginRight: 10 }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="arrow-back"
+                        size={20}
+                        color={themeColors.primary}
+                      />
+                    </TouchableOpacity>
+                  )}
+                  {hasDictBack && !hasViewBack && (
+                    <TouchableOpacity
+                      onPress={handleBack}
+                      style={{ padding: 5, marginRight: 10 }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name="arrow-back"
+                        size={20}
+                        color={themeColors.primary}
+                      />
+                    </TouchableOpacity>
+                  )}
+                  <Text
+                    style={{
+                      flex: 1,
+                      textAlign: "center",
+                      fontSize: 18,
+                      fontWeight: "bold",
+                      color: themeColors.textPrimary,
+                      fontFamily: actualFontFamily,
+                    }}
+                  >
+                    {currentTitle}
+                  </Text>
+                  {!(hasViewBack || hasDictBack) && (
+                    <View style={{ width: 30 }} />
+                  )}
+                </View>
                 {selectedVerse && (
                   <Text
                     style={{
@@ -1655,9 +2066,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   >
                     {selectedVerse.book_name} {selectedVerse.chapter}:
                     {selectedVerse.verse}
-                    {displayVersion === "NASB" && /^\d+$/.test(tagContent) && (
-                      <Text> • {language}</Text>
-                    )}
                   </Text>
                 )}
                 {commentaryLoading ? (
@@ -1667,11 +2075,17 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     style={{ maxHeight: 400 }}
                     contentContainerStyle={{ paddingHorizontal: 8 }}
                   >
-                    {modalView === "commentary" &&
-                    displayVersion === "NASB" &&
-                    /^\d+$/.test(tagContent) ? (
-                      // Dictionary content - with proper text wrapping
-                      <Text style={commentaryModalStyle}>{commentaryText}</Text>
+                    {isDictMode ? (
+                      // Dictionary content - with colored non-alphabets and numbers
+                      <Text style={commentaryModalStyle}>
+                        {renderDictionaryText(
+                          commentaryText,
+                          commentaryModalStyle,
+                          themeColors,
+                          actualFontFamily,
+                          handleStrongPress
+                        )}
+                      </Text>
                     ) : (
                       // Commentary content - with verse links
                       <Text style={commentaryModalStyle}>
