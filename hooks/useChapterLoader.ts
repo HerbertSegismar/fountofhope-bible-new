@@ -1,7 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { LayoutChangeEvent, View, Alert, ScrollView } from "react-native";
+import {
+  LayoutChangeEvent,
+  View,
+  Alert,
+  ScrollView,
+  Dimensions,
+} from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 export const useChapterLoader = (
   bookId: number,
@@ -16,25 +24,27 @@ export const useChapterLoader = (
   const [verseMeasurements, setVerseMeasurements] = useState<
     Record<number, number>
   >({});
-  const [chapterContainerY, setChapterContainerY] = useState(0);
   const [contentHeight, setContentHeight] = useState(1);
   const [scrollViewHeight, setScrollViewHeight] = useState(0);
   const [scrollViewReady, setScrollViewReady] = useState(false);
   const isMounted = useRef(true);
-  const abortController = useRef<AbortController | null>(null); // REFACTOR: For aborting retries on unmount
-  const scrollViewRef = useRef<ScrollView>(null); // Ensure typed
+  const abortController = useRef<AbortController | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const chapterContainerRef = useRef<View>(null);
+  const scrollAttemptsRef = useRef(0);
+  const maxScrollAttempts = 5;
   const defaultVerseHeight = 80;
+  const blankLineHeight = 22; // Height of blank line between verses
 
   const loadChapter = useCallback(async () => {
     if (!bibleDB || !isMounted.current) return;
-    abortController.current = new AbortController(); // REFACTOR: New signal for this load
+    abortController.current = new AbortController();
     const signal = abortController.current.signal;
     setLoading(true);
     setHasScrolledToVerse(false);
     setScrollViewReady(false);
     setVerseMeasurements({});
-    setChapterContainerY(0);
+    scrollAttemptsRef.current = 0;
 
     const maxRetries = 3;
     let lastError: unknown;
@@ -45,140 +55,175 @@ export const useChapterLoader = (
         return;
       }
       try {
-        // REFACTOR: Granular retries - separate for book and verses
-        // Book caching: Skip if already loaded for this bookId
         if (!book || book.book_number !== bookId) {
-          const bookDetails = await Promise.race([
-            bibleDB.getBook(bookId),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Query timeout")), 10000)
-            ),
-          ]);
+          const bookDetails = await bibleDB.getBook(bookId);
           if (signal.aborted) return;
           setBook(bookDetails);
         }
 
-        const chapterVerses = await Promise.race([
-          bibleDB.getVerses(bookId, chapter),
-          new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error("Query timeout")), 10000)
-          ),
-        ]);
+        const chapterVerses = await bibleDB.getVerses(bookId, chapter);
         if (signal.aborted) return;
         setVerses(chapterVerses);
         if (isMounted.current) setLoading(false);
         return;
       } catch (error: any) {
-        if (signal.aborted) {
-          console.log("Query aborted");
-          return;
-        }
+        if (signal.aborted) return;
         lastError = error;
-        if (error.message === "Query timeout") {
-          console.log("Query timed out");
-          // Continue to retry on timeout
-        }
         if (attempt < maxRetries - 1) {
-          const delay = 500 * Math.pow(2, attempt);
-          await new Promise((resolve) => {
-            const timeout = setTimeout(resolve, delay);
-            return () => clearTimeout(timeout);
-          });
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
     }
     if (isMounted.current) setLoading(false);
     if (lastError) {
-      Alert.alert(
-        "Error",
-        `Failed to load chapter after ${maxRetries} attempts.`
-      );
+      Alert.alert("Error", "Failed to load chapter");
     }
-  }, [bibleDB, bookId, chapter, book]); // REFACTOR: Added 'book' dep for caching logic
+  }, [bibleDB, bookId, chapter, book]);
 
   useEffect(() => {
     isMounted.current = true;
     return () => {
       isMounted.current = false;
-      abortController.current?.abort(); // REFACTOR: Abort pending loads on unmount
+      abortController.current?.abort();
     };
   }, []);
 
   useEffect(() => {
     if (bibleDB) loadChapter();
-  }, [bibleDB, bookId, chapter, loadChapter]); // REFACTOR: Stable deps
+  }, [bibleDB, bookId, chapter, loadChapter]);
 
-  const handleContentSizeChange = useCallback(
-    (w: number, h: number) => setContentHeight(h),
-    []
-  );
+  useEffect(() => {
+    if (targetVerse) {
+      setHasScrolledToVerse(false);
+      scrollAttemptsRef.current = 0;
+    }
+  }, [targetVerse, bookId, chapter]);
+
+  const handleContentSizeChange = useCallback((w: number, h: number) => {
+    setContentHeight(h);
+  }, []);
+
   const handleScrollViewLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
     setScrollViewHeight(height);
     setScrollViewReady(true);
   }, []);
+
   const handleChapterContainerLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      const { y } = event.nativeEvent.layout;
-      setChapterContainerY(y);
+      // Empty but needed for the ref
     },
     []
   );
+
   const handleVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
       const { height } = event.nativeEvent.layout;
       if (height > 0) {
-        setVerseMeasurements((prev) =>
-          prev[verseNumber] === height
-            ? prev
-            : { ...prev, [verseNumber]: height }
-        );
+        setVerseMeasurements((prev) => ({
+          ...prev,
+          [verseNumber]: height,
+        }));
       }
     },
     []
   );
 
   const scrollToTargetVerse = useCallback(() => {
-    if (!targetVerse || verses.length === 0 || !scrollViewRef.current)
+    if (!targetVerse || verses.length === 0 || !scrollViewRef.current) {
       return false;
+    }
+
     const verseIndex = verses.findIndex((v) => v.verse === targetVerse);
     if (verseIndex === -1) return false;
+
+    if (scrollAttemptsRef.current >= maxScrollAttempts) {
+      setHasScrolledToVerse(true);
+      return false;
+    }
+
+    scrollAttemptsRef.current += 1;
+
+    // Calculate cumulative height to the target verse INCLUDING blank lines
     let cumulative = 0;
     for (let i = 0; i < verseIndex; i++) {
+      // Add verse height + blank line after each verse (except the last one)
       cumulative += verseMeasurements[verses[i].verse] || defaultVerseHeight;
+
+      // Add blank line after each verse except the last one before the target
+      if (i < verseIndex - 1) {
+        cumulative += blankLineHeight;
+      }
     }
-    const verseHeight = verseMeasurements[targetVerse] || defaultVerseHeight;
-    const scrollPosition = Math.max(
-      0,
-      cumulative - scrollViewHeight / 2 + verseHeight / 2
-    );
+
+    // Place verse at half screen height (simple and direct)
+    const scrollPosition = Math.max(0, cumulative - SCREEN_HEIGHT / 2);
+
+    console.log("Scrolling to verse:", {
+      targetVerse,
+      verseIndex,
+      cumulative,
+      scrollPosition,
+      screenHeight: SCREEN_HEIGHT,
+      blankLinesIncluded: verseIndex > 0 ? verseIndex - 1 : 0,
+    });
+
     scrollViewRef.current.scrollTo({ y: scrollPosition, animated: true });
     setHasScrolledToVerse(true);
     return true;
-  }, [verses, verseMeasurements, scrollViewHeight, targetVerse]);
+  }, [verses, verseMeasurements, targetVerse]);
 
-  // REFACTOR: Stabilized deps (removed redundant ones if any)
+  // Simple scroll trigger
   useEffect(() => {
-    const ready =
-      targetVerse &&
-      verses.length > 0 &&
-      scrollViewReady &&
-      verses.findIndex((v) => v.verse === targetVerse) !== -1 &&
-      verses
-        .slice(0, verses.findIndex((v) => v.verse === targetVerse) + 1)
-        .every((v) => verseMeasurements[v.verse]);
-    if (ready && !hasScrolledToVerse) {
-      requestAnimationFrame(() => {
-        if (!hasScrolledToVerse && isMounted.current) scrollToTargetVerse();
-      });
+    if (
+      !targetVerse ||
+      hasScrolledToVerse ||
+      !scrollViewReady ||
+      verses.length === 0
+    ) {
+      return;
     }
+
+    const verseIndex = verses.findIndex((v) => v.verse === targetVerse);
+    if (verseIndex === -1) return;
+
+    // Try to scroll immediately
+    const timeoutId = setTimeout(() => {
+      if (isMounted.current && !hasScrolledToVerse) {
+        scrollToTargetVerse();
+      }
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
   }, [
     verses,
-    verseMeasurements,
     scrollViewReady,
     targetVerse,
     hasScrolledToVerse,
     scrollToTargetVerse,
+  ]);
+
+  // Retry if measurements come in later
+  useEffect(() => {
+    if (
+      targetVerse &&
+      !hasScrolledToVerse &&
+      scrollViewReady &&
+      verses.length > 0 &&
+      verseMeasurements[targetVerse]
+    ) {
+      setTimeout(() => {
+        if (isMounted.current && !hasScrolledToVerse) {
+          scrollToTargetVerse();
+        }
+      }, 50);
+    }
+  }, [
+    verseMeasurements,
+    targetVerse,
+    hasScrolledToVerse,
+    scrollViewReady,
+    verses.length,
   ]);
 
   return {
@@ -186,14 +231,12 @@ export const useChapterLoader = (
     book,
     loading,
     hasScrolledToVerse,
-    setHasScrolledToVerse,
     verseMeasurements,
-    chapterContainerY,
-    chapterContainerRef,
     contentHeight,
     scrollViewHeight,
     scrollViewReady,
     scrollViewRef,
+    chapterContainerRef,
     handleContentSizeChange,
     handleScrollViewLayout,
     handleChapterContainerLayout,

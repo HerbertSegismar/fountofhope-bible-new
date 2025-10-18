@@ -97,9 +97,10 @@ export default function ReaderScreen({
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const isFullScreen = uiMode === 3;
-  const hideHeader = uiMode === 1 || uiMode === 2 || uiMode === 3;
-  const hideFooter = uiMode === 2 || uiMode === 3;
+  const buttonOpacity = useRef(new Animated.Value(1)).current;
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isFullScreen = uiMode === 2;
+  const hideHeader = uiMode === 1 || uiMode === 2;
   const scrollSync = useScrollSync(
     showMultiVersion,
     chapterProps.scrollViewHeight,
@@ -120,6 +121,33 @@ export default function ReaderScreen({
     secondaryScrollViewRef
   );
   const { handleScroll, handleSecondaryScroll } = scrollSync;
+
+  const resetButtonOpacity = useCallback(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    Animated.timing(buttonOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    timeoutRef.current = setTimeout(() => {
+      Animated.timing(buttonOpacity, {
+        toValue: 0.2,
+        duration: 500,
+        useNativeDriver: true,
+      }).start();
+    }, 5000);
+  }, [buttonOpacity]);
+
+  useEffect(() => {
+    resetButtonOpacity();
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [resetButtonOpacity]);
 
   const bookmarkedVerses = useMemo(() => {
     const chapterBookmarks = bookmarks.filter(
@@ -515,9 +543,7 @@ export default function ReaderScreen({
             >
               Bible Reader
             </Text>
-            <View
-              className={`flex-row mr-0 ${isLandscape ? "top-2 gap-4" : "gap-2"}`}
-            >
+            <View className="flex-row gap-2">
               <TouchableOpacity onPress={toggleTheme} className="p-2">
                 <Ionicons
                   name={
@@ -588,7 +614,10 @@ export default function ReaderScreen({
         >
           <View className="flex-row justify-between items-center">
             <TouchableOpacity
-              onPress={goToPreviousChapter}
+              onPress={() => {
+                goToPreviousChapter();
+                resetButtonOpacity();
+              }}
               disabled={chapter <= 1}
               className={`p-2 ${chapter <= 1 ? "opacity-30" : ""}`}
             >
@@ -617,8 +646,11 @@ export default function ReaderScreen({
               </Text>
             </View>
             <TouchableOpacity
-              onPress={goToNextChapter}
-              className={`p-2 ${isLandscape ? "mr-12" : "mr-0"}`}
+              onPress={() => {
+                goToNextChapter();
+                resetButtonOpacity();
+              }}
+              className="p-2"
             >
               <Text
                 style={{
@@ -667,9 +699,7 @@ export default function ReaderScreen({
           }}
         >
           <Text style={{ color: colors.muted, fontSize: 12 }}>Font Size</Text>
-          <View
-            className={`flex-row items-center space-x-3 ${isLandscape ? "mr-12 gap-4" : "mr-0 gap-2"}`}
-          >
+          <View className="flex-row items-center gap-2">
             <TouchableOpacity
               onPress={decreaseFontSize}
               className="w-8 h-8 rounded-full items-center justify-center"
@@ -732,68 +762,81 @@ export default function ReaderScreen({
       {/* Chapter Content */}
       {renderMultiVersionContent()}
 
-      {/* Quick Navigation Footer */}
-      {!hideFooter && (
-        <View
-          className="flex-row justify-between items-center px-4 py-3"
-          style={{
-            backgroundColor: colors.card + "80",
-            borderTopWidth: 1,
-            borderTopColor: colors.border?.default,
-          }}
-        >
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate("VerseList", {
-                book: book || { book_number: bookId, long_name: bookName },
-                chapter,
-              })
-            }
-            className="px-4 py-2 rounded-lg border"
-            style={{
-              backgroundColor: colors.card,
-              borderColor: colors.border?.default,
-            }}
-          >
-            <Text style={{ color: colors.text?.primary, fontSize: 12 }}>
-              Verse List
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() =>
-              navigation.navigate("ChapterList", {
-                book: book || { book_number: bookId, long_name: bookName },
-              })
-            }
-            className={`px-4 py-2 rounded-lg border ${isLandscape ? "mr-12" : "mr-0"}`}
-            style={{
-              backgroundColor: colors.card,
-              borderColor: colors.border?.default,
-            }}
-          >
-            <Text style={{ color: colors.text?.primary, fontSize: 12 }}>
-              All Chapters
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
       {/* Full screen toggle button - always visible, positioned absolutely */}
-      <TouchableOpacity
-        onPress={() => setUiMode((prev) => (prev + 1) % 4)}
-        className={`absolute ${isFullScreen ? "bottom-32" : "bottom-20"} ${isLandscape ? "right-16 " : "right-6"} size-12 rounded-full items-center justify-center z-50`}
-        style={{ backgroundColor: colors.primary + "33" }}
+      <Animated.View
+        className={`absolute left-1/2 -ml-6 size-12 rounded-full items-center justify-center z-50`}
+        style={{ opacity: buttonOpacity, bottom: 44 }}
       >
-        <Text
+        <TouchableOpacity
+          onPress={() => {
+            setUiMode((prev) => (prev + 1) % 3);
+            resetButtonOpacity();
+          }}
+          className={`absolute left-1/2 -ml-6 size-12 rounded-full items-center justify-center z-50`}
+          style={{ backgroundColor: colors.primary }}
+        >
+          <Text
+            style={{
+              color: "white",
+              fontSize: 24,
+              fontWeight: "bold",
+            }}
+          >
+            {isFullScreen ? "◱" : "◲"}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+      <Animated.View
+        style={{
+          position: "absolute",
+          bottom: 34,
+          left: 0,
+          right: 0,
+          height: 60,
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          opacity: buttonOpacity,
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => {
+            goToPreviousChapter();
+            resetButtonOpacity();
+          }}
+          disabled={chapter <= 1}
           style={{
-            color: "white",
-            fontSize: 24,
-            fontWeight: "bold",
+            width: 35,
+            height: 35,
+            backgroundColor: colors.primary,
+            borderRadius: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+            marginLeft: 28,
           }}
         >
-          {isFullScreen ? "◱" : "◲"}
-        </Text>
-      </TouchableOpacity>
+          <Ionicons name="chevron-back" size={24} color="white" />
+        </TouchableOpacity>
+        <View style={{ flex: 1, alignItems: "center" }} />
+        <TouchableOpacity
+          onPress={() => {
+            goToNextChapter();
+            resetButtonOpacity();
+          }}
+          style={{
+            width: 35,
+            height: 35,
+            backgroundColor: colors.primary,
+            borderRadius: "100%",
+            justifyContent: "center",
+            alignItems: "center",
+            marginRight: 28,
+          }}
+        >
+          <Ionicons name="chevron-forward" size={24} color="white" />
+        </TouchableOpacity>
+      </Animated.View>
     </View>
   );
 }

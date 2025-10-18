@@ -15,6 +15,7 @@ import { useTheme, ColorScheme } from "../context/ThemeContext";
 import { VersionSelector } from "../components/VersionSelector";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Fonts } from "../utils/fonts";
+import Footer from "../components/Footer";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -629,19 +630,7 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
       </SettingSection>
-
-      {/* Footer */}
-      <View className="px-4 mt-4 mb-8">
-        <Text className="text-center text-xs" style={{ color: colors.muted }}>
-          Made with ❤️ for Bible study
-        </Text>
-        <Text
-          className="text-center text-xs mt-1"
-          style={{ color: colors.muted }}
-        >
-          Version 1.0.0
-        </Text>
-      </View>
+      <Footer/>
     </ScrollView>
   );
 };

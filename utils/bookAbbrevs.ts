@@ -102,7 +102,7 @@ export const BOOK_ABBREVS: Record<string, string[]> = {
   Esther: ["Est.", "Esth.", "Es."],
   Job: ["Job", "Jb."],
   Psalms: ["Ps.", "Psalm", "Pslm.", "Psa.", "Psm.", "Pss."],
-  Proverbs: ["Prov", "Pro.", "Prv.", "Pr."],
+  Proverbs: ["Prov", "Prov.", "Pro.", "Prv.", "Pr."],
   Ecclesiastes: ["Eccles.", "Eccle.", "Ecc.", "Ec.", "Qoh."],
   "Song of Solomon": [
     "Song",

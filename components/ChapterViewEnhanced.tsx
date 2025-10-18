@@ -1383,8 +1383,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     return (
       <TouchableOpacity
         key={verse.verse}
-        activeOpacity={onVersePress ? 0.7 : 1}
-        onPress={() => handleVersePress(verse)}
+        activeOpacity={1}
+        onLongPress={() => handleVersePress(verse)}
       >
         <View
           style={[

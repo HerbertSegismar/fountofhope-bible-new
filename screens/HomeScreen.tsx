@@ -23,6 +23,7 @@ import {
   type Theme,
   type FontFamily,
 } from "../context/ThemeContext";
+import Footer from "../components/Footer";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -122,27 +123,6 @@ type ThemeColors = BaseThemeColors & {
   primary: string;
   verseNumber: string;
   tagColor: string;
-};
-
-// Helper function to determine text color based on background color
-const getContrastColor = (
-  backgroundColor: string,
-  themeColors: ThemeColors
-): string => {
-  // Default to theme text primary if no background color
-  if (!backgroundColor) return themeColors.textPrimary;
-
-  // Convert hex color to RGB
-  const hex = backgroundColor.replace("#", "");
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // Calculate luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-  // Return dark text for light colors, light text for dark colors
-  return luminance > 0.5 ? themeColors.textSecondary : themeColors.textPrimary;
 };
 
 // Map fontFamily to actual font family string
@@ -570,6 +550,7 @@ export default function HomeScreen({ navigation }: Props) {
       <View>
         <MatrixRN />
       </View>
+      <Footer/>
     </ScrollView>
   );
 }

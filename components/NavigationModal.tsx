@@ -227,17 +227,15 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
         </View>
         <View
           style={{
-            backgroundColor: colors.background?.highlight,
+            backgroundColor: colors.primary,
             borderRadius: 8,
             padding: 8,
             marginBottom: 16,
-            borderWidth: 1,
-            borderColor: colors.border?.highlight,
           }}
         >
           <Text
             style={{
-              color: colors.text?.primary,
+              color: "white",
               fontWeight: "600",
               textAlign: "center",
               fontSize: 16,
@@ -249,7 +247,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
           </Text>
           <Text
             style={{
-              color: colors.muted,
+              color: "white",
               fontSize: 12,
               textAlign: "center",
               marginTop: 4,
@@ -282,8 +280,16 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                   <TouchableOpacity
                     key={chapterInfo.chapter}
                     onPress={() => handleChapterSelect(chapterInfo.chapter)}
-                    className={`rounded-lg border items-center justify-center ${selectedChapter === chapterInfo.chapter ? "bg-primary border-primary" : "bg-card border-border"}`}
-                    style={{ width: 40, height: 40 }}
+                    className={`rounded-lg border items-center justify-center`}
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderColor: colors.muted,
+                      backgroundColor:
+                        selectedChapter === chapterInfo.chapter
+                          ? colors.primary
+                          : colors.card,
+                    }}
                   >
                     <Text
                       style={{
@@ -351,7 +357,8 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                   <TouchableOpacity
                     key={verse}
                     onPress={() => handleVerseSelect(verse)}
-                    className="size-10 rounded-lg border items-center justify-center bg-card border-primary"
+                    className="size-10 rounded-lg items-center justify-center border bg-card"
+                    style={{ borderColor: colors.primary }}
                   >
                     <Text
                       style={{
@@ -370,11 +377,12 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
         <TouchableOpacity
           onPress={handleNavigateToLocation}
           disabled={!selectedBook || isLoadingNavigation}
-          className={`p-4 rounded-lg mt-4 mb-20 ${selectedBook && !isLoadingNavigation ? "bg-primary" : "bg-muted"}`}
+          className={`p-4 rounded-lg mt-4 mb-20`}
+          style={{ backgroundColor: colors.primary }}
         >
           <Text
             style={{
-              color: primaryTextColor,
+              color: "white",
               fontWeight: "600",
               textAlign: "center",
               fontSize: 16,
@@ -386,7 +394,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
           </Text>
           <Text
             style={{
-              color: primaryTextColor + "80",
+              color: "white",
               fontSize: 12,
               textAlign: "center",
               marginTop: 4,
