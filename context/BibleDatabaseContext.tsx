@@ -24,7 +24,9 @@ interface BibleDatabaseContextType {
   getDatabase: (version: string) => Promise<BibleDatabase | undefined>;
   retryInitialization: () => Promise<void>;
   preloadCurrentCommentary: () => Promise<void>;
-  recoverDatabaseConnection: () => Promise<void>; // Add this line
+  recoverDatabaseConnection: () => Promise<void>;
+  // Add method to explicitly close secondary databases
+  closeSecondaryDatabases: (keepVersions?: string[]) => Promise<void>;
 }
 
 const BibleDatabaseContext = createContext<
@@ -237,6 +239,40 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     setBibleDB(openDatabases.current.get(currentVersion)!);
   }, [currentVersion, initializeDatabase]);
 
+  // NEW: Close secondary databases (commentaries and dictionaries) except those to keep
+  const closeSecondaryDatabases = useCallback(
+    async (keepVersions: string[] = []) => {
+      const versionsToClose: string[] = [];
+
+      openDatabases.current.forEach((db, version) => {
+        // Don't close the current main Bible version
+        if (version === currentVersion) return;
+
+        // Don't close versions in the keep list
+        if (keepVersions.includes(version)) return;
+
+        // Close secondary databases (commentaries and dictionaries)
+        if (version.includes("com") || version.includes("dictionary")) {
+          versionsToClose.push(version);
+        }
+      });
+
+      for (const version of versionsToClose) {
+        try {
+          const db = openDatabases.current.get(version);
+          if (db) {
+            await db.close();
+            openDatabases.current.delete(version);
+            console.log(`Closed secondary database: ${version}`);
+          }
+        } catch (error) {
+          console.warn(`Error closing secondary database ${version}:`, error);
+        }
+      }
+    },
+    [currentVersion]
+  );
+
   // Load persisted version on mount and preload current commentary
   useEffect(() => {
     const loadVersion = async () => {
@@ -285,19 +321,54 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
       try {
         await AsyncStorage.setItem(STORAGE_KEY, newVersion);
+
+        // Get the commentary version for the current Bible before switching
+        const currentCommentaryVersion =
+          BIBLE_TO_COMMENTARY_MAP[currentVersion];
+        // Get the commentary version for the new Bible
+        const newCommentaryVersion = BIBLE_TO_COMMENTARY_MAP[newVersion];
+
+        // Determine which secondary databases to keep
+        const keepVersions: string[] = [];
+
+        // If switching to a different version but keeping the same commentary,
+        // don't close the commentary database
+        if (
+          currentCommentaryVersion &&
+          currentCommentaryVersion === newCommentaryVersion
+        ) {
+          keepVersions.push(currentCommentaryVersion);
+        }
+
+        // Always keep the dictionary if NASB is involved
+        if (
+          currentVersion === "nasb.sqlite3" ||
+          newVersion === "nasb.sqlite3"
+        ) {
+          keepVersions.push("secedictionary.sqlite3");
+        }
+
+        // Close secondary databases except those we want to keep
+        await closeSecondaryDatabases(keepVersions);
+
         await initializeDatabase(newVersion, true);
         setCurrentVersion(newVersion);
         setBibleDB(openDatabases.current.get(newVersion)!);
         console.log(`Successfully switched to: ${newVersion}`);
 
-        // Preload commentary for the new version
-        if (newVersion === "nasb.sqlite3") {
-          // Immediate preload for NASB to ensure dictionary is loaded without delay
-          await preloadCurrentCommentary(newVersion);
-        } else {
-          setTimeout(() => {
-            preloadCurrentCommentary(newVersion);
-          }, 500);
+        // Preload commentary for the new version if not already loaded
+        if (
+          newCommentaryVersion &&
+          !openDatabases.current.has(newCommentaryVersion)
+        ) {
+          if (newVersion === "nasb.sqlite3") {
+            // Immediate preload for NASB to ensure dictionary is loaded without delay
+            await preloadCurrentCommentary(newVersion);
+          } else {
+            setTimeout(() => {
+              preloadCurrentCommentary(newVersion);
+            }, 500);
+          }
         }
       } catch (err) {
         console.error("Failed to switch version:", err);
@@ -312,6 +383,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       isInitializing,
       initializeDatabase,
       preloadCurrentCommentary,
+      closeSecondaryDatabases,
     ]
   );
 
@@ -392,6 +464,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     retryInitialization,
     preloadCurrentCommentary: preloadCurrentCommentaryPublic,
     recoverDatabaseConnection,
+    closeSecondaryDatabases, // Export the new method
   };
 
   React.useEffect(() => {

@@ -16,16 +16,9 @@ import { VersionSelector } from "../components/VersionSelector";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Fonts } from "../utils/fonts";
 import Footer from "../components/Footer";
+import { primaryColors } from "../utils/themeUtils";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
-
-// Define primaryColors with proper typing
-const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
-  purple: { light: "#A855F7", dark: "#9333EA" },
-  green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#bb3636ff", dark: "#a22c2cff" },
-  yellow: { light: "#F59E0B", dark: "#D97706" },
-};
 
 const SettingsScreen = () => {
   const {

@@ -112,7 +112,7 @@ export default function ReaderScreen({
     multiProps.secondaryVerseMeasurements,
     isLandscape,
     isFullScreen,
-    () => {}, // Placeholder, no longer used for setting full screen
+    () => {},
     scrollThreshold,
     lastScrollYRef,
     scrollY,
@@ -120,7 +120,12 @@ export default function ReaderScreen({
     primaryScrollViewRef,
     secondaryScrollViewRef
   );
-  const { handleScroll, handleSecondaryScroll } = scrollSync;
+  const {
+    handleScroll,
+    handleSecondaryScroll,
+    updatePrimaryOffset,
+    updateSecondaryOffset,
+  } = scrollSync;
 
   const resetButtonOpacity = useCallback(() => {
     if (timeoutRef.current) {
@@ -301,6 +306,48 @@ export default function ReaderScreen({
     }
   }, [isFullScreen, navigation, colors.primary]);
 
+  // Scroll to top for primary when loading completes and no target verse
+  useEffect(() => {
+    if (!targetVerse && !chapterLoading && primaryScrollViewRef.current) {
+      primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updatePrimaryOffset(0);
+      lastScrollYRef.current = 0;
+    }
+  }, [chapterLoading, targetVerse, primaryScrollViewRef, updatePrimaryOffset]);
+
+  // Scroll to top for secondary when loading completes and no target verse
+  useEffect(() => {
+    if (
+      showMultiVersion &&
+      !targetVerse &&
+      !secondaryLoading &&
+      secondaryScrollViewRef.current
+    ) {
+      secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updateSecondaryOffset(0);
+    }
+  }, [
+    secondaryLoading,
+    showMultiVersion,
+    targetVerse,
+    secondaryScrollViewRef,
+    updateSecondaryOffset,
+  ]);
+
+  const handlePrimaryContentSizeChange = useCallback(
+    (width: number, height: number) => {
+      chapterProps.handleContentSizeChange(width, height);
+    },
+    [chapterProps.handleContentSizeChange]
+  );
+
+  const handleSecondaryContentSizeChange = useCallback(
+    (width: number, height: number) => {
+      multiProps.handleSecondaryContentSizeChange(width, height);
+    },
+    [multiProps.handleSecondaryContentSizeChange]
+  );
+
   const renderMultiVersionContent = () => {
     const primaryDisplay = getVersionDisplayName(currentVersion);
     const secondaryDisplay = getVersionDisplayName(
@@ -355,11 +402,11 @@ export default function ReaderScreen({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingBottom: 40,
-            paddingTop: hideHeader ? 40 : 0,
+            paddingTop: 10,
           }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
-          onContentSizeChange={chapterProps.handleContentSizeChange}
+          onContentSizeChange={handlePrimaryContentSizeChange}
           onLayout={chapterProps.handleScrollViewLayout}
         >
           <View
@@ -473,12 +520,12 @@ export default function ReaderScreen({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
                 paddingBottom: 40,
-                paddingTop: hideHeader ? 10 : 0,
+                paddingTop: 10,
               }}
               onScroll={handleSecondaryScroll}
               scrollEventThrottle={16}
-              onContentSizeChange={multiProps.handleSecondaryContentSizeChange}
-              onLayout={chapterProps.handleScrollViewLayout}
+              onContentSizeChange={handleSecondaryContentSizeChange}
+              onLayout={multiProps.handleSecondaryScroll}
             >
               <ChapterViewEnhanced
                 verses={secondaryVerses}
@@ -522,7 +569,10 @@ export default function ReaderScreen({
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background?.default }}>
+    <View
+      className={`${uiMode > 0 ? "mt-10" : "mt-0"}`}
+      style={{ flex: 1, backgroundColor: colors.background?.default }}
+    >
       {/* Header */}
       {!hideHeader && (
         <View

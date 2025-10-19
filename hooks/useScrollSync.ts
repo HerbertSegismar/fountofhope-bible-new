@@ -150,6 +150,18 @@ export const useScrollSync = (
     scrollY,
   ]);
 
+  const updatePrimaryOffset = useCallback(
+    (y: number) => {
+      lastPrimaryOffset.current = y;
+      scrollY.setValue(y);
+    },
+    [scrollY]
+  );
+
+  const updateSecondaryOffset = useCallback((y: number) => {
+    lastSecondaryOffset.current = y;
+  }, []);
+
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
@@ -259,5 +271,7 @@ export const useScrollSync = (
     handleSecondaryScroll,
     syncToSecondary,
     syncToPrimary,
+    updatePrimaryOffset,
+    updateSecondaryOffset,
   };
 };
