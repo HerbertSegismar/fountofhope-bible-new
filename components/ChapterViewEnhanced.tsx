@@ -1498,8 +1498,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       <View
         style={{
           backgroundColor: bookColor,
-          paddingHorizontal: isFullScreen ? 8 : 12,
-          paddingVertical: isFullScreen ? 6 : 8,
+          padding: 8,
           borderTopLeftRadius: 8,
           borderTopRightRadius: 8,
         }}
@@ -1515,7 +1514,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
             <Text
               style={{
                 color: "#41315eff",
-                fontSize: isFullScreen ? 10 : 14,
+                fontSize: 14,
                 fontWeight: "600",
                 fontFamily: actualFontFamily,
               }}

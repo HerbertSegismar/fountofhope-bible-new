@@ -287,19 +287,13 @@ export default function BookmarksScreen({ navigation }: Props) {
     (verse: Verse) => {
       const bookInfo = getBookInfo(verse.book_number);
       const longName = bookInfo?.long || verse.book_name || "Unknown Book";
-      const testament = verse.book_number >= 470 ? "NT" : "OT";
 
       // Use the same pattern as VerseListScreen
-      const tabNavigation = navigation.getParent();
-      tabNavigation?.navigate("Bible", {
-        screen: "Reader",
-        params: {
-          bookId: verse.book_number,
-          chapter: verse.chapter,
-          verse: verse.verse,
-          bookName: longName,
-          testament: testament,
-        },
+      navigation.navigate("Reader", {
+        bookId: verse.book_number,
+        chapter: verse.chapter,
+        verse: verse.verse,
+        bookName: longName,
       });
     },
     [navigation]
@@ -330,8 +324,7 @@ export default function BookmarksScreen({ navigation }: Props) {
   }, [loadBookmarks]);
 
   const handleGoToBible = useCallback(() => {
-    const tabNavigator = navigation.getParent();
-    tabNavigator?.navigate("Bible");
+    navigation.navigate("BookList");
   }, [navigation]);
 
   const handleRefresh = useCallback(async () => {
@@ -583,11 +576,7 @@ export default function BookmarksScreen({ navigation }: Props) {
           alignItems: "center",
         }}
       >
-        <Ionicons
-          name="book"
-          size={18}
-          color="white"
-        />
+        <Ionicons name="book" size={18} color="white" />
         <Text
           style={{
             color: "white",
@@ -596,7 +585,7 @@ export default function BookmarksScreen({ navigation }: Props) {
             fontFamily: actualFontFamily,
           }}
         >
-          Go Back
+          Read Bible
         </Text>
       </TouchableOpacity>
     </View>
@@ -763,11 +752,7 @@ export default function BookmarksScreen({ navigation }: Props) {
                   borderRadius: 999,
                 }}
               >
-                <Ionicons
-                  name="eye"
-                  size={12}
-                  color="white"
-                />
+                <Ionicons name="eye" size={12} color="white" />
                 <Text
                   style={{
                     color: "white",

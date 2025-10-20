@@ -1,4 +1,3 @@
-// screens/BookListScreen.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -9,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
 import { Book } from "../services/BibleDatabase";
@@ -16,6 +16,7 @@ import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
 import { lightenColor } from "../utils/colorUtils";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type BookListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -117,30 +118,40 @@ export default function BookListScreen({ navigation }: Props) {
     );
   }
 
-  // Updated BookCard with soft background colors and dynamic text for readability
+  // Updated BookCard with book color punched into background
   const BookCard = ({ book, color }: { book: Book; color: string }) => {
-    const borderColor = book.book_color || color;
-    const backgroundColor =
-      lightenColor(borderColor, 0.15) ||
-      (theme === "dark" ? "#374151" : "#fff"); // Adjust fallback for dark mode
+    const borderColor = book.book_color ?? color;
 
-    const textColor = theme === "dark" ? "#F3F4F6" : "#1F2937";
+    const getButtonStyles = (bookColor: string, currentTheme: string) => {
+      let bgColor: string;
+      let textColor: string;
+      if (currentTheme === "dark") {
+        bgColor = bookColor;
+        textColor = "#ffffff";
+      } else {
+        const lightened = lightenColor(bookColor, 0.85);
+        bgColor = lightened ?? bookColor;
+        textColor = "#111827";
+      }
+      return { bgColor, textColor };
+    };
+
+    const { bgColor, textColor } = getButtonStyles(borderColor, theme);
 
     return (
       <TouchableOpacity
         key={book.book_number}
-        className="p-3 rounded-lg shadow-sm mb-3 border-l-4"
+        className="relative p-3 rounded-lg shadow-sm mb-3"
         style={{
           width: BOOK_CARD_WIDTH,
-          borderLeftColor: borderColor,
-          backgroundColor,
+          backgroundColor: bgColor,
         }}
         onPress={() => handleBookPress(book)}
         activeOpacity={0.7}
       >
         <Text
           className="font-semibold text-center text-sm"
-          style={{ color: textColor }}
+          style={{ color: "#30415bff" }}
           numberOfLines={2}
           adjustsFontSizeToFit
           minimumFontScale={0.8}
@@ -152,19 +163,9 @@ export default function BookListScreen({ navigation }: Props) {
   };
 
   return (
-    <View className={`flex-1 ${bgClass}`}>
-      {/* Header with version info */}
-      <View className={`${headerBgClass} px-4 py-3 border-b ${borderClass}`}>
-        <Text className={`text-lg font-bold ${textPrimaryClass} text-center`}>
-          Bible Books
-        </Text>
-        <Text className={`text-sm ${textSecondaryClass} text-center mt-1`}>
-          {currentVersion.replace(".sqlite3", "").toUpperCase()} Version
-        </Text>
-      </View>
-
+    <SafeAreaView className={`flex-1 ${bgClass}`}>
       <ScrollView
-        className="flex-1"
+        className="flex-1 mb-20"
         contentContainerStyle={{ padding: 16 }}
         showsVerticalScrollIndicator={false}
       >
@@ -218,12 +219,18 @@ export default function BookListScreen({ navigation }: Props) {
             borderColor: primaryBorder,
           }}
         >
+          <Ionicons
+            name="book"
+            size={20}
+            color="white"
+            style={{ textAlign: "center", marginBottom: 8 }}
+          />
           <Text className="text-sm text-center text-white">
-            📚 Total: {books.length} books • OT: {oldTestament.length} • NT:{" "}
+            Total: {books.length} books • OT: {oldTestament.length} • NT:{" "}
             {newTestament.length}
           </Text>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

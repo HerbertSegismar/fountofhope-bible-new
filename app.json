@@ -27,7 +27,7 @@
       "permissions": []
     },
     "androidNavigationBar": {
-      "visible": "immersive",
+      "visible": "sticky-immersive",
       "backgroundColor": "#1e40af"
     },
     "web": {

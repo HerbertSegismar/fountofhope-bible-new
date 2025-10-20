@@ -47,6 +47,8 @@ export default function ChapterListScreen({ navigation, route }: Props) {
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { theme, navTheme } = useTheme();
   const primaryColor = navTheme.colors.primary;
+  const primaryBorder = lightenColor(primaryColor, 0.5);
+  const neutralBorder = theme === "dark" ? "#4B5563" : "#D1D5DB";
 
   const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
   const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
@@ -161,30 +163,23 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     const verseCount = verseMapping[chapter] || 0;
 
     if (verseCount === 0) {
-      return theme === "dark"
-        ? "bg-gray-700 border-gray-600"
-        : "bg-gray-100 border-gray-300";
+      return theme === "dark" ? "bg-gray-700" : "bg-gray-100";
     }
 
-    if (book.book_color) {
-      return `${theme === "dark" ? "bg-gray-800" : "bg-white"} border-l-4`;
-    } else {
-      const testamentScheme = book.testament === "OT" ? "red" : "green";
-      const lightBg = `bg-${testamentScheme}-50`;
-      const lightBorder = `border-${testamentScheme}-200`;
-      const darkBg = `bg-${testamentScheme}-900/20`;
-      const darkBorder = `border-${testamentScheme}-800/50`;
-      return theme === "dark"
-        ? `${darkBg} ${darkBorder}`
-        : `${lightBg} ${lightBorder}`;
-    }
+    return theme === "dark" ? "bg-gray-800" : "bg-white";
   };
 
-  const getBorderColor = () => {
-    if (book.book_color) {
-      return { borderLeftColor: book.book_color };
+  const getBorderColor = (chapter: number) => {
+    const verseCount = verseMapping[chapter] || 0;
+
+    let color;
+    if (verseCount === 0) {
+      color = neutralBorder;
+    } else {
+      const testamentColor = book.testament === "OT" ? "#DC2626" : "#059669";
+      color = book.book_color || testamentColor;
     }
-    return {};
+    return { borderColor: color, borderWidth: 1.5 };
   };
 
   const getTextColorValue = (chapter: number) => {
@@ -194,12 +189,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
       return theme === "dark" ? "#6B7280" : "#9CA3AF";
     }
 
-    if (book.book_color) {
-      return book.book_color;
-    } else {
-      const baseColor = book.testament === "OT" ? "#DC2626" : "#059669";
-      return theme === "dark" ? lightenColor(baseColor, 0.6) : baseColor;
-    }
+    return primaryColor;
   };
 
   const getChapterDisplay = (chapter: number) => {
@@ -284,23 +274,24 @@ export default function ChapterListScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView className={`flex-1 ${bgClass}`}>
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+      <ScrollView className="flex-1 mb-20" showsVerticalScrollIndicator={false}>
         <View className="p-4">
           {/* Header */}
           <View
-            className={`${headerBgClass} rounded-lg p-4 mb-4 shadow-sm border-l-4 h-30 ${borderClass}`}
-            style={{ borderLeftColor: book.book_color || primaryColor }}
+            className="rounded-lg p-4 mb-4 shadow-sm h-30"
+            style={{
+              backgroundColor: primaryColor,
+              borderColor: primaryBorder,
+              borderLeftColor: book.book_color || primaryColor,
+            }}
           >
-            <Text
-              className="text-2xl font-bold text-center"
-              style={{ color: primaryColor }}
-            >
+            <Text className="text-xl font-bold text-center text-white h-10">
               {book.long_name}
             </Text>
-            <Text className={`text-sm ${textSecondaryClass} text-center`}>
+            <Text className="text-sm text-white/80 text-center">
               Select a chapter to read
             </Text>
-            <Text className={`text-xs ${textTertiaryClass} text-center mt-1`}>
+            <Text className="text-xs text-white/70 text-center mt-1">
               {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
               {chapterCount} chapters • {totalVerses} total verses
             </Text>
@@ -312,13 +303,15 @@ export default function ChapterListScreen({ navigation, route }: Props) {
               {chapters.map((chapter) => (
                 <TouchableOpacity
                   key={chapter}
-                  className={`${getChapterColor(chapter)} border rounded-lg shadow-sm justify-center items-center`}
+                  className={`rounded-lg shadow-sm justify-center items-center ${getChapterColor(
+                    chapter
+                  )}`}
                   style={[
                     {
                       width: CHAPTER_SIZE,
                       height: CHAPTER_SIZE,
                     },
-                    getBorderColor(),
+                    getBorderColor(chapter),
                   ]}
                   onPress={() => handleChapterPress(chapter)}
                   onLongPress={() => handleLongPress(chapter)}

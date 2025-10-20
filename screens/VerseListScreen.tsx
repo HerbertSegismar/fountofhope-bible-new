@@ -15,6 +15,7 @@ import { RootStackParamList } from "../types";
 import { Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
+import { lightenColor } from "../utils/colorUtils";
 
 type VerseListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -41,6 +42,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { theme, navTheme } = useTheme();
   const primaryColor = navTheme.colors.primary;
+  const primaryBorder = lightenColor(primaryColor, 0.5);
 
   const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
   const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
@@ -236,19 +238,20 @@ export default function VerseListScreen({ navigation, route }: Props) {
         <View className="p-4">
           {/* Header */}
           <View
-            className={`${headerBgClass} rounded-lg p-4 mb-4 shadow-sm border-l-4 h-30 ${borderClass}`}
-            style={{ borderLeftColor: book.book_color || primaryColor }}
+            className="rounded-lg p-4 mb-4 shadow-sm h-30"
+            style={{
+              backgroundColor: primaryColor,
+              borderColor: primaryBorder,
+              borderLeftColor: book.book_color || primaryColor,
+            }}
           >
-            <Text
-              className="text-2xl font-bold text-center"
-              style={{ color: primaryColor }}
-            >
+            <Text className="text-xl font-bold text-center text-white h-10">
               {book.long_name}
             </Text>
-            <Text className={`text-base ${textTertiaryClass} text-center`}>
+            <Text className="text-base text-white/80 text-center">
               Chapter {chapter}
             </Text>
-            <Text className={`text-sm ${textSecondaryClass} text-center mt-1`}>
+            <Text className="text-sm text-white/70 text-center mt-1">
               {currentVersion.replace(".sqlite3", "").toUpperCase()} •{" "}
               {verseCount} verses
             </Text>
@@ -256,7 +259,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
             {/* Chapter Progress */}
             {chapterCount > 0 && (
               <View className="mt-2">
-                <Text className={`text-xs ${textTertiaryClass} text-center`}>
+                <Text className="text-xs text-white/70 text-center">
                   Chapter {chapter} of {chapterCount}
                 </Text>
               </View>
@@ -386,30 +389,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
                 Next Chapter →
               </Text>
             </TouchableOpacity>
-          </View>
-
-          {/* Quick Actions */}
-          <View className={`${lightGrayClass} rounded-lg p-4`}>
-            <Text className={`text-sm ${textTertiaryClass} font-semibold mb-2`}>
-              Quick Actions
-            </Text>
-            <View className="flex-row justify-between">
-              <TouchableOpacity
-                className={`${cardBgClass} px-3 py-2 rounded ${borderClass}`}
-                onPress={() => navigation.navigate("ChapterList", { book })}
-              >
-                <Text className={`text-sm ${textTertiaryClass}`}>
-                  All Chapters
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                className={`${cardBgClass} px-3 py-2 rounded ${borderClass}`}
-                onPress={() => navigation.goBack()}
-              >
-                <Text className={`text-sm ${textTertiaryClass}`}>Back</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         </View>
       </ScrollView>

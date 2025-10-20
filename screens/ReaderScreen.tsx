@@ -24,16 +24,27 @@ import { useHighlights } from "../context/HighlightsContext";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import { SettingsModal } from "../components/SettingsModal";
-import { NavigationModal } from "../components/NavigationModal";
 import { useChapterLoader } from "../hooks/useChapterLoader";
 import { useMultiVersion } from "../hooks/useMultiVersion";
-import { useNavigationModal } from "../hooks/useNavigationModal";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Verse } from "../types";
+import { getBookInfo } from "../utils/testamentUtils";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+type SelectorType = "version" | null;
+
+interface MenuItem {
+  key: string;
+  name: string;
+  icon: IconName;
+  onPress: () => void;
+  color: string;
+}
 
 export default function ReaderScreen({
   navigation,
@@ -42,19 +53,26 @@ export default function ReaderScreen({
   navigation: any;
   route: any;
 }) {
-  const { bookId, chapter, bookName, verse: targetVerse } = route.params;
+  const {
+    bookId,
+    chapter,
+    bookName,
+    verse: targetVerse,
+    bookColor,
+  } = route.params;
   const { addBookmark, bookmarks } = useContext(BookmarksContext);
   const {
     toggleVerseHighlight,
     getChapterHighlights,
     loading: highlightedVersesLoading,
   } = useHighlights();
-  const {
-    bibleDB,
-    currentVersion,
-    availableBibleVersions, // Changed from availableVersions
-    switchVersion,
-  } = useBibleDatabase();
+  const { bibleDB, currentVersion, availableBibleVersions, switchVersion } =
+    useBibleDatabase();
+
+  // Additional states for selectors
+  const [maxChapter, setMaxChapter] = useState(0);
+  const [openSelector, setOpenSelector] = useState<SelectorType>(null);
+  const [selectorLoading, setSelectorLoading] = useState(false);
 
   // Hooks
   const themeColors = useThemeColors();
@@ -81,26 +99,19 @@ export default function ReaderScreen({
     secondaryScrollViewRef,
     ...multiProps
   } = multiVersion;
-  const navModal = useNavigationModal(
-    bookId,
-    chapter,
-    targetVerse,
-    navigation,
-    route
-  );
-  const { showNavigation, ...navProps } = navModal;
   const [fontSize, setFontSize] = useState(16);
   const [uiMode, setUiMode] = useState(0);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
   const [_showEnd, setShowEnd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isFullScreen = uiMode === 2;
-  const hideHeader = uiMode === 1 || uiMode === 2;
+  const isFullScreen = uiMode === 1;
+  const hideHeader = uiMode === 1;
   const scrollSync = useScrollSync(
     showMultiVersion,
     chapterProps.scrollViewHeight,
@@ -154,18 +165,42 @@ export default function ReaderScreen({
     };
   }, [resetButtonOpacity]);
 
-  const bookmarkedVerses = useMemo(() => {
-    const chapterBookmarks = bookmarks.filter(
-      (b) => b.book_number === bookId && b.chapter === chapter
-    );
-    return new Set(chapterBookmarks.map((b) => b.verse));
-  }, [bookmarks, bookId, chapter]);
+  // Load max chapter
+  useEffect(() => {
+    const loadData = async () => {
+      if (bibleDB) {
+        try {
+          const chCount = await bibleDB.getChapterCount(Number(bookId));
+          setMaxChapter(chCount);
+        } catch (error) {
+          console.error("Failed to load navigation data:", error);
+        }
+      }
+    };
+    loadData();
+  }, [bibleDB, bookId]);
 
-  // REFACTOR: Memoize highlightedVerses to prevent re-compute on every render (uses getChapterHighlights which may query storage)
-  const highlightedVerses = useMemo(
-    () => getChapterHighlights(bookId, chapter),
-    [bookId, chapter, getChapterHighlights]
-  );
+  const currentVerse = targetVerse || 1;
+  const versionName = getVersionDisplayName(currentVersion);
+  const bookInfo = useMemo(() => getBookInfo(Number(bookId)), [bookId]);
+  const displayBookName = bookInfo?.long || bookName;
+
+  const closeSelector = useCallback(() => setOpenSelector(null), []);
+
+  const openNavigationSelector = useCallback(() => {
+    navigation.navigate("BookList");
+  }, [navigation]);
+
+  const openVersionSelector = useCallback(() => setOpenSelector("version"), []);
+
+  const selectorTitle = useMemo(() => {
+    switch (openSelector) {
+      case "version":
+        return "Select Version";
+      default:
+        return "";
+    }
+  }, [openSelector]);
 
   const handleVersionSelect = useCallback(
     async (version: string) => {
@@ -180,6 +215,98 @@ export default function ReaderScreen({
       }
     },
     [currentVersion, switchVersion, multiProps.setIsSwitchingVersion]
+  );
+
+  const bookmarkedVerses = useMemo(() => {
+    const chapterBookmarks = bookmarks.filter(
+      (b) => b.book_number === bookId && b.chapter === chapter
+    );
+    return new Set(chapterBookmarks.map((b) => b.verse));
+  }, [bookmarks, bookId, chapter]);
+
+  // REFACTOR: Memoize highlightedVerses to prevent re-compute on every render (uses getChapterHighlights which may query storage)
+  const highlightedVerses = useMemo(
+    () => getChapterHighlights(bookId, chapter),
+    [bookId, chapter, getChapterHighlights]
+  );
+
+  // Then update your menuItems to use proper icon names:
+  const menuItems: MenuItem[] = useMemo(
+    () => [
+      {
+        key: "home",
+        name: "Home",
+        icon: "home-outline",
+        onPress: () => navigation.navigate("Home"),
+        color: primaryTextColor,
+      },
+      {
+        key: "bible",
+        name: "Bible",
+        icon: "book-outline",
+        onPress: () => navigation.navigate("BookList"),
+        color: primaryTextColor,
+      },
+      {
+        key: "search",
+        name: "Search",
+        icon: "search-outline",
+        onPress: () => navigation.navigate("Search"),
+        color: primaryTextColor,
+      },
+      {
+        key: "bookmarks",
+        name: "Bookmarks",
+        icon: "bookmark-outline",
+        onPress: () => navigation.navigate("Bookmarks"),
+        color: primaryTextColor,
+      },
+      {
+        key: "theme",
+        name: "Toggle Theme",
+        icon: themeColors.theme === "light" ? "moon-outline" : "sunny-outline",
+        onPress: toggleTheme,
+        color: primaryTextColor,
+      },
+      {
+        key: "color",
+        name: "Color Scheme",
+        icon: "color-palette-outline",
+        onPress: handleColorSchemePress,
+        color: primaryTextColor,
+      },
+      {
+        key: "multi",
+        name: "Toggle Multi-Version",
+        icon: showMultiVersion ? "copy-outline" : "copy-outline",
+        onPress: multiProps.toggleMultiVersion,
+        color: showMultiVersion ? "#f6f0f0ff" : primaryTextColor,
+      },
+      {
+        key: "settings",
+        name: "Settings",
+        icon: "settings-outline",
+        onPress: () => setShowSettings(true),
+        color: primaryTextColor,
+      },
+      {
+        key: "close",
+        name: "Close",
+        icon: "close-outline",
+        onPress: () => setShowDropdown(false),
+        color: primaryTextColor,
+      },
+    ],
+    [
+      themeColors.theme,
+      primaryTextColor,
+      showMultiVersion,
+      toggleTheme,
+      handleColorSchemePress,
+      multiProps.toggleMultiVersion,
+      navigation,
+      setShowSettings,
+    ]
   );
 
   const increaseFontSize = useCallback(
@@ -244,30 +371,17 @@ export default function ReaderScreen({
   }, [chapter, navigation, route.params]);
 
   // REFACTOR: Use getChapterCount (cached MAX) instead of getVerseCount (COUNT) for faster next-chapter check (Bible chapters are consecutive)
-  const goToNextChapter = useCallback(async () => {
-    if (!bibleDB) return;
-    try {
-      const maxChapter = await bibleDB.getChapterCount(bookId);
-      if (chapter < maxChapter)
-        navigation.navigate("Reader", {
-          ...route.params,
-          chapter: chapter + 1,
-          verse: undefined,
-        });
-      else Alert.alert("End of Book", "This is the last chapter.");
-    } catch {
-      Alert.alert("Error", "Cannot load next chapter");
+  const goToNextChapter = useCallback(() => {
+    if (chapter < maxChapter) {
+      navigation.navigate("Reader", {
+        ...route.params,
+        chapter: chapter + 1,
+        verse: undefined,
+      });
+    } else {
+      Alert.alert("End of Book", "This is the last chapter.");
     }
-  }, [bibleDB, bookId, chapter, navigation, route.params]);
-
-  const getHeaderTitle = useCallback(() => {
-    const baseTitle = targetVerse
-      ? `${bookName} ${chapter}:${targetVerse}`
-      : `${bookName} ${chapter}`;
-    return !showMultiVersion
-      ? `${baseTitle} (${getVersionDisplayName(currentVersion)})`
-      : baseTitle;
-  }, [bookName, chapter, targetVerse, showMultiVersion, currentVersion]);
+  }, [maxChapter, chapter, navigation, route.params]);
 
   const progress = Animated.divide(
     scrollY,
@@ -292,19 +406,6 @@ export default function ReaderScreen({
     const subscription = Dimensions.addEventListener("change", updateLayout);
     return () => subscription?.remove();
   }, []);
-
-  // Hide tab bar in full screen mode
-  useEffect(() => {
-    const parent = navigation.getParent();
-    if (parent) {
-      parent.setOptions({
-        tabBarStyle: {
-          backgroundColor: colors.primary,
-          display: isFullScreen ? "none" : "flex",
-        },
-      });
-    }
-  }, [isFullScreen, navigation, colors.primary]);
 
   // Scroll to top for primary when loading completes and no target verse
   useEffect(() => {
@@ -353,6 +454,7 @@ export default function ReaderScreen({
     const secondaryDisplay = getVersionDisplayName(
       multiProps.secondaryVersion || ""
     );
+    const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
 
     const renderPrimaryContent = () => {
       if (chapterLoading) {
@@ -398,6 +500,7 @@ export default function ReaderScreen({
 
       return (
         <ScrollView
+          style={{ flex: 1 }}
           ref={primaryScrollViewRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
@@ -440,7 +543,7 @@ export default function ReaderScreen({
     }
 
     return (
-      <View className="flex-1 flex-row">
+      <View style={{ flex: 1, flexDirection: "row" }}>
         <View
           style={{
             flex: 1,
@@ -451,14 +554,18 @@ export default function ReaderScreen({
           <View
             style={{
               backgroundColor: colors.muted + "20",
-              paddingVertical: 8,
+              paddingVertical: versionHeaderPaddingVertical,
               paddingHorizontal: 16,
               borderBottomWidth: 1,
               borderBottomColor: colors.border?.default,
             }}
           >
             <Text
-              style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}
+              style={{
+                color: colors.primary,
+                fontSize: isLandscape ? 12 : 14,
+                fontWeight: "600",
+              }}
             >
               {primaryDisplay}
             </Text>
@@ -469,14 +576,18 @@ export default function ReaderScreen({
           <View
             style={{
               backgroundColor: colors.muted + "20",
-              paddingVertical: 8,
+              paddingVertical: versionHeaderPaddingVertical,
               paddingHorizontal: 16,
               borderBottomWidth: 1,
               borderBottomColor: colors.border?.default,
             }}
           >
             <Text
-              style={{ color: colors.primary, fontSize: 14, fontWeight: "600" }}
+              style={{
+                color: colors.primary,
+                fontSize: isLandscape ? 12 : 14,
+                fontWeight: "600",
+              }}
             >
               {secondaryDisplay}
             </Text>
@@ -516,6 +627,7 @@ export default function ReaderScreen({
             </View>
           ) : (
             <ScrollView
+              style={{ flex: 1 }}
               ref={secondaryScrollViewRef}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
@@ -568,217 +680,333 @@ export default function ReaderScreen({
     );
   }
 
+  const headerHeight = 60;
+  const chevronBottom = 20;
+  const toggleBottom = 22;
+  const buttonSize = 35;
+  const iconSize = 24;
+  const toggleSize = 48;
+
   return (
-    <View
-      className={`${uiMode > 0 ? "mt-10" : "mt-0"}`}
+    <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
     >
       {/* Header */}
       {!hideHeader && (
-        <View
-          style={{
-            backgroundColor: colors.primary,
-            width: "100%",
-            height: 96,
-            justifyContent: "flex-end",
-          }}
-        >
-          <View className="flex-row justify-between items-center w-full px-6 pb-2">
-            <Text
-              style={{
-                color: primaryTextColor,
-                letterSpacing: 1,
-                fontSize: 20,
-              }}
-            >
-              Bible Reader
-            </Text>
-            <View className="flex-row gap-2">
-              <TouchableOpacity onPress={toggleTheme} className="p-2">
-                <Ionicons
-                  name={
-                    themeColors.theme === "light"
-                      ? "moon-outline"
-                      : "sunny-outline"
-                  }
-                  size={24}
-                  color={primaryTextColor}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleColorSchemePress}
-                className="p-2"
-              >
-                <Ionicons
-                  name="color-palette-outline"
-                  size={24}
-                  color={primaryTextColor}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => {
-                  navProps.setShowNavigation(true);
-                  navProps.setHasTappedChapter(false);
-                }}
-                className="p-2 mr-2"
-              >
-                <Ionicons
-                  name="book-outline"
-                  size={24}
-                  color={primaryTextColor}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={multiProps.toggleMultiVersion}
-                className="p-2 mr-2"
-              >
-                <Ionicons
-                  name={showMultiVersion ? "copy" : "copy-outline"}
-                  size={24}
-                  color={showMultiVersion ? "#f6f0f0ff" : "white"}
-                />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setShowSettings(true)}
-                className="p-2"
-              >
-                <Ionicons
-                  name="settings-outline"
-                  size={24}
-                  color={primaryTextColor}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Chapter Navigation */}
-      {!hideHeader && (
-        <View
-          style={{
-            backgroundColor: colors.primary,
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-          }}
-        >
-          <View className="flex-row justify-between items-center">
-            <TouchableOpacity
-              onPress={() => {
-                goToPreviousChapter();
-                resetButtonOpacity();
-              }}
-              disabled={chapter <= 1}
-              className={`p-2 ${chapter <= 1 ? "opacity-30" : ""}`}
-            >
-              <Text
-                style={{
-                  color: primaryTextColor,
-                  fontWeight: "600",
-                  fontSize: 12,
-                }}
-              >
-                ← Prev
-              </Text>
-            </TouchableOpacity>
-            <View className="flex-1 items-center">
-              <Text
-                style={{
-                  color: primaryTextColor,
-                  fontWeight: "bold",
-                  textAlign: "center",
-                  fontSize: 12,
-                }}
-                numberOfLines={2}
-                adjustsFontSizeToFit
-              >
-                {getHeaderTitle()}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => {
-                goToNextChapter();
-                resetButtonOpacity();
-              }}
-              className="p-2"
-            >
-              <Text
-                style={{
-                  color: primaryTextColor,
-                  fontWeight: "600",
-                  fontSize: 12,
-                }}
-              >
-                Next →
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <>
           <View
             style={{
-              marginTop: 8,
+              backgroundColor: colors.primary,
               width: "100%",
-              height: 4,
-              backgroundColor: colors.primary + "40",
-              borderRadius: 2,
+              height: headerHeight,
+              justifyContent: "flex-end",
             }}
           >
-            <Animated.View
+            <View
               style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                width: "100%",
+                paddingHorizontal: 24,
+              }}
+            >
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={{ opacity: 0.8 }}
+              >
+                <Ionicons
+                  name="arrow-back"
+                  size={isLandscape ? 20 : 24}
+                  color={primaryTextColor}
+                />
+              </TouchableOpacity>
+              <View
+                style={{ flex: 1, alignItems: "center", paddingHorizontal: 16 }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  }}
+                >
+                  <TouchableOpacity
+                    onPress={openNavigationSelector}
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        fontWeight: "500",
+                        fontSize: 16,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {`${displayBookName} ${chapter}:${currentVerse}`}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={openVersionSelector}
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: "white",
+                        fontWeight: "500",
+                        fontSize: 16,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {versionName}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <View
+                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              >
+                {isLandscape ? (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    {menuItems.slice(0, -1).map((item) => (
+                      <TouchableOpacity
+                        key={item.key}
+                        onPress={item.onPress}
+                        style={{ padding: 8 }}
+                      >
+                        <Ionicons
+                          name={item.icon}
+                          size={isLandscape ? 20 : 24}
+                          color={item.color}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setShowDropdown(true)}
+                    style={{ padding: 8 }}
+                  >
+                    <Ionicons
+                      name="ellipsis-vertical"
+                      size={24}
+                      color={primaryTextColor}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+            <View
+              style={{
+                marginTop: 8,
+                marginHorizontal: 16,
+                width: "100%",
                 height: 4,
-                backgroundColor: colors.primary,
+                backgroundColor: colors.primary + "40",
                 borderRadius: 2,
-                width: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["0%", "100%"],
-                  extrapolate: "clamp",
-                }),
               }}
-            />
-          </View>
-        </View>
-      )}
-
-      {/* Font Size Controls */}
-      {!hideHeader && (
-        <View
-          className="flex-row justify-between items-center px-4 py-2"
-          style={{
-            backgroundColor: colors.card + "80",
-            borderBottomWidth: 1,
-            borderBottomColor: colors.border?.default,
-          }}
-        >
-          <Text style={{ color: colors.muted, fontSize: 12 }}>Font Size</Text>
-          <View className="flex-row items-center gap-2">
-            <TouchableOpacity
-              onPress={decreaseFontSize}
-              className="w-8 h-8 rounded-full items-center justify-center"
-              style={{ backgroundColor: colors.card }}
             >
-              <Text style={{ color: colors.muted, fontWeight: "bold" }}>
-                A-
-              </Text>
-            </TouchableOpacity>
-            <Text
+              <Animated.View
+                style={{
+                  height: 4,
+                  backgroundColor: colors.primary,
+                  borderRadius: 2,
+                  width: progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ["0%", "100%"],
+                    extrapolate: "clamp",
+                  }),
+                }}
+              />
+            </View>
+          </View>
+          {/* Dropdown for portrait */}
+          {!isLandscape && showDropdown && (
+            <TouchableOpacity
               style={{
-                color: colors.text?.primary,
-                textAlign: "center",
-                fontSize: 12,
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1000,
               }}
+              activeOpacity={1}
+              onPress={() => setShowDropdown(false)}
             >
-              {fontSize}px
-            </Text>
-            <TouchableOpacity
-              onPress={increaseFontSize}
-              className="w-8 h-8 rounded-full items-center justify-center"
-              style={{ backgroundColor: colors.card }}
-            >
-              <Text style={{ color: colors.muted, fontWeight: "bold" }}>
-                A+
-              </Text>
+              <View
+                style={{
+                  position: "absolute",
+                  top: headerHeight,
+                  right: 16,
+                  backgroundColor: colors.primary,
+                  borderRadius: 8,
+                  paddingVertical: 8,
+                  minWidth: 160,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}
+                onStartShouldSetResponder={() => true}
+              >
+                {menuItems.map((item, index) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    onPress={() => {
+                      item.onPress();
+                    }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderBottomWidth: index === menuItems.length - 1 ? 0 : 1,
+                      borderBottomColor: colors.primary + "40",
+                    }}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={20}
+                      color={item.color}
+                      style={{ marginRight: 12 }}
+                    />
+                    <Text
+                      style={{
+                        color: primaryTextColor,
+                        fontSize: 16,
+                      }}
+                    >
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </TouchableOpacity>
-          </View>
-        </View>
+          )}
+          {/* Enhanced Selector Dropdown */}
+          {openSelector && (
+            <TouchableOpacity
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 999,
+                backgroundColor: "rgba(0,0,0,0.5)",
+              }}
+              activeOpacity={1}
+              onPress={closeSelector}
+            >
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  backgroundColor: colors.primary,
+                  maxHeight: "70%",
+                  borderTopLeftRadius: 16,
+                  borderTopRightRadius: 16,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={closeSelector}
+                  style={{ padding: 16, alignItems: "center" }}
+                >
+                  <View
+                    style={{
+                      width: 48,
+                      height: 4,
+                      backgroundColor: "rgba(255,255,255,0.2)",
+                      borderRadius: 2,
+                    }}
+                  />
+                </TouchableOpacity>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 16,
+                    paddingVertical: 8,
+                  }}
+                >
+                  {selectorTitle && (
+                    <Text
+                      style={{
+                        color: primaryTextColor,
+                        fontSize: 18,
+                        fontWeight: "600",
+                        flex: 1,
+                      }}
+                    >
+                      {selectorTitle}
+                    </Text>
+                  )}
+                </View>
+                <ScrollView
+                  showsVerticalScrollIndicator={false}
+                  style={{ flex: 1 }}
+                >
+                  {selectorLoading ? (
+                    <View
+                      style={{
+                        flex: 1,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
+                      <ActivityIndicator
+                        size="small"
+                        color={primaryTextColor}
+                      />
+                    </View>
+                  ) : openSelector === "version" ? (
+                    availableBibleVersions.map((v) => (
+                      <TouchableOpacity
+                        key={v}
+                        onPress={async () => {
+                          await handleVersionSelect(v);
+                          closeSelector();
+                        }}
+                        style={{
+                          paddingHorizontal: 16,
+                          paddingVertical: 12,
+                          borderBottomWidth: 1,
+                          borderBottomColor: "rgba(255,255,255,0.1)",
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={{
+                            color: "white",
+                            fontWeight: "500",
+                            fontSize: 16,
+                          }}
+                        >
+                          {getVersionDisplayName(v)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : null}
+                </ScrollView>
+              </View>
+            </TouchableOpacity>
+          )}
+        </>
       )}
 
       {/* Modals */}
@@ -795,98 +1023,114 @@ export default function ReaderScreen({
         showMultiVersion={showMultiVersion}
         toggleMultiVersion={multiProps.toggleMultiVersion}
         currentVersion={currentVersion}
-        availableBibleVersions={availableBibleVersions} // Fixed: Changed from availableVersions
+        availableBibleVersions={availableBibleVersions}
         handleVersionSelect={handleVersionSelect}
         handleSecondaryVersionSelect={multiProps.handleSecondaryVersionSelect}
         secondaryVersion={multiProps.secondaryVersion}
         isSwitchingVersion={multiProps.isSwitchingVersion}
       />
-      <NavigationModal
-        visible={showNavigation}
-        onClose={() => navProps.setShowNavigation(false)}
-        {...navProps}
-        colors={colors}
-        primaryTextColor={primaryTextColor}
-      />
 
       {/* Chapter Content */}
-      {renderMultiVersionContent()}
+      <View style={{ flex: 1 }}>{renderMultiVersionContent()}</View>
 
-      {/* Full screen toggle button - always visible, positioned absolutely */}
-      <Animated.View
-        className={`absolute left-1/2 -ml-6 size-12 rounded-full items-center justify-center z-50`}
-        style={{ opacity: buttonOpacity, bottom: 44 }}
-      >
-        <TouchableOpacity
-          onPress={() => {
-            setUiMode((prev) => (prev + 1) % 3);
-            resetButtonOpacity();
-          }}
-          className={`absolute left-1/2 -ml-6 size-12 rounded-full items-center justify-center z-50`}
-          style={{ backgroundColor: colors.primary }}
-        >
-          <Text
-            style={{
-              color: "white",
-              fontSize: 24,
-              fontWeight: "bold",
-            }}
-          >
-            {isFullScreen ? "◱" : "◲"}
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
+      {/* Footer with buttons */}
       <Animated.View
         style={{
-          position: "absolute",
-          bottom: 34,
-          left: 0,
-          right: 0,
-          height: 60,
-          flexDirection: "row",
-          justifyContent: "space-between",
-          alignItems: "center",
-          paddingHorizontal: 16,
+          position: "relative",
+          height: 0,
           opacity: buttonOpacity,
         }}
       >
-        <TouchableOpacity
-          onPress={() => {
-            goToPreviousChapter();
-            resetButtonOpacity();
-          }}
-          disabled={chapter <= 1}
+        {/* Chevron navigation bar */}
+        <View
           style={{
-            width: 35,
-            height: 35,
-            backgroundColor: colors.primary,
-            borderRadius: "100%",
-            justifyContent: "center",
+            position: "absolute",
+            bottom: chevronBottom,
+            left: 0,
+            right: 0,
+            height: 20,
+            flexDirection: "row",
+            justifyContent: "space-between",
             alignItems: "center",
-            marginLeft: 28,
+            paddingHorizontal: 16,
           }}
         >
-          <Ionicons name="chevron-back" size={24} color="white" />
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: "center" }} />
-        <TouchableOpacity
-          onPress={() => {
-            goToNextChapter();
-            resetButtonOpacity();
-          }}
+          <TouchableOpacity
+            onPress={() => {
+              goToPreviousChapter();
+              resetButtonOpacity();
+            }}
+            disabled={chapter <= 1}
+            style={{
+              width: buttonSize,
+              height: buttonSize,
+              backgroundColor: colors.primary,
+              borderRadius: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+              marginLeft: 28,
+              opacity: chapter <= 1 ? 0.3 : 1,
+            }}
+          >
+            <Ionicons name="chevron-back" size={iconSize} color="white" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, alignItems: "center" }} />
+          <TouchableOpacity
+            onPress={() => {
+              goToNextChapter();
+              resetButtonOpacity();
+            }}
+            style={{
+              width: buttonSize,
+              height: buttonSize,
+              backgroundColor: colors.primary,
+              borderRadius: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+              marginRight: 28,
+            }}
+          >
+            <Ionicons name="chevron-forward" size={iconSize} color="white" />
+          </TouchableOpacity>
+        </View>
+        {/* Full screen toggle button */}
+        <View
           style={{
-            width: 35,
-            height: 35,
-            backgroundColor: colors.primary,
-            borderRadius: "100%",
-            justifyContent: "center",
+            position: "absolute",
+            bottom: toggleBottom,
+            left: "50%",
+            marginLeft: -toggleSize / 2,
             alignItems: "center",
-            marginRight: 28,
+            justifyContent: "center",
+            height: 20,
           }}
         >
-          <Ionicons name="chevron-forward" size={24} color="white" />
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setUiMode((prev) => (prev + 1) % 2);
+              resetButtonOpacity();
+            }}
+            style={{
+              width: toggleSize,
+              height: toggleSize,
+              borderRadius: toggleSize / 2,
+              backgroundColor: colors.primary,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: isLandscape ? 20 : 24,
+                fontWeight: "bold",
+              }}
+            >
+              {isFullScreen ? "◱" : "◲"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
-    </View>
+    </SafeAreaView>
   );
 }

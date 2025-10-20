@@ -101,29 +101,49 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   ];
 
   const openDatabases = React.useRef<Map<string, BibleDatabase>>(new Map());
+  const pendingInits = React.useRef<Map<string, Promise<BibleDatabase>>>(
+    new Map()
+  );
 
   // Initialize a database version if not already open
   const initializeDatabase = useCallback(
-    async (version: string, isPrimary: boolean = false): Promise<void> => {
+    async (
+      version: string,
+      isPrimary: boolean = false
+    ): Promise<BibleDatabase> => {
       if (isPrimary) {
         setIsInitializing(true);
         setInitializationError(null);
       }
 
-      let db: BibleDatabase | null = null;
+      if (openDatabases.current.has(version)) {
+        const db = openDatabases.current.get(version)!;
+        if (isPrimary) {
+          setIsInitializing(false);
+        }
+        console.log(`Using existing database: ${version}`);
+        return db;
+      }
 
-      try {
-        console.log(`Initializing database: ${version}`);
+      if (pendingInits.current.has(version)) {
+        console.log(`Awaiting pending initialization for: ${version}`);
+        const db = await pendingInits.current.get(version)!;
+        if (isPrimary) {
+          setIsInitializing(false);
+        }
+        return db;
+      }
 
-        if (openDatabases.current.has(version)) {
-          db = openDatabases.current.get(version)!;
-          console.log(`Using existing database: ${version}`);
-        } else {
+      console.log(`Starting new initialization for: ${version}`);
+
+      const initPromise = (async (): Promise<BibleDatabase> => {
+        let db: BibleDatabase | null = null;
+        try {
           db = new BibleDatabase(version);
 
           // Add timeout to prevent hanging indefinitely
-          const initPromise = db.init();
-          const timeoutPromise = new Promise((_, reject) =>
+          const dbInitPromise = db.init();
+          const timeoutPromise = new Promise<BibleDatabase>((_, reject) =>
             setTimeout(
               () =>
                 reject(new Error("Database initialization timeout after 30s")),
@@ -131,37 +151,45 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
             )
           );
 
-          await Promise.race([initPromise, timeoutPromise]);
+          await Promise.race([dbInitPromise, timeoutPromise]);
 
           openDatabases.current.set(version, db);
 
           console.log(`Database initialized successfully: ${version}`);
-        }
-      } catch (error) {
-        console.error("Failed to initialize database:", error);
-        const errorMessage =
-          error instanceof Error
-            ? error.message
-            : "Unknown initialization error";
-        console.error(`Full error details:`, {
-          message: errorMessage,
-          stack: error instanceof Error ? error.stack : undefined,
-          version,
-        });
+          return db;
+        } catch (error) {
+          if (db) {
+            openDatabases.current.delete(version);
+          }
+          console.error("Failed to initialize database:", error);
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "Unknown initialization error";
+          console.error(`Full error details:`, {
+            message: errorMessage,
+            stack: error instanceof Error ? error.stack : undefined,
+            version,
+          });
 
-        // Only set error if it's the primary Bible database
-        if (isPrimary) {
-          setInitializationError(errorMessage);
-          setBibleDB(null);
-        }
+          // Only set error if it's the primary Bible database
+          if (isPrimary) {
+            setInitializationError(errorMessage);
+            setBibleDB(null);
+          }
 
-        openDatabases.current.delete(version);
-        throw error;
-      } finally {
-        if (isPrimary) {
-          setIsInitializing(false);
+          throw error;
+        } finally {
+          if (isPrimary) {
+            setIsInitializing(false);
+          }
+          pendingInits.current.delete(version);
         }
-      }
+      })();
+
+      pendingInits.current.set(version, initPromise);
+
+      return await initPromise;
     },
     []
   );
@@ -235,8 +263,8 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
   // Retry initialization
   const retryInitialization = useCallback(async () => {
-    await initializeDatabase(currentVersion, true);
-    setBibleDB(openDatabases.current.get(currentVersion)!);
+    const db = await initializeDatabase(currentVersion, true);
+    setBibleDB(db);
   }, [currentVersion, initializeDatabase]);
 
   // NEW: Close secondary databases (commentaries and dictionaries) except those to keep
@@ -281,9 +309,9 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         const versionToLoad = savedVersion || currentVersion;
         console.log(`Loading version: ${versionToLoad}`);
 
-        await initializeDatabase(versionToLoad, true);
+        const db = await initializeDatabase(versionToLoad, true);
         setCurrentVersion(versionToLoad);
-        setBibleDB(openDatabases.current.get(versionToLoad)!);
+        setBibleDB(db);
 
         // Preload current commentary in background
         if (versionToLoad === "nasb.sqlite3") {
@@ -351,9 +379,9 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         // Close secondary databases except those we want to keep
         await closeSecondaryDatabases(keepVersions);
 
-        await initializeDatabase(newVersion, true);
+        const db = await initializeDatabase(newVersion, true);
         setCurrentVersion(newVersion);
-        setBibleDB(openDatabases.current.get(newVersion)!);
+        setBibleDB(db);
         console.log(`Successfully switched to: ${newVersion}`);
 
         // Preload commentary for the new version if not already loaded
@@ -388,8 +416,8 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   );
 
   const refreshDatabase = useCallback(async () => {
-    await initializeDatabase(currentVersion, true);
-    setBibleDB(openDatabases.current.get(currentVersion)!);
+    const db = await initializeDatabase(currentVersion, true);
+    setBibleDB(db);
   }, [currentVersion, initializeDatabase]);
 
   const searchVerses = useCallback(
@@ -404,24 +432,14 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
   const getDatabase = useCallback(
     async (version: string): Promise<BibleDatabase | undefined> => {
-      if (openDatabases.current.has(version)) {
-        return openDatabases.current.get(version);
-      }
-
       try {
-        await initializeDatabase(version, false);
-        const db = openDatabases.current.get(version);
-        if (!db) {
-          throw new Error(`Database not set after initialization: ${version}`);
-        }
-
+        const db = await initializeDatabase(version, false);
         // Preload commentary after secondary bible version initialization
         if (!version.includes("com")) {
           preloadCurrentCommentary(version).catch((error) => {
             console.warn(`Failed to preload commentary for ${version}:`, error);
           });
         }
-
         return db;
       } catch (error) {
         console.error(`Error loading database ${version}:`, error);
@@ -443,10 +461,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       }
     });
     openDatabases.current.clear();
+    pendingInits.current.clear();
 
     // Reinitialize current version
-    await initializeDatabase(currentVersion, true);
-    setBibleDB(openDatabases.current.get(currentVersion)!);
+    const db = await initializeDatabase(currentVersion, true);
+    setBibleDB(db);
   }, [currentVersion, initializeDatabase]);
 
   const value: BibleDatabaseContextType = {
@@ -478,6 +497,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         }
       });
       openDatabases.current.clear();
+      pendingInits.current.clear();
     };
   }, []);
 

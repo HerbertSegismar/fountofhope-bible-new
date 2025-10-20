@@ -4,7 +4,6 @@ import {
   NavigationContainer,
   useTheme as useNavigationTheme,
 } from "@react-navigation/native";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -13,6 +12,8 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
+  Modal,
+  TouchableWithoutFeedback,
 } from "react-native";
 import * as Font from "expo-font";
 
@@ -38,32 +39,15 @@ import Oswald_Variable from "./assets/Oswald_VariableFont_wght.ttf";
 import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 
-export type BibleStackParamList = {
+export type RootStackParamList = {
   Home: undefined;
   BookList: undefined;
   ChapterList: { book: Book };
   VerseList: { book: Book; chapter: number };
   Reader: { bookId: number; chapter: number; bookName: string; verse?: number };
-};
-
-export type SearchStackParamList = {
   Search: undefined;
-};
-
-export type BookmarksStackParamList = {
   Bookmarks: undefined;
-  Reader: { bookId: number; chapter: number; bookName: string; verse?: number };
-};
-
-export type SettingsStackParamList = {
   Settings: undefined;
-};
-
-export type RootStackParamList = {
-  Bible: BibleStackParamList;
-  SearchTab: SearchStackParamList;
-  BookmarksTab: BookmarksStackParamList;
-  SettingsTab: SettingsStackParamList;
 };
 
 // Improved font loading hook with proper TypeScript error handling
@@ -76,23 +60,23 @@ function useFonts() {
 
     async function loadFonts() {
       try {
-        console.log('Starting font loading...');
-        
+        console.log("Starting font loading...");
+
         // Method 1: Try loading with Expo Font
         await Font.loadAsync({
           "Oswald-Variable": Oswald_Variable,
           "RubikGlitch-Regular": RubikGlitch_Regular,
         });
-        
+
         // Method 2: Wait a bit and check if fonts are really loaded
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         // Method 3: Verify fonts are available
         if (mounted) {
           // Check if fonts are actually available
           const fontFamilies = await Font.getLoadedFonts();
-          console.log('Loaded fonts:', fontFamilies);
-          
+          console.log("Loaded fonts:", fontFamilies);
+
           setFontsLoaded(true);
           setFontError(null);
         }
@@ -100,7 +84,10 @@ function useFonts() {
         console.warn("Error loading fonts:", error);
         if (mounted) {
           // Proper TypeScript error handling
-          const errorMessage = error instanceof Error ? error.message : 'Unknown font loading error';
+          const errorMessage =
+            error instanceof Error
+              ? error.message
+              : "Unknown font loading error";
           setFontError(errorMessage);
           setFontsLoaded(true); // Continue app anyway
         }
@@ -112,7 +99,7 @@ function useFonts() {
     // Fallback: If fonts don't load in 3 seconds, continue anyway
     const timeoutId = setTimeout(() => {
       if (mounted && !fontsLoaded) {
-        console.warn('Font loading timeout - continuing without custom fonts');
+        console.warn("Font loading timeout - continuing without custom fonts");
         setFontsLoaded(true);
       }
     }, 3000);
@@ -136,8 +123,27 @@ function LoadingScreen() {
   );
 }
 
-// Header Right Actions Component
-function HeaderActions() {
+// Hook to determine if device is in Portrait mode
+function usePortraitMode() {
+  const { width, height } = useWindowDimensions();
+  return height > width;
+}
+
+// Define proper type for Ionicons names
+type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+
+interface MenuItem {
+  key: string;
+  name: string;
+  icon: IoniconName;
+  onPress: () => void;
+}
+
+// Enhanced Header Actions Component with Conditional Display
+function HeaderActions({ navigation }: { navigation: any }) {
+  const isPortrait = usePortraitMode();
+  const [showDropdown, setShowDropdown] = useState(false);
+  const navigationTheme = useNavigationTheme();
   const { toggleTheme, theme, colorScheme, setColorScheme, colorSchemes } =
     useTheme();
 
@@ -147,77 +153,196 @@ function HeaderActions() {
     setColorScheme(colorSchemes[nextIndex].name);
   };
 
+  const menuItems: MenuItem[] = [
+    {
+      key: "home",
+      name: "Home",
+      icon: "home",
+      onPress: () => navigation.navigate("Home"),
+    },
+    {
+      key: "bible",
+      name: "Bible",
+      icon: "book",
+      onPress: () => navigation.navigate("BookList"),
+    },
+    {
+      key: "search",
+      name: "Search",
+      icon: "search",
+      onPress: () => navigation.navigate("Search"),
+    },
+    {
+      key: "bookmarks",
+      name: "Bookmarks",
+      icon: "bookmark",
+      onPress: () => navigation.navigate("Bookmarks"),
+    },
+    {
+      key: "settings",
+      name: "Settings",
+      icon: "settings",
+      onPress: () => navigation.navigate("Settings"),
+    },
+    {
+      key: "theme",
+      name: theme === "light" ? "Dark Mode" : "Light Mode",
+      icon: theme === "light" ? "moon" : "sunny",
+      onPress: toggleTheme,
+    },
+    {
+      key: "colors",
+      name: "Color Scheme",
+      icon: "color-palette",
+      onPress: handleColorSchemePress,
+    },
+    {
+      key: "close",
+      name: "Close",
+      icon: "close",
+      onPress: () => setShowDropdown(false),
+    },
+  ];
+
+  const dropdownBgColor = navigationTheme.colors.primary;
+  const textColor = "#fff";
+  const borderColor = "rgba(255,255,255,0.3)";
+  const iconColor = "#fff";
+
+  // In landscape mode, show all icons except close
+  if (!isPortrait) {
+    return (
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        {menuItems.slice(0, -1).map((item) => (
+          <TouchableOpacity
+            key={item.key}
+            onPress={item.onPress}
+            style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+          >
+            <Ionicons name={item.icon} size={24} color={iconColor} />
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  }
+
+  // In portrait mode, show dropdown menu
   return (
-    <View style={{ flexDirection: "row", alignItems: "center" }}>
+    <View>
       <TouchableOpacity
-        onPress={toggleTheme}
+        onPress={() => setShowDropdown(true)}
         style={{ paddingHorizontal: 8, paddingVertical: 8 }}
       >
-        <Ionicons
-          name={theme === "light" ? "moon" : "sunny"}
-          size={24}
-          color="#fff"
-        />
+        <Ionicons name="ellipsis-vertical" size={24} color={iconColor} />
       </TouchableOpacity>
-      <TouchableOpacity
-        onPress={handleColorSchemePress}
-        style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+
+      <Modal
+        visible={showDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDropdown(false)}
       >
-        <Ionicons name="color-palette" size={24} color="#fff" />
-      </TouchableOpacity>
+        <TouchableWithoutFeedback onPress={() => setShowDropdown(false)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "transparent",
+              justifyContent: "flex-start",
+              alignItems: "flex-end",
+            }}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={{
+                  backgroundColor: dropdownBgColor,
+                  borderRadius: 8,
+                  paddingVertical: 8,
+                  minWidth: 160,
+                  marginTop: 100, // Approximate: StatusBar + Header height (adjust if needed)
+                  marginRight: 16,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 4,
+                  elevation: 5,
+                }}
+              >
+                {menuItems.map((item, index) => (
+                  <TouchableOpacity
+                    key={item.key}
+                    onPress={() => {
+                      item.onPress();
+                      if (item.key !== "close") {
+                        setShowDropdown(false);
+                      }
+                    }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderBottomWidth: index === menuItems.length - 1 ? 0 : 1,
+                      borderBottomColor: borderColor,
+                    }}
+                  >
+                    <Ionicons
+                      name={item.icon}
+                      size={20}
+                      color={iconColor}
+                      style={{ marginRight: 12 }}
+                    />
+                    <Text style={{ color: textColor, fontSize: 16 }}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
 
-// Navigators
-const BibleStackNav = createStackNavigator<BibleStackParamList>();
-const SearchStackNav = createStackNavigator<SearchStackParamList>();
-const BookmarksStackNav = createStackNavigator<BookmarksStackParamList>();
-const SettingsStackNav = createStackNavigator<SettingsStackParamList>();
-const Tab = createBottomTabNavigator<RootStackParamList>();
+// Root Stack Navigator
+const RootStack = createStackNavigator<RootStackParamList>();
 
-// Hook to determine if device is in Portrait mode
-function usePortraitMode() {
-  const { width, height } = useWindowDimensions();
-  return height > width;
-}
-
-// Bible Stack Navigator
-function BibleStack() {
+function AppStack() {
   const isPortrait = usePortraitMode();
 
   return (
-    <BibleStackNav.Navigator
-      screenOptions={({ theme }) => ({
+    <RootStack.Navigator
+      screenOptions={({ navigation, theme }) => ({
         headerStyle: { backgroundColor: theme.colors.primary },
         headerTintColor: "#fff",
         headerShown: isPortrait,
-        headerRight: () => <HeaderActions />,
+        headerRight: () => <HeaderActions navigation={navigation} />,
       })}
     >
-      <BibleStackNav.Screen
+      <RootStack.Screen
         name="Home"
         component={HomeScreen}
         options={{ title: "Fount of Hope" }}
       />
-      <BibleStackNav.Screen
+      <RootStack.Screen
         name="BookList"
         component={BookListScreen}
         options={{ title: "Books of the Bible" }}
       />
-      <BibleStackNav.Screen
+      <RootStack.Screen
         name="ChapterList"
         component={ChapterListScreen}
         options={({ route }) => ({ title: route.params.book.long_name })}
       />
-      <BibleStackNav.Screen
+      <RootStack.Screen
         name="VerseList"
         component={VerseListScreen}
         options={({ route }) => ({
           title: `${route.params.book.short_name} ${route.params.chapter}`,
         })}
       />
-      <BibleStackNav.Screen
+      <RootStack.Screen
         name="Reader"
         component={ReaderScreen}
         options={({ route }) => ({
@@ -225,160 +350,26 @@ function BibleStack() {
           headerShown: false,
         })}
       />
-    </BibleStackNav.Navigator>
-  );
-}
-
-// Search Stack
-function SearchStack() {
-  const isPortrait = usePortraitMode();
-
-  return (
-    <SearchStackNav.Navigator
-      screenOptions={({ theme }) => ({
-        headerStyle: { backgroundColor: theme.colors.primary },
-        headerTintColor: "#fff",
-        headerShown: isPortrait,
-        headerRight: () => <HeaderActions />,
-      })}
-    >
-      <SearchStackNav.Screen
+      <RootStack.Screen
         name="Search"
         component={SearchScreen}
         options={{ title: "Search" }}
       />
-    </SearchStackNav.Navigator>
-  );
-}
-
-// Bookmarks Stack
-function BookmarksStack() {
-  const isPortrait = usePortraitMode();
-
-  return (
-    <BookmarksStackNav.Navigator
-      screenOptions={({ theme }) => ({
-        headerStyle: { backgroundColor: theme.colors.primary },
-        headerTintColor: "#fff",
-        headerShown: isPortrait,
-        headerRight: () => <HeaderActions />,
-      })}
-    >
-      <BookmarksStackNav.Screen
+      <RootStack.Screen
         name="Bookmarks"
         component={BookmarksScreen}
         options={{ title: "Saved Bookmarks" }}
       />
-      <BookmarksStackNav.Screen
-        name="Reader"
-        component={ReaderScreen}
-        options={({ route }) => ({
-          title: `${route.params.bookName} ${route.params.chapter}`,
-          headerShown: false,
-        })}
-      />
-    </BookmarksStackNav.Navigator>
-  );
-}
-
-// Settings Stack
-function SettingsStack() {
-  const isPortrait = usePortraitMode();
-
-  return (
-    <SettingsStackNav.Navigator
-      screenOptions={({ theme }) => ({
-        headerStyle: { backgroundColor: theme.colors.primary },
-        headerTintColor: "#fff",
-        headerShown: isPortrait,
-        headerRight: () => <HeaderActions />,
-      })}
-    >
-      <SettingsStackNav.Screen
+      <RootStack.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ title: "Settings" }}
       />
-    </SettingsStackNav.Navigator>
+    </RootStack.Navigator>
   );
 }
 
-// Bottom Tabs - RESTORED ORIGINAL STYLING
-function AppTabs() {
-  const navigationTheme = useNavigationTheme();
-  const { colorScheme } = useTheme();
-
-  const activeTintColor = useMemo(() => {
-    switch (colorScheme) {
-      case "purple":
-        return "#C4B5FD";
-      case "green":
-        return "#A7F3D0";
-      case "red":
-        return "#FCA5A5";
-      case "yellow":
-        return "#FEF08A";
-      default:
-        return "#a5a4ecff";
-    }
-  }, [colorScheme]);
-
-  return (
-    <Tab.Navigator
-      screenOptions={{
-        tabBarStyle: {
-          backgroundColor: navigationTheme.colors.primary,
-          display: "flex",
-        },
-        tabBarActiveTintColor: activeTintColor,
-        tabBarInactiveTintColor: "white",
-        headerShown: false,
-      }}
-    >
-      <Tab.Screen
-        name="Bible"
-        component={BibleStack}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="book" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="SearchTab"
-        component={SearchStack}
-        options={{
-          title: "Search",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="search" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="BookmarksTab"
-        component={BookmarksStack}
-        options={{
-          title: "Bookmarks",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="bookmark" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="SettingsTab"
-        component={SettingsStack}
-        options={{
-          title: "Settings",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
-          ),
-        }}
-      />
-    </Tab.Navigator>
-  );
-}
-
-// Custom Status Bar component - RESTORED ORIGINAL
+// Custom Status Bar component
 function AutoHideStatusBar() {
   const theme = useNavigationTheme();
 
@@ -392,19 +383,19 @@ function AutoHideStatusBar() {
   );
 }
 
-// App with Theme - RESTORED ORIGINAL
+// App with Theme
 function AppWithTheme() {
   const { navTheme } = useTheme();
 
   return (
     <NavigationContainer theme={navTheme}>
       <AutoHideStatusBar />
-      <AppTabs />
+      <AppStack />
     </NavigationContainer>
   );
 }
 
-// Main App Component - SIMPLIFIED
+// Main App Component
 export default function App() {
   const fontsLoaded = useFonts();
 
