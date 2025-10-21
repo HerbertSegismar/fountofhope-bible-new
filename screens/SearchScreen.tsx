@@ -246,14 +246,8 @@ const BackToTopButton = React.memo(
           activeOpacity={0.8}
         >
           <View className="items-center justify-center">
-            <Text
-              className="font-bold text-lg text-white"
-            >
-              ↑
-            </Text>
-            <Text className="text-xs mt-1 text-white">
-              Top
-            </Text>
+            <Text className="font-bold text-lg text-white">↑</Text>
+            <Text className="text-xs mt-1 text-white">Top</Text>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -443,15 +437,11 @@ const ScopeDropdown = React.memo(
             <Text className="font-semibold text-white">
               {currentConfig.label}
             </Text>
-            <Text
-              className="text-xs mt-1 text-white"
-            >
+            <Text className="text-xs mt-1 text-white">
               {currentConfig.description}
             </Text>
           </View>
-          <Text className="text-lg text-white">
-            {isOpen ? "↑" : "↓"}
-          </Text>
+          <Text className="text-lg text-white">{isOpen ? "↑" : "↓"}</Text>
         </TouchableOpacity>
 
         <Modal
@@ -797,11 +787,10 @@ export default function SearchScreen({ navigation }: Props) {
           className="p-4 rounded-lg shadow-sm mb-4"
           onPress={() => handleSearch()}
           disabled={!query.trim()}
+          activeOpacity={0.7}
           style={{ backgroundColor: colors.primary }}
         >
-          <Text
-            className="font-semibold text-center text-white"
-          >
+          <Text className="font-semibold text-center text-white">
             {resultStats}
           </Text>
         </TouchableOpacity>

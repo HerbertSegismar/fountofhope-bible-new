@@ -91,7 +91,7 @@ export const BIBLE_BOOKS_MAP: {
   230: { short: "Psa", long: "Psalms", standardNumber: 19 },
   240: { short: "Pro", long: "Proverbs", standardNumber: 20 },
   250: { short: "Ecc", long: "Ecclesiastes", standardNumber: 21 },
-  260: { short: "Son", long: "Song of Solomon", standardNumber: 22 },
+  260: { short: "Son", long: "Songs", standardNumber: 22 },
   290: { short: "Isa", long: "Isaiah", standardNumber: 23 },
   300: { short: "Jer", long: "Jeremiah", standardNumber: 24 },
   310: { short: "Lam", long: "Lamentations", standardNumber: 25 },

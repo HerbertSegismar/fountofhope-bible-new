@@ -1804,15 +1804,225 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   >
                     {isDictMode ? (
                       // Dictionary content - with colored non-alphabets and numbers
-                      <Text style={commentaryModalStyle}>
-                        {renderDictionaryText(
-                          commentaryText,
-                          commentaryModalStyle,
-                          themeColors,
-                          actualFontFamily,
-                          handleStrongPress
-                        )}
-                      </Text>
+                      (() => {
+                        let remainingText = commentaryText;
+                        const sections: React.ReactNode[] = [];
+                        const headers = ["Derivation:"];
+                        let keyCounter = 0;
+
+                        for (const header of headers) {
+                          const lowerHeader = header.toLowerCase();
+                          const index = remainingText
+                            .toLowerCase()
+                            .indexOf(lowerHeader);
+                          if (index === -1) continue;
+
+                          const before = remainingText.substring(0, index);
+                          if (before.trim()) {
+                            sections.push(
+                              <View
+                                key={`before-${keyCounter++}`}
+                                style={{ marginBottom: 8 }}
+                              >
+                                <Text style={commentaryModalStyle}>
+                                  {renderDictionaryText(
+                                    before,
+                                    commentaryModalStyle,
+                                    themeColors,
+                                    actualFontFamily,
+                                    handleStrongPress
+                                  )}
+                                </Text>
+                              </View>
+                            );
+                          }
+
+                          const colonIndex = remainingText.indexOf(":", index);
+                          const headerStart =
+                            colonIndex !== -1
+                              ? colonIndex + 1
+                              : index + header.length;
+                          const headerLabel = remainingText
+                            .substring(index, headerStart)
+                            .trim();
+                          remainingText = remainingText
+                            .substring(headerStart)
+                            .trimStart();
+
+                          sections.push(
+                            <View
+                              key={header}
+                              style={{
+                                borderTopWidth: 1,
+                                borderTopColor: themeColors.border,
+                                paddingTop: 12,
+                                paddingBottom: 8,
+                              }}
+                            >
+                              <Text
+                                style={[
+                                  commentaryModalStyle,
+                                  { fontWeight: "bold", marginBottom: 4 },
+                                ]}
+                              >
+                                {headerLabel}
+                              </Text>
+                            </View>
+                          );
+                        }
+
+                        // Handle See: sections specially for multiple occurrences
+                        const lowerSee = "see:";
+                        let seeStartIndex = remainingText
+                          .toLowerCase()
+                          .indexOf(lowerSee);
+                        if (seeStartIndex !== -1) {
+                          // Add text before first See:
+                          const beforeSee = remainingText.substring(
+                            0,
+                            seeStartIndex
+                          );
+                          if (beforeSee.trim()) {
+                            sections.push(
+                              <View
+                                key={`before-see-${keyCounter++}`}
+                                style={{ marginBottom: 8 }}
+                              >
+                                <Text style={commentaryModalStyle}>
+                                  {renderDictionaryText(
+                                    beforeSee,
+                                    commentaryModalStyle,
+                                    themeColors,
+                                    actualFontFamily,
+                                    handleStrongPress
+                                  )}
+                                </Text>
+                              </View>
+                            );
+                          }
+
+                          // Collect See: contents
+                          const seeContents: string[] = [];
+                          let searchPos = seeStartIndex;
+                          let lastEnd = seeStartIndex; // Initialize to start of first See:
+
+                          while (true) {
+                            const colonIndex = remainingText.indexOf(
+                              ":",
+                              searchPos
+                            );
+                            if (colonIndex === -1) {
+                              break;
+                            }
+
+                            const contentStart = colonIndex + 1;
+                            // Find next See:
+                            const nextSeeIndex = remainingText
+                              .toLowerCase()
+                              .indexOf(lowerSee, contentStart);
+                            const contentEnd =
+                              nextSeeIndex !== -1
+                                ? nextSeeIndex
+                                : remainingText.length;
+
+                            const content = remainingText
+                              .substring(contentStart, contentEnd)
+                              .trim();
+                            if (content) {
+                              seeContents.push(content);
+                            }
+
+                            lastEnd = contentEnd;
+                            if (nextSeeIndex === -1) break;
+                            searchPos = nextSeeIndex;
+                          }
+
+                          if (seeContents.length > 0) {
+                            // Join with ", "
+                            const joinedSeeContent = seeContents.join(", ");
+
+                            sections.push(
+                              <View
+                                key="see"
+                                style={{
+                                  borderTopWidth: 1,
+                                  borderTopColor: themeColors.border,
+                                  paddingTop: 12,
+                                  paddingBottom: 8,
+                                }}
+                              >
+                                <Text
+                                  style={[
+                                    commentaryModalStyle,
+                                    { fontWeight: "bold", marginBottom: 4 },
+                                  ]}
+                                >
+                                  See:
+                                </Text>
+                                <Text style={commentaryModalStyle}>
+                                  {renderDictionaryText(
+                                    joinedSeeContent,
+                                    commentaryModalStyle,
+                                    themeColors,
+                                    actualFontFamily,
+                                    handleStrongPress
+                                  )}
+                                </Text>
+                              </View>
+                            );
+
+                            // Update remainingText to after last See:
+                            remainingText = remainingText
+                              .substring(lastEnd)
+                              .trimStart();
+                          } else {
+                            // No content, skip to after the See:
+                            const colonIndex = remainingText.indexOf(
+                              ":",
+                              seeStartIndex
+                            );
+                            if (colonIndex !== -1) {
+                              remainingText = remainingText
+                                .substring(colonIndex + 1)
+                                .trimStart();
+                            } else {
+                              remainingText = remainingText
+                                .substring(seeStartIndex + 4)
+                                .trimStart();
+                            }
+                          }
+                        }
+
+                        if (remainingText.trim()) {
+                          sections.push(
+                            <View key="remaining">
+                              <Text style={commentaryModalStyle}>
+                                {renderDictionaryText(
+                                  remainingText,
+                                  commentaryModalStyle,
+                                  themeColors,
+                                  actualFontFamily,
+                                  handleStrongPress
+                                )}
+                              </Text>
+                            </View>
+                          );
+                        }
+
+                        return sections.length > 0 ? (
+                          sections
+                        ) : (
+                          <Text style={commentaryModalStyle}>
+                            {renderDictionaryText(
+                              commentaryText,
+                              commentaryModalStyle,
+                              themeColors,
+                              actualFontFamily,
+                              handleStrongPress
+                            )}
+                          </Text>
+                        );
+                      })()
                     ) : (
                       // Commentary content - with verse links
                       <Text style={commentaryModalStyle}>

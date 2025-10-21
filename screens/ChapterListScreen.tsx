@@ -15,6 +15,7 @@ import { RootStackParamList } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
 import { lightenColor } from "../utils/colorUtils";
+import { getBookInfo } from "../utils/testamentUtils";
 
 type ChapterListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -39,6 +40,8 @@ interface VerseMapping {
 
 export default function ChapterListScreen({ navigation, route }: Props) {
   const { book } = route.params;
+  const bookInfo = getBookInfo(Number(book.book_number));
+  const longName = bookInfo?.long || book.long_name;
   const [loading, setLoading] = useState(false);
   const [verseMapping, setVerseMapping] = useState<VerseMapping>({});
   const [chapterCount, setChapterCount] = useState(0);
@@ -241,7 +244,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
           {currentVersion.replace(".sqlite3", "").toUpperCase()}
         </Text>
         <Text className={`text-xs ${textTertiaryClass} mt-1`}>
-          Loading verse mapping for {book.long_name}
+          Loading verse mapping for {longName}
         </Text>
       </SafeAreaView>
     );
@@ -286,7 +289,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
             }}
           >
             <Text className="text-xl font-bold text-center text-white h-10">
-              {book.long_name}
+              {longName}
             </Text>
             <Text className="text-sm text-white/80 text-center">
               Select a chapter to read

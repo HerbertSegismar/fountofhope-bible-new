@@ -16,6 +16,7 @@ import { Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
 import { lightenColor } from "../utils/colorUtils";
+import { getBookInfo } from "../utils/testamentUtils";
 
 type VerseListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -34,6 +35,8 @@ const VERSE_SIZE = (width - 32 - (VERSES_PER_ROW - 1) * 8) / VERSES_PER_ROW;
 
 export default function VerseListScreen({ navigation, route }: Props) {
   const { book, chapter } = route.params;
+  const bookInfo = getBookInfo(Number(book.book_number));
+  const longName = bookInfo?.long || book.long_name;
   const [verses, setVerses] = useState<Verse[]>([]);
   const [loading, setLoading] = useState(true);
   const [verseCount, setVerseCount] = useState(0);
@@ -121,7 +124,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
       bookId: book.book_number,
       chapter,
       verse: verseNumber, // Pass the selected verse number
-      bookName: book.long_name,
+      bookName: longName,
       bookColor: book.book_color,
       testament: book.testament,
     });
@@ -150,7 +153,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
     navigation.navigate("Reader", {
       bookId: book.book_number,
       chapter,
-      bookName: book.long_name,
+      bookName: longName,
       bookColor: book.book_color,
       testament: book.testament,
     });
@@ -207,7 +210,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
           {currentVersion.replace(".sqlite3", "").toUpperCase()}
         </Text>
         <Text className={`text-xs ${textTertiaryClass} mt-1`}>
-          Loading verse selection for {book.long_name} {chapter}
+          Loading verse selection for {longName} {chapter}
         </Text>
       </SafeAreaView>
     );
@@ -246,7 +249,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
             }}
           >
             <Text className="text-xl font-bold text-center text-white h-10">
-              {book.long_name}
+              {longName}
             </Text>
             <Text className="text-base text-white/80 text-center">
               Chapter {chapter}
@@ -310,7 +313,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
               <Text
                 className={`text-center text-lg ${warningTextPrimaryClass}`}
               >
-                No verses found for {book.long_name} {chapter}
+                No verses found for {longName} {chapter}
               </Text>
               <Text
                 className={`text-center mt-2 text-sm ${warningTextSecondaryClass}`}

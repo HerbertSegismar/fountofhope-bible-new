@@ -15,10 +15,12 @@ import {
   type Theme,
   type FontFamily,
 } from "../context/ThemeContext"; // Adjust path as needed
+import { getBookInfo } from "../utils/testamentUtils";
 
 interface VerseViewProps {
   verses: Verse[];
   bookName: string;
+  bookNumber?: number;
   chapterNumber: number;
   onPress?: () => void;
   showVerseNumbers?: boolean;
@@ -516,6 +518,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
   ({
     verses,
     bookName,
+    bookNumber,
     chapterNumber,
     showVerseNumbers = true,
     fontSize = 16,
@@ -524,6 +527,8 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
     highlight = undefined,
     compact = false,
   }) => {
+    const bookInfo = bookNumber ? getBookInfo(Number(bookNumber)) : null;
+    const longName = bookInfo?.long || bookName;
     const { theme, colorScheme, fontFamily } = useTheme();
     const defaultColors = getThemeColors(theme, colorScheme);
     const { currentVersion } = useBibleDatabase();
@@ -627,7 +632,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
                 }}
                 numberOfLines={2}
               >
-                {bookName} {chapterNumber}:{verseRangeText}
+                {longName} {chapterNumber}:{verseRangeText}
               </Text>
             </View>
 

@@ -24,6 +24,7 @@ import {
   type FontFamily,
 } from "../context/ThemeContext";
 import Footer from "../components/Footer";
+import { getBookInfo } from "../utils/testamentUtils";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -244,14 +245,8 @@ export default function HomeScreen({ navigation }: Props) {
       const range = verses.slice(startIndex, startIndex + rangeLength);
       setVerseRange(range);
 
-      try {
-        const bookInfo = await bibleDB.getBook(bookId);
-        setBookLongName(
-          bookInfo?.long_name ?? range[0].book_name ?? "Unknown Book"
-        );
-      } catch {
-        setBookLongName(range[0].book_name ?? "Unknown Book");
-      }
+      const bookInfo = getBookInfo(bookId);
+      setBookLongName(bookInfo?.long || "Unknown Book");
     } catch (err) {
       console.error("Failed to load random verse:", err);
       if (err instanceof BibleDatabaseError)
@@ -263,11 +258,13 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   const handleVersePress = (verse: Verse) => {
+    const bookInfo = getBookInfo(Number(verse.book_number));
+    const longName = bookInfo?.long || bookLongName || "Unknown Book";
     navigation.navigate("VerseList", {
       book: {
         book_number: verse.book_number,
         short_name: verse.book_name ?? "Unknown",
-        long_name: bookLongName || verse.book_name || "Unknown Book",
+        long_name: longName,
         book_color: verse.book_color || "#3B82F6",
       },
       chapter: verse.chapter,
@@ -474,6 +471,7 @@ export default function HomeScreen({ navigation }: Props) {
             <VerseViewEnhanced
               verses={verseRange}
               bookName={bookLongName}
+              bookNumber={verseRange[0].book_number}
               chapterNumber={verseRange[0].chapter}
               fontSize={16}
               onVersePress={handleVersePress}
@@ -550,7 +548,7 @@ export default function HomeScreen({ navigation }: Props) {
       <View>
         <MatrixRN />
       </View>
-      <Footer/>
+      <Footer />
     </ScrollView>
   );
 }

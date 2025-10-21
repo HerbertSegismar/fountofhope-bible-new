@@ -16,8 +16,12 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import { useFocusEffect } from "@react-navigation/native";
 import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
@@ -53,6 +57,7 @@ export default function ReaderScreen({
   navigation: any;
   route: any;
 }) {
+  const insets = useSafeAreaInsets();
   const {
     bookId,
     chapter,
@@ -263,7 +268,7 @@ export default function ReaderScreen({
       },
       {
         key: "theme",
-        name: "Toggle Theme",
+        name: themeColors.theme === "light" ? "Dark Mode" : "Light Mode",
         icon: themeColors.theme === "light" ? "moon-outline" : "sunny-outline",
         onPress: toggleTheme,
         color: primaryTextColor,
@@ -307,6 +312,24 @@ export default function ReaderScreen({
       navigation,
       setShowSettings,
     ]
+  );
+
+  const filteredMenuItems = useMemo(
+    () =>
+      menuItems.filter(
+        (item) =>
+          item.key !== "multi" && item.key !== "theme" && item.key !== "color"
+      ),
+    [menuItems]
+  );
+
+  const themeItem = useMemo(
+    () => menuItems.find((item) => item.key === "theme"),
+    [menuItems]
+  );
+  const colorItem = useMemo(
+    () => menuItems.find((item) => item.key === "color"),
+    [menuItems]
   );
 
   const increaseFontSize = useCallback(
@@ -400,6 +423,7 @@ export default function ReaderScreen({
     const updateLayout = () => {
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
       const newIsLandscape = newWidth > newHeight;
+      setShowDropdown(false);
       setIsLandscape(newIsLandscape);
     };
     updateLayout();
@@ -505,7 +529,7 @@ export default function ReaderScreen({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{
             paddingBottom: 40,
-            paddingTop: 10,
+            paddingTop: 0,
           }}
           onScroll={handleScroll}
           scrollEventThrottle={16}
@@ -632,7 +656,7 @@ export default function ReaderScreen({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{
                 paddingBottom: 40,
-                paddingTop: 10,
+                paddingTop: 0,
               }}
               onScroll={handleSecondaryScroll}
               scrollEventThrottle={16}
@@ -680,7 +704,8 @@ export default function ReaderScreen({
     );
   }
 
-  const headerHeight = 60;
+  const headerContentHeight = 60;
+  const headerTotalHeight = insets.top + headerContentHeight;
   const chevronBottom = 20;
   const toggleBottom = 22;
   const buttonSize = 35;
@@ -691,112 +716,153 @@ export default function ReaderScreen({
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
     >
+      <StatusBar backgroundColor={colors.primary} />
       {/* Header */}
       {!hideHeader && (
-        <>
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: headerTotalHeight,
+            backgroundColor: colors.primary,
+            justifyContent: "flex-end",
+            zIndex: 1,
+          }}
+        >
           <View
             style={{
-              backgroundColor: colors.primary,
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
               width: "100%",
-              height: headerHeight,
-              justifyContent: "flex-end",
+              paddingHorizontal: 12,
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-                width: "100%",
-                paddingHorizontal: 24,
-              }}
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              style={{ opacity: 0.8 }}
             >
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                style={{ opacity: 0.8 }}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={isLandscape ? 20 : 24}
-                  color={primaryTextColor}
-                />
-              </TouchableOpacity>
+              <Ionicons
+                name="chevron-back"
+                size={isLandscape ? 20 : 24}
+                color={primaryTextColor}
+              />
+            </TouchableOpacity>
+            <View
+              style={{ flex: 1, alignItems: "center", paddingHorizontal: 10 }}
+            >
               <View
-                style={{ flex: 1, alignItems: "center", paddingHorizontal: 16 }}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 5,
+                }}
               >
-                <View
+                <TouchableOpacity
+                  onPress={openNavigationSelector}
                   style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    backgroundColor: "rgba(255,255,255,0.1)",
+                    borderRadius: 4,
                   }}
                 >
-                  <TouchableOpacity
-                    onPress={openNavigationSelector}
+                  <Text
                     style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                      borderRadius: 4,
+                      color: "white",
+                      fontWeight: "500",
+                      fontSize: 16,
                     }}
+                    numberOfLines={1}
                   >
-                    <Text
-                      style={{
-                        color: "white",
-                        fontWeight: "500",
-                        fontSize: 16,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {`${displayBookName} ${chapter}:${currentVerse}`}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={openVersionSelector}
+                    {`${displayBookName} ${chapter}:${currentVerse}`}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openVersionSelector}
+                  style={{
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    backgroundColor: "rgba(255,255,255,0.1)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
                     style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      backgroundColor: "rgba(255,255,255,0.1)",
-                      borderRadius: 4,
+                      color: "white",
+                      fontWeight: "500",
+                      fontSize: 16,
                     }}
+                    numberOfLines={1}
                   >
-                    <Text
-                      style={{
-                        color: "white",
-                        fontWeight: "500",
-                        fontSize: 16,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {versionName}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                    {versionName}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
-              >
-                {isLandscape ? (
-                  <View style={{ flexDirection: "row", gap: 8 }}>
-                    {menuItems.slice(0, -1).map((item) => (
-                      <TouchableOpacity
-                        key={item.key}
-                        onPress={item.onPress}
-                        style={{ padding: 8 }}
-                      >
-                        <Ionicons
-                          name={item.icon}
-                          size={isLandscape ? 20 : 24}
-                          color={item.color}
-                        />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ) : (
+            </View>
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+            >
+              {isLandscape ? (
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  {menuItems.slice(0, -1).map((item) => (
+                    <TouchableOpacity
+                      key={item.key}
+                      onPress={item.onPress}
+                      style={{ padding: 8 }}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={isLandscape ? 20 : 24}
+                        color={item.color}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View
+                  style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <TouchableOpacity
+                    onPress={multiProps.toggleMultiVersion}
+                    style={{ padding: 2 }}
+                  >
+                    <Ionicons
+                      name="copy-outline"
+                      size={24}
+                      color={showMultiVersion ? "#f6f0f0ff" : primaryTextColor}
+                    />
+                  </TouchableOpacity>
+                  {themeItem && (
+                    <TouchableOpacity
+                      onPress={themeItem.onPress}
+                      style={{ padding: 2 }}
+                    >
+                      <Ionicons
+                        name={themeItem.icon}
+                        size={24}
+                        color={themeItem.color}
+                      />
+                    </TouchableOpacity>
+                  )}
+                  {colorItem && (
+                    <TouchableOpacity
+                      onPress={colorItem.onPress}
+                      style={{ padding: 2 }}
+                    >
+                      <Ionicons
+                        name={colorItem.icon}
+                        size={24}
+                        color={colorItem.color}
+                      />
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     onPress={() => setShowDropdown(true)}
-                    style={{ padding: 8 }}
+                    style={{ padding: 2 }}
                   >
                     <Ionicons
                       name="ellipsis-vertical"
@@ -804,209 +870,185 @@ export default function ReaderScreen({
                       color={primaryTextColor}
                     />
                   </TouchableOpacity>
-                )}
-              </View>
-            </View>
-            <View
-              style={{
-                marginTop: 8,
-                marginHorizontal: 16,
-                width: "100%",
-                height: 4,
-                backgroundColor: colors.primary + "40",
-                borderRadius: 2,
-              }}
-            >
-              <Animated.View
-                style={{
-                  height: 4,
-                  backgroundColor: colors.primary,
-                  borderRadius: 2,
-                  width: progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ["0%", "100%"],
-                    extrapolate: "clamp",
-                  }),
-                }}
-              />
+                </View>
+              )}
             </View>
           </View>
-          {/* Dropdown for portrait */}
-          {!isLandscape && showDropdown && (
-            <TouchableOpacity
+          <View
+            style={{
+              marginTop: 8,
+              marginHorizontal: 16,
+              width: "100%",
+              height: 4,
+              backgroundColor: colors.primary + "40",
+              borderRadius: 2,
+            }}
+          >
+            <Animated.View
               style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 1000,
+                height: 4,
+                backgroundColor: colors.primary,
+                borderRadius: 2,
+                width: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ["0%", "100%"],
+                  extrapolate: "clamp",
+                }),
               }}
-              activeOpacity={1}
-              onPress={() => setShowDropdown(false)}
-            >
-              <View
-                style={{
-                  position: "absolute",
-                  top: headerHeight,
-                  right: 16,
-                  backgroundColor: colors.primary,
-                  borderRadius: 8,
-                  paddingVertical: 8,
-                  minWidth: 160,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 4,
-                  elevation: 5,
+            />
+          </View>
+        </View>
+      )}
+      {/* Dropdown for portrait */}
+      {!isLandscape && showDropdown && (
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 1000,
+          }}
+          activeOpacity={1}
+          onPress={() => setShowDropdown(false)}
+        >
+          <View
+            style={{
+              position: "absolute",
+              top: headerTotalHeight,
+              right: 16,
+              backgroundColor: colors.primary,
+              borderRadius: 8,
+              paddingVertical: 8,
+              minWidth: 160,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}
+            onStartShouldSetResponder={() => true}
+          >
+            {filteredMenuItems.map((item, index) => (
+              <TouchableOpacity
+                key={item.key}
+                onPress={() => {
+                  item.onPress();
+                  if (item.key !== "close") {
+                    setShowDropdown(false);
+                  }
                 }}
-                onStartShouldSetResponder={() => true}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderBottomWidth:
+                    index < filteredMenuItems.length - 1 ? 1 : 0,
+                  borderBottomColor: colors.primary + "40",
+                }}
               >
-                {menuItems.map((item, index) => (
+                <Ionicons
+                  name={item.icon}
+                  size={20}
+                  color={item.color}
+                  style={{ marginRight: 12 }}
+                />
+                <Text
+                  style={{
+                    color: primaryTextColor,
+                    fontSize: 16,
+                  }}
+                >
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      )}
+      {/* Enhanced Selector Dropdown */}
+      {openSelector && (
+        <TouchableOpacity
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+          }}
+          activeOpacity={1}
+          onPress={closeSelector}
+        >
+          <View
+            style={{
+              position: "absolute",
+              top: headerTotalHeight,
+              left: (screenWidth - 160) / 2,
+              width: 160,
+              backgroundColor: colors.primary,
+              borderRadius: 8,
+              paddingVertical: 8,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}
+            onStartShouldSetResponder={() => true}
+          >
+            <View className="border-b border-white">
+              <Text className="text-center text-white text-sm font-bold">
+                Select Bible Version
+              </Text>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={true}
+              style={{ maxHeight: 300 }}
+            >
+              {selectorLoading ? (
+                <View
+                  style={{
+                    paddingVertical: 20,
+                    alignItems: "center",
+                  }}
+                >
+                  <ActivityIndicator size="small" color={primaryTextColor} />
+                </View>
+              ) : openSelector === "version" ? (
+                availableBibleVersions.map((v, index) => (
                   <TouchableOpacity
-                    key={item.key}
-                    onPress={() => {
-                      item.onPress();
+                    key={v}
+                    onPress={async () => {
+                      await handleVersionSelect(v);
+                      closeSelector();
                     }}
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingHorizontal: 12,
+                      paddingHorizontal: 16,
                       paddingVertical: 8,
-                      borderBottomWidth: index === menuItems.length - 1 ? 0 : 1,
+                      borderBottomWidth:
+                        index < availableBibleVersions.length - 1 ? 1 : 0,
                       borderBottomColor: colors.primary + "40",
                     }}
+                    activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name={item.icon}
-                      size={20}
-                      color={item.color}
-                      style={{ marginRight: 12 }}
-                    />
                     <Text
                       style={{
                         color: primaryTextColor,
+                        fontWeight: "500",
                         fontSize: 16,
                       }}
                     >
-                      {item.name}
+                      {getVersionDisplayName(v)}
                     </Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </TouchableOpacity>
-          )}
-          {/* Enhanced Selector Dropdown */}
-          {openSelector && (
-            <TouchableOpacity
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 999,
-                backgroundColor: "rgba(0,0,0,0.5)",
-              }}
-              activeOpacity={1}
-              onPress={closeSelector}
-            >
-              <View
-                style={{
-                  position: "absolute",
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  backgroundColor: colors.primary,
-                  maxHeight: "70%",
-                  borderTopLeftRadius: 16,
-                  borderTopRightRadius: 16,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={closeSelector}
-                  style={{ padding: 16, alignItems: "center" }}
-                >
-                  <View
-                    style={{
-                      width: 48,
-                      height: 4,
-                      backgroundColor: "rgba(255,255,255,0.2)",
-                      borderRadius: 2,
-                    }}
-                  />
-                </TouchableOpacity>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    paddingHorizontal: 16,
-                    paddingVertical: 8,
-                  }}
-                >
-                  {selectorTitle && (
-                    <Text
-                      style={{
-                        color: primaryTextColor,
-                        fontSize: 18,
-                        fontWeight: "600",
-                        flex: 1,
-                      }}
-                    >
-                      {selectorTitle}
-                    </Text>
-                  )}
-                </View>
-                <ScrollView
-                  showsVerticalScrollIndicator={false}
-                  style={{ flex: 1 }}
-                >
-                  {selectorLoading ? (
-                    <View
-                      style={{
-                        flex: 1,
-                        justifyContent: "center",
-                        alignItems: "center",
-                      }}
-                    >
-                      <ActivityIndicator
-                        size="small"
-                        color={primaryTextColor}
-                      />
-                    </View>
-                  ) : openSelector === "version" ? (
-                    availableBibleVersions.map((v) => (
-                      <TouchableOpacity
-                        key={v}
-                        onPress={async () => {
-                          await handleVersionSelect(v);
-                          closeSelector();
-                        }}
-                        style={{
-                          paddingHorizontal: 16,
-                          paddingVertical: 12,
-                          borderBottomWidth: 1,
-                          borderBottomColor: "rgba(255,255,255,0.1)",
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <Text
-                          style={{
-                            color: "white",
-                            fontWeight: "500",
-                            fontSize: 16,
-                          }}
-                        >
-                          {getVersionDisplayName(v)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))
-                  ) : null}
-                </ScrollView>
-              </View>
-            </TouchableOpacity>
-          )}
-        </>
+                ))
+              ) : null}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       )}
 
       {/* Modals */}
@@ -1031,7 +1073,14 @@ export default function ReaderScreen({
       />
 
       {/* Chapter Content */}
-      <View style={{ flex: 1 }}>{renderMultiVersionContent()}</View>
+      <View
+        style={{
+          flex: 1,
+          marginTop: hideHeader ? 0 : headerTotalHeight - insets.top + 2,
+        }}
+      >
+        {renderMultiVersionContent()}
+      </View>
 
       {/* Footer with buttons */}
       <Animated.View

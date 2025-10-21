@@ -38,6 +38,7 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import Oswald_Variable from "./assets/Oswald_VariableFont_wght.ttf";
 import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
+import { getBookInfo } from "./utils/testamentUtils";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -204,6 +205,21 @@ function HeaderActions({ navigation }: { navigation: any }) {
     },
   ];
 
+  const filteredMenuItems = useMemo(
+    () =>
+      menuItems.filter((item) => item.key !== "theme" && item.key !== "colors"),
+    [menuItems]
+  );
+
+  const themeItem = useMemo(
+    () => menuItems.find((item) => item.key === "theme"),
+    [menuItems]
+  );
+  const colorItem = useMemo(
+    () => menuItems.find((item) => item.key === "colors"),
+    [menuItems]
+  );
+
   const dropdownBgColor = navigationTheme.colors.primary;
   const textColor = "#fff";
   const borderColor = "rgba(255,255,255,0.3)";
@@ -229,12 +245,24 @@ function HeaderActions({ navigation }: { navigation: any }) {
   // In portrait mode, show dropdown menu
   return (
     <View>
-      <TouchableOpacity
-        onPress={() => setShowDropdown(true)}
-        style={{ paddingHorizontal: 8, paddingVertical: 8 }}
-      >
-        <Ionicons name="ellipsis-vertical" size={24} color={iconColor} />
-      </TouchableOpacity>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        {themeItem && (
+          <TouchableOpacity onPress={themeItem.onPress} style={{ padding: 8 }}>
+            <Ionicons name={themeItem.icon} size={24} color={iconColor} />
+          </TouchableOpacity>
+        )}
+        {colorItem && (
+          <TouchableOpacity onPress={colorItem.onPress} style={{ padding: 8 }}>
+            <Ionicons name={colorItem.icon} size={24} color={iconColor} />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => setShowDropdown(true)}
+          style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+        >
+          <Ionicons name="ellipsis-vertical" size={24} color={iconColor} />
+        </TouchableOpacity>
+      </View>
 
       <Modal
         visible={showDropdown}
@@ -244,6 +272,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
       >
         <TouchableWithoutFeedback onPress={() => setShowDropdown(false)}>
           <View
+            className="-mt-[36px]"
             style={{
               flex: 1,
               backgroundColor: "transparent",
@@ -267,7 +296,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
                   elevation: 5,
                 }}
               >
-                {menuItems.map((item, index) => (
+                {filteredMenuItems.map((item, index) => (
                   <TouchableOpacity
                     key={item.key}
                     onPress={() => {
@@ -281,7 +310,8 @@ function HeaderActions({ navigation }: { navigation: any }) {
                       alignItems: "center",
                       paddingHorizontal: 12,
                       paddingVertical: 8,
-                      borderBottomWidth: index === menuItems.length - 1 ? 0 : 1,
+                      borderBottomWidth:
+                        index === filteredMenuItems.length - 1 ? 0 : 1,
                       borderBottomColor: borderColor,
                     }}
                   >
@@ -333,14 +363,22 @@ function AppStack() {
       <RootStack.Screen
         name="ChapterList"
         component={ChapterListScreen}
-        options={({ route }) => ({ title: route.params.book.long_name })}
+        options={({ route }) => {
+          const bookInfo = getBookInfo(Number(route.params.book.book_number));
+          const longName = bookInfo?.long || route.params.book.long_name;
+          return { title: longName };
+        }}
       />
       <RootStack.Screen
         name="VerseList"
         component={VerseListScreen}
-        options={({ route }) => ({
-          title: `${route.params.book.short_name} ${route.params.chapter}`,
-        })}
+        options={({ route }) => {
+          const bookInfo = getBookInfo(Number(route.params.book.book_number));
+          const longName = bookInfo?.long || route.params.book.long_name;
+          return {
+            title: `${longName} ${route.params.chapter}`,
+          };
+        }}
       />
       <RootStack.Screen
         name="Reader"
