@@ -25,6 +25,7 @@ import {
 } from "../context/ThemeContext";
 import Footer from "../components/Footer";
 import { getBookInfo } from "../utils/testamentUtils";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -380,7 +381,7 @@ export default function HomeScreen({ navigation }: Props) {
       showsVerticalScrollIndicator={false}
     >
       {/* Header */}
-      <View style={{ alignItems: "center", marginBottom: 24 }}>
+      <SafeAreaView style={{ alignItems: "center", marginBottom: 24 }}>
         <Image
           source={require("../assets/fohs-512x512.png")}
           style={{ width: 160, height: 160, marginBottom: 16, borderRadius: 8 }}
@@ -410,10 +411,10 @@ export default function HomeScreen({ navigation }: Props) {
         >
           Your daily source of Inspiration
         </Text>
-      </View>
+      </SafeAreaView>
 
       {/* Verse of the Day */}
-      <View style={{ marginBottom: 24 }}>
+      <SafeAreaView style={{ marginBottom: 24 }}>
         <View
           style={{
             flexDirection: "row",
@@ -466,7 +467,7 @@ export default function HomeScreen({ navigation }: Props) {
           </TouchableOpacity>
         </View>
 
-        <View style={{ marginRight: isLandscape ? 48 : 0 }}>
+        <View>
           {verseRange && verseRange.length > 0 && (
             <VerseViewEnhanced
               verses={verseRange}
@@ -478,14 +479,13 @@ export default function HomeScreen({ navigation }: Props) {
             />
           )}
         </View>
-      </View>
+      </SafeAreaView>
 
       {/* Daily Inspiration */}
-      <View
+      <SafeAreaView
         style={{
           padding: 16,
           marginBottom: 24,
-          marginRight: isLandscape ? 48 : 0,
         }}
       >
         <Text
@@ -499,14 +499,13 @@ export default function HomeScreen({ navigation }: Props) {
         >
           📖 Start your day with God's Word
         </Text>
-      </View>
+      </SafeAreaView>
 
       {/* Main Actions */}
-      <View
+      <SafeAreaView
         style={{
           gap: 8,
           marginBottom: 24,
-          marginRight: isLandscape ? 48 : 0,
         }}
       >
         <Button
@@ -518,36 +517,37 @@ export default function HomeScreen({ navigation }: Props) {
           onPress={() => navigation.navigate("BookList")}
           variant="outline"
         />
-      </View>
+      </SafeAreaView>
 
       {/* Quick Tips */}
       {verseRange && verseRange.length > 0 && (
-        <View
-          style={{
-            backgroundColor: themeColors.card,
-            padding: 16,
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: themeColors.border,
-            marginRight: isLandscape ? 48 : 0,
-          }}
-        >
-          <Text
+        <SafeAreaView>
+          <View
             style={{
-              color: themeColors.textMuted,
-              textAlign: "center",
-              fontSize: 14,
-              fontFamily: actualFontFamily,
+              backgroundColor: themeColors.card,
+              padding: 16,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: themeColors.border,
             }}
           >
-            ✨ Tap "Refresh" for fresh inspiration anytime
-          </Text>
-        </View>
+            <Text
+              style={{
+                color: themeColors.textMuted,
+                textAlign: "center",
+                fontSize: 14,
+                fontFamily: actualFontFamily,
+              }}
+            >
+              ✨ Tap "Refresh" for fresh inspiration anytime
+            </Text>
+          </View>
+        </SafeAreaView>
       )}
 
-      <View>
+      <SafeAreaView>
         <MatrixRN />
-      </View>
+      </SafeAreaView>
       <Footer />
     </ScrollView>
   );

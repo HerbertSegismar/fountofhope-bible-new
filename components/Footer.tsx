@@ -103,7 +103,7 @@ export const Footer = () => {
   const { theme, colorScheme, fontFamily } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme);
   return (
-    <View className="px-4 mt-4 mb-8">
+    <View className="px-4 mt-4 mb-20">
       <Text
         className="text-center text-xs"
         style={{ color: themeColors.textMuted }}

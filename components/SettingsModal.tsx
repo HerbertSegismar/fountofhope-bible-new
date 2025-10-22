@@ -80,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 fontWeight: "bold",
               }}
             >
-              Settings
+              Reader Settings
             </Text>
           </View>
           <ScrollView className="flex-1 mx-4">

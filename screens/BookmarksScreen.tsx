@@ -15,7 +15,6 @@ import {
   Alert,
   RefreshControl,
   Platform,
-  StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
@@ -654,7 +653,6 @@ export default function BookmarksScreen({ navigation }: Props) {
       }
 
       const bookColor = getBookColor(longName, verse);
-      const headerTextColor = getContrastColor(bookColor, themeColors);
 
       return (
         <View
@@ -790,12 +788,11 @@ export default function BookmarksScreen({ navigation }: Props) {
     <View
       style={{
         backgroundColor: themeColors.card,
-        paddingVertical: 16,
+        paddingVertical: 8,
         shadowOpacity: 0.1,
         shadowRadius: 4,
         shadowOffset: { width: 0, height: -2 },
         elevation: 2,
-        marginTop: -56,
       }}
     >
       <View
@@ -854,8 +851,6 @@ export default function BookmarksScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: themeColors.background }}>
-      {renderHeader()}
-
       <ScrollView
         style={{ flex: 1, padding: 16 }}
         showsVerticalScrollIndicator={false}
@@ -870,6 +865,7 @@ export default function BookmarksScreen({ navigation }: Props) {
           />
         }
       >
+        {renderHeader()}
         {bookmarks.length === 0 ? renderEmptyState() : renderBookmarksList()}
       </ScrollView>
     </SafeAreaView>

@@ -11,6 +11,7 @@ import {
   Modal,
   TextStyle,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList, Verse, SearchOptions } from "../types";
@@ -461,9 +462,14 @@ const ScopeDropdown = React.memo(
             >
               {/* Fixed Header - Not Scrollable */}
               <View style={headerStyle} className="px-4 py-3 sticky top-0 z-10">
-                <Text className="font-bold text-center text-base text-white">
-                  Select Search Scope
-                </Text>
+                <View className="flex-row justify-between items-center">
+                  <Text className="font-bold text-center text-base text-white flex-1">
+                    Select Search Scope
+                  </Text>
+                  <TouchableOpacity onPress={onToggle} style={{ padding: 4 }}>
+                    <Ionicons name="close" size={24} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <ScrollView>
@@ -842,7 +848,7 @@ export default function SearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View className="flex-1 px-4 -mt-8">
+      <View className="flex-1 px-4 mt-2">
         <FlatList
           ref={flatListRef}
           data={results}

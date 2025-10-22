@@ -719,7 +719,7 @@ export default function ReaderScreen({
       <StatusBar backgroundColor={colors.primary} />
       {/* Header */}
       {!hideHeader && (
-        <View
+        <SafeAreaView
           style={{
             position: "absolute",
             top: 0,
@@ -897,7 +897,7 @@ export default function ReaderScreen({
               }}
             />
           </View>
-        </View>
+        </SafeAreaView>
       )}
       {/* Dropdown for portrait */}
       {!isLandscape && showDropdown && (

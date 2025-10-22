@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { StatusBar } from "expo-status-bar";
+import { StatusBar as ExpoStatusBar } from "expo-status-bar";
+import { Platform, StatusBar as RNStatusBar } from "react-native";
 import {
   NavigationContainer,
   useTheme as useNavigationTheme,
@@ -14,6 +15,7 @@ import {
   TouchableOpacity,
   Modal,
   TouchableWithoutFeedback,
+  SafeAreaView,
 } from "react-native";
 import * as Font from "expo-font";
 
@@ -233,7 +235,11 @@ function HeaderActions({ navigation }: { navigation: any }) {
           <TouchableOpacity
             key={item.key}
             onPress={item.onPress}
-            style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 8,
+              marginRight: 8,
+            }}
           >
             <Ionicons name={item.icon} size={24} color={iconColor} />
           </TouchableOpacity>
@@ -272,12 +278,12 @@ function HeaderActions({ navigation }: { navigation: any }) {
       >
         <TouchableWithoutFeedback onPress={() => setShowDropdown(false)}>
           <View
-            className="-mt-[36px]"
             style={{
               flex: 1,
               backgroundColor: "transparent",
               justifyContent: "flex-start",
               alignItems: "flex-end",
+              marginTop: 100
             }}
           >
             <TouchableWithoutFeedback>
@@ -287,7 +293,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
                   borderRadius: 8,
                   paddingVertical: 8,
                   minWidth: 160,
-                  marginTop: 100, // Approximate: StatusBar + Header height (adjust if needed)
+                  marginTop: 0,
                   marginRight: 16,
                   shadowColor: "#000",
                   shadowOffset: { width: 0, height: 2 },
@@ -344,9 +350,13 @@ function AppStack() {
   return (
     <RootStack.Navigator
       screenOptions={({ navigation, theme }) => ({
-        headerStyle: { backgroundColor: theme.colors.primary },
+        headerStyle: {
+          backgroundColor: theme.colors.primary,
+          paddingTop:
+            Platform.OS === "android" ? RNStatusBar.currentHeight || 0 : 0,
+        },
         headerTintColor: "#fff",
-        headerShown: isPortrait,
+        headerShown: true,
         headerRight: () => <HeaderActions navigation={navigation} />,
       })}
     >
@@ -412,7 +422,7 @@ function AutoHideStatusBar() {
   const theme = useNavigationTheme();
 
   return (
-    <StatusBar
+    <ExpoStatusBar
       backgroundColor={theme.colors.primary}
       style={theme.dark ? "light" : "dark"}
       translucent={true}
@@ -427,8 +437,10 @@ function AppWithTheme() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <AutoHideStatusBar />
-      <AppStack />
+      <SafeAreaView style={{ flex: 1 }}>
+        <AutoHideStatusBar />
+        <AppStack />
+      </SafeAreaView>
     </NavigationContainer>
   );
 }
@@ -459,3 +471,4 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
