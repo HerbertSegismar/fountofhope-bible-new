@@ -807,7 +807,13 @@ export default function ReaderScreen({
               style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
             >
               {isLandscape ? (
-                <View style={{ flexDirection: "row", gap: 8 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 8,
+                    marginRight: isLandscape ? 40 : 0,
+                  }}
+                >
                   {menuItems.slice(0, -1).map((item) => (
                     <TouchableOpacity
                       key={item.key}

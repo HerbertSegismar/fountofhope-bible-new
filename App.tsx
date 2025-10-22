@@ -283,7 +283,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
               backgroundColor: "transparent",
               justifyContent: "flex-start",
               alignItems: "flex-end",
-              marginTop: 102,
+              marginTop: 105,
             }}
           >
             <TouchableWithoutFeedback>
