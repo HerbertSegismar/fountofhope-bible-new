@@ -352,8 +352,6 @@ function AppStack() {
       screenOptions={({ navigation, theme }) => ({
         headerStyle: {
           backgroundColor: theme.colors.primary,
-          paddingTop:
-            Platform.OS === "android" ? RNStatusBar.currentHeight || 0 : 0,
         },
         headerTintColor: "#fff",
         headerShown: true,
@@ -471,4 +469,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-

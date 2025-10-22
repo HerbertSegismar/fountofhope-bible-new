@@ -853,6 +853,8 @@ class BibleDatabase {
   // Keep the existing getDatabaseAsset method unchanged
   private getDatabaseAsset(): number {
     switch (this.dbName) {
+      case "kj2.sqlite3":
+        return require("../assets/kj2.sqlite3");
       case "ampc.sqlite3":
         return require("../assets/ampc.sqlite3");
       case "ampccom.sqlite3":
@@ -881,8 +883,6 @@ class BibleDatabase {
         return require("../assets/secedictionary.sqlite3");
       case "logos.sqlite3":
         return require("../assets/logos.sqlite3");
-      case "kj2.sqlite3":
-        return require("../assets/kj2.sqlite3");
       case "esv.sqlite3":
         return require("../assets/esv.sqlite3");
       case "esvcom.sqlite3":

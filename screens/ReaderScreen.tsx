@@ -35,6 +35,7 @@ import { useThemeColors } from "../hooks/useThemeColors";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Verse } from "../types";
 import { getBookInfo } from "../utils/testamentUtils";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -134,7 +135,7 @@ export default function ReaderScreen({
     scrollY,
     setShowEnd,
     primaryScrollViewRef,
-    secondaryScrollViewRef
+    secondaryScrollViewRef,
   );
   const {
     handleScroll,
@@ -193,8 +194,11 @@ export default function ReaderScreen({
   const closeSelector = useCallback(() => setOpenSelector(null), []);
 
   const openNavigationSelector = useCallback(() => {
-    navigation.navigate("BookList");
-  }, [navigation]);
+    navigation.navigate("BookList", {
+      showMultiVersion,
+      secondaryVersion: multiProps.secondaryVersion,
+    });
+  }, [navigation, showMultiVersion, multiProps.secondaryVersion]);
 
   const openVersionSelector = useCallback(() => setOpenSelector("version"), []);
 
@@ -472,6 +476,40 @@ export default function ReaderScreen({
     },
     [multiProps.handleSecondaryContentSizeChange]
   );
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const [showMultiStr, secVer] = await Promise.all([
+          AsyncStorage.getItem("showMultiVersion"),
+          AsyncStorage.getItem("secondaryVersion"),
+        ]);
+        if (showMultiStr === "true" && !showMultiVersion) {
+          multiProps.toggleMultiVersion();
+        }
+        if (secVer && secVer !== multiProps.secondaryVersion) {
+          multiProps.handleSecondaryVersionSelect(secVer);
+        }
+      } catch (e) {
+        console.error("Failed to load reader settings", e);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(
+      "showMultiVersion",
+      showMultiVersion ? "true" : "false"
+    ).catch((e) => console.error("Failed to save showMultiVersion", e));
+  }, [showMultiVersion]);
+
+  useEffect(() => {
+    AsyncStorage.setItem(
+      "secondaryVersion",
+      multiProps.secondaryVersion || ""
+    ).catch((e) => console.error("Failed to save secondaryVersion", e));
+  }, [multiProps.secondaryVersion]);
 
   const renderMultiVersionContent = () => {
     const primaryDisplay = getVersionDisplayName(currentVersion);

@@ -1,4 +1,4 @@
-// Updated hooks/useMultiVersion.ts
+// useMultiVersion Hook
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Alert, ScrollView } from "react-native";
 import { Verse } from "../types";
@@ -56,35 +56,36 @@ export const useMultiVersion = (
         return;
       }
       setSecondaryVersion(version);
+      setSecondaryFailureCount(0); // Reset failure count on version change
     },
     [currentVersion]
   );
 
   const loadSecondaryVerses = useCallback(
     async (dbInstance: BibleDatabase, retryCount = 0) => {
-      const maxRetries = 3;
+      const maxRetries = 5; // Increased from 3 for better resilience
       if (retryCount >= maxRetries)
         throw new Error(`Failed after ${maxRetries} retries`);
       try {
         return await dbInstance.getVerses(bookId, chapter);
       } catch (error) {
         console.error(
-          `Secondary load attempt ${retryCount + 1} failed:`,
+          `Secondary load attempt ${retryCount + 1} failed for version ${secondaryVersion}:`,
           error
         );
         if (retryCount < maxRetries - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 1000)); // Increased delay
           return loadSecondaryVerses(dbInstance, retryCount + 1);
         }
         throw error;
       }
     },
-    [bookId, chapter]
+    [bookId, chapter, secondaryVersion]
   );
 
   useEffect(() => {
     const loadSecondary = async () => {
-      if (!showMultiVersion || !secondaryVersion || !verses.length) return;
+      if (!showMultiVersion || !secondaryVersion) return;
       setSecondaryLoading(true);
       try {
         let secondaryChapterVerses: Verse[] = [];
@@ -103,16 +104,29 @@ export const useMultiVersion = (
         setSecondaryFailureCount(0);
         setSecondaryVerses(secondaryChapterVerses);
       } catch (error) {
-        console.error("Failed to load secondary version:", error);
+        console.error(
+          `Failed to load secondary version ${secondaryVersion}:`,
+          error
+        );
         const newFailureCount = secondaryFailureCount + 1;
         setSecondaryFailureCount(newFailureCount);
-        if (newFailureCount >= 3) {
+        if (newFailureCount >= 5) {
+          // Increased threshold
           Alert.alert(
             "Version Load Error",
-            `Failed to load ${secondaryVersion}. Disabling multi-version.`
+            `Failed to load ${secondaryVersion}. Trying another version or disabling multi-version.`
           );
-          setShowMultiVersion(false);
-          setSecondaryVersion(null);
+          // Fallback: Try next available version
+          const otherVersions = availableVersions.filter(
+            (v) => v !== currentVersion && v !== secondaryVersion
+          );
+          if (otherVersions.length > 0) {
+            setSecondaryVersion(otherVersions[0]);
+            setSecondaryFailureCount(0);
+          } else {
+            setShowMultiVersion(false);
+            setSecondaryVersion(null);
+          }
         }
         setSecondaryVerses([]);
       } finally {
@@ -126,9 +140,9 @@ export const useMultiVersion = (
     currentVersion,
     bookId,
     chapter,
-    verses,
     loadSecondaryVerses,
     secondaryFailureCount,
+    availableVersions,
   ]);
 
   useEffect(() => {
@@ -142,7 +156,6 @@ export const useMultiVersion = (
 
   const handleSecondaryVerseLayout = useCallback(
     (verseNumber: number, event: any) => {
-      // LayoutChangeEvent removed for simplicity, adjust if needed
       const { height } = event.nativeEvent.layout;
       if (height > 0) {
         setSecondaryVerseMeasurements((prev) =>
@@ -174,7 +187,7 @@ export const useMultiVersion = (
     secondaryVerses,
     secondaryLoading,
     isSwitchingVersion,
-    setIsSwitchingVersion, // Added this line to fix the error
+    setIsSwitchingVersion,
     secondaryScrollViewRef,
     secondaryVerseMeasurements,
     secondaryContentHeight,
