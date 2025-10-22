@@ -742,7 +742,7 @@ export default function ReaderScreen({
           >
             <TouchableOpacity
               onPress={() => navigation.goBack()}
-              style={{ opacity: 0.8 }}
+              style={{ opacity: 0.8, marginLeft: isLandscape ? 40 : 0 }}
             >
               <Ionicons
                 name="chevron-back"

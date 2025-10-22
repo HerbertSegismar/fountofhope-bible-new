@@ -848,7 +848,7 @@ export default function SearchScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View className="flex-1 px-4 mt-2">
+      <View className="flex-1 px-4 -mt-10">
         <FlatList
           ref={flatListRef}
           data={results}
