@@ -29,7 +29,7 @@ import SettingsScreen from "./screens/SettingsScreen";
 import "./global.css";
 
 import { Book } from "./types";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
@@ -434,10 +434,10 @@ function AppWithTheme() {
 
   return (
     <NavigationContainer theme={navTheme}>
-      <SafeAreaView style={{ flex: 1 }}>
+      <View style={{ flex: 1 }}>
         <AutoHideStatusBar />
         <AppStack />
-      </SafeAreaView>
+      </View>
     </NavigationContainer>
   );
 }

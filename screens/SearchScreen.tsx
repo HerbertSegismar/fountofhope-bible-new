@@ -675,17 +675,13 @@ export default function SearchScreen({ navigation }: Props) {
       const longName = bookInfo?.long || verse.book_name || "Unknown Book";
       const testament = verse.book_number >= 470 ? "NT" : "OT";
 
-      // Use the same pattern as VerseListScreen
-      const tabNavigation = navigation.getParent();
-      tabNavigation?.navigate("Bible", {
-        screen: "Reader",
-        params: {
-          bookId: verse.book_number,
-          chapter: verse.chapter,
-          verse: verse.verse,
-          bookName: longName,
-          testament: testament,
-        },
+      // Navigate directly to Reader screen (no tab navigator exists)
+      navigation.navigate("Reader", {
+        bookId: verse.book_number,
+        chapter: verse.chapter,
+        verse: verse.verse,
+        bookName: longName,
+        testament: testament,
       });
     },
     [navigation]
