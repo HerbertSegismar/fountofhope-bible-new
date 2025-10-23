@@ -15,7 +15,6 @@ import {
   TouchableOpacity,
   Modal,
   TouchableWithoutFeedback,
-  SafeAreaView,
 } from "react-native";
 import * as Font from "expo-font";
 
@@ -30,10 +29,9 @@ import SettingsScreen from "./screens/SettingsScreen";
 import "./global.css";
 
 import { Book } from "./types";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
-import { VerseMeasurementsProvider } from "./context/VerseMeasurementsContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
@@ -41,6 +39,7 @@ import Oswald_Variable from "./assets/Oswald_VariableFont_wght.ttf";
 import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 import { getBookInfo } from "./utils/testamentUtils";
+import { ChapterMeasurementsProvider } from "./context/ChapterMeasurementsContext";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -455,7 +454,7 @@ export default function App() {
     <SafeAreaProvider>
       <FontLoader>
         <HighlightsProvider>
-          <VerseMeasurementsProvider>
+          <ChapterMeasurementsProvider>
             <BibleDatabaseProvider>
               <ThemeProvider>
                 <BookmarksProvider>
@@ -463,7 +462,7 @@ export default function App() {
                 </BookmarksProvider>
               </ThemeProvider>
             </BibleDatabaseProvider>
-          </VerseMeasurementsProvider>
+          </ChapterMeasurementsProvider>
         </HighlightsProvider>
       </FontLoader>
     </SafeAreaProvider>

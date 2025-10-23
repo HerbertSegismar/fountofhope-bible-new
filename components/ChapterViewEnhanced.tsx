@@ -16,26 +16,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
 import {
   useTheme,
-  type ColorScheme,
-  type Theme,
-  type FontFamily,
 } from "../context/ThemeContext";
-import { Platform } from "react-native";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
 import { getTestament } from "../utils/testamentUtils";
 import {
-  commentaryDBMap,
-  DISPLAY_TO_STEM_MAP,
   getVersionKey,
   getDatabaseFilename,
-  stripTags,
 } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 import { getFontFamily } from "../utils/fontUtils";
-import { useDictionary } from "../hooks/useDictionary";
 import { useCommentary } from "../hooks/useCommentary";
 
 type ParsedNode = {
@@ -53,7 +45,6 @@ type TreeNode = {
   children?: TreeNode[];
 };
 
-// Build a tree structure from parsed nodes to handle nesting
 const buildTree = (nodes: ParsedNode[]): TreeNode[] => {
   const root: TreeNode[] = [];
   let current: TreeNode[] = root;
@@ -91,13 +82,11 @@ const parseXmlTags = (text: string): ParsedNode[] => {
 
   while (i < text.length) {
     if (text[i] === "<") {
-      // Push any accumulated text before the tag
       if (currentText) {
         nodes.push({ type: "text", content: currentText });
         currentText = "";
       }
 
-      // Find the end of the tag
       const tagEnd = text.indexOf(">", i);
       if (tagEnd === -1) {
         currentText += text.substring(i);
@@ -107,14 +96,11 @@ const parseXmlTags = (text: string): ParsedNode[] => {
       const fullTag = text.substring(i, tagEnd + 1);
 
       if (fullTag.startsWith("</")) {
-        // Closing tag
         nodes.push({ type: "closing-tag", tag: fullTag });
       } else if (fullTag.endsWith("/>")) {
-        // Self-closing tag
         const tagName = fullTag.slice(1, -2).trim();
         nodes.push({ type: "self-closing-tag", tag: tagName, fullTag });
       } else {
-        // Opening tag
         const tagName = fullTag.slice(1, -1).trim().split(" ")[0];
         nodes.push({ type: "opening-tag", tag: tagName, fullTag });
       }
@@ -126,7 +112,6 @@ const parseXmlTags = (text: string): ParsedNode[] => {
     }
   }
 
-  // Push any remaining text
   if (currentText) {
     nodes.push({ type: "text", content: currentText });
   }
@@ -134,7 +119,6 @@ const parseXmlTags = (text: string): ParsedNode[] => {
   return nodes;
 };
 
-// Render the tree to React elements
 const renderTree = (
   tree: TreeNode[],
   baseFontSize: number,
@@ -197,7 +181,6 @@ const renderTree = (
         .trim();
 
       if (isTextContainer) {
-        // For text containers like <t>, do not colorize plain text, render children with outer textColor
         const children = ch.map((child: TreeNode) =>
           renderNode(child, textColor)
         );
@@ -213,7 +196,6 @@ const renderTree = (
           </Text>
         );
       } else {
-        // For marker elements, colorize and make clickable
         const children = ch.map((child: TreeNode) =>
           renderNode(child, themeColors.tagColor)
         );
@@ -243,13 +225,11 @@ const renderTree = (
   return elements;
 };
 
-// Extract content from between tags
 const extractContentFromTag = (tag: string): string => {
   const match = tag.match(/<[^>]+>([^<]*)<\/[^>]+>/);
   return match ? match[1] : "";
 };
 
-// Render text with highlighting
 const renderTextWithHighlight = (
   text: string,
   themeColors: ThemeColors,
@@ -301,12 +281,10 @@ const renderTextWithHighlight = (
   );
 };
 
-// Helper to escape regex special characters
 const escapeRegex = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
-// Improved verse text rendering
 const renderVerseTextWithXmlHighlight = (
   text: string,
   baseFontSize: number,
@@ -345,23 +323,19 @@ const renderVerseTextWithXmlHighlight = (
   }
 };
 
-// Helper function to find book number with exact match or normalization for abbreviations and variations
 const findBookNumber = (
   bookStr: string,
   bookToNumber: Record<string, number>
 ): number | undefined => {
   if (!bookStr) return undefined;
 
-  // Try exact match first
   const trimmed = bookStr.trim();
   if (bookToNumber[trimmed]) {
     return bookToNumber[trimmed];
   }
 
-  // Fallback: normalize by removing non-alphanumeric, uppercase
   const cleanQuery = trimmed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
 
-  // Iterate over map keys and normalize them similarly
   for (const [key, num] of Object.entries(bookToNumber)) {
     const cleanKey = key.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
     if (cleanQuery === cleanKey) {
@@ -372,7 +346,6 @@ const findBookNumber = (
   return undefined;
 };
 
-// Render commentary text with clickable verse references
 const renderCommentaryWithVerseLinks = (
   text: string,
   themeColors: ThemeColors,
@@ -471,7 +444,6 @@ const renderCommentaryWithVerseLinks = (
     const fullMatchStr = (selectedMatch as RegExpExecArray)[0];
     const matchEnd = minPos + fullMatchStr.length;
 
-    // Add plain text before the match
     if (lastIndex < matchIndex) {
       parts.push(
         <Text key={parts.length} style={plainStyle}>
@@ -481,7 +453,6 @@ const renderCommentaryWithVerseLinks = (
     }
 
     if (matchType === "full") {
-      // Full reference
       const bookStr = selectedMatch[1];
       let bookNum = currentBook;
       if (bookStr) {
@@ -514,7 +485,6 @@ const renderCommentaryWithVerseLinks = (
         );
       }
     } else if (matchType === "cont") {
-      // Continuation reference
       if (currentBook !== undefined && currentChapter !== undefined) {
         const verseListStr = selectedMatch[1] as string;
         const ranges = parseVerseList(verseListStr);
@@ -547,7 +517,6 @@ const renderCommentaryWithVerseLinks = (
           );
         }
       } else {
-        // Treat as plain
         parts.push(
           <Text key={parts.length} style={plainStyle}>
             {fullMatchStr}
@@ -555,7 +524,6 @@ const renderCommentaryWithVerseLinks = (
         );
       }
     } else if (matchType === "chap") {
-      // Chapter only reference
       if (currentBook !== undefined) {
         const ch = parseInt(selectedMatch[1] as string, 10);
         const refText = fullMatchStr;
@@ -572,7 +540,6 @@ const renderCommentaryWithVerseLinks = (
         );
         currentChapter = ch;
       } else {
-        // Treat as plain
         parts.push(
           <Text key={parts.length} style={plainStyle}>
             {fullMatchStr}
@@ -580,7 +547,6 @@ const renderCommentaryWithVerseLinks = (
         );
       }
     } else if (matchType === "verse") {
-      // Verse only reference
       if (currentBook !== undefined && currentChapter !== undefined) {
         const verseListStr = selectedMatch[1] as string;
         const ranges = parseVerseList(verseListStr);
@@ -603,7 +569,6 @@ const renderCommentaryWithVerseLinks = (
           );
         }
       } else {
-        // Treat as plain
         parts.push(
           <Text key={parts.length} style={plainStyle}>
             {fullMatchStr}
@@ -615,7 +580,6 @@ const renderCommentaryWithVerseLinks = (
     lastIndex = matchEnd;
   }
 
-  // Add remaining plain text
   if (lastIndex < text.length) {
     parts.push(
       <Text key={parts.length} style={plainStyle}>
@@ -627,7 +591,6 @@ const renderCommentaryWithVerseLinks = (
   return parts;
 };
 
-// Render dictionary text with colored non-alphabets and numbers
 const renderDictionaryText = (
   text: string,
   baseStyle: TextStyle,
@@ -678,15 +641,13 @@ const renderDictionaryText = (
     const char = text[i];
 
     if (isAlpha(char)) {
-      // Check for Strong's pattern: H or G followed by digits
       if (
         (char === "H" || char === "G") &&
         i + 1 < text.length &&
         /\d/.test(text[i + 1])
       ) {
-        // Strong's number - treat like num for spacing
         let strong = char;
-        i++; // move past H/G
+        i++; 
         while (i < text.length && /\d/.test(text[i])) {
           strong += text[i];
           i++;
@@ -710,19 +671,16 @@ const renderDictionaryText = (
             {content}
           </Text>
         );
-        // After strong/num, check if next is alpha and add space
         pushSpaceIfNeeded();
         previousType = "num";
         continue;
       } else {
-        // Normal alphabetic word
         let word = char;
-        i++; // move past current char
+        i++; 
         while (i < text.length && isAlpha(text[i])) {
           word += text[i];
           i++;
         }
-        // No prepend for alpha
         parts.push(
           <Text key={`alpha-${key++}`} style={{ ...baseStyle, fontFamily }}>
             {word}
@@ -731,9 +689,8 @@ const renderDictionaryText = (
         previousType = "alpha";
       }
     } else if (/\d/.test(char)) {
-      // Number sequence - treat like strong/num
       let num = char;
-      i++; // move past current char
+      i++; 
       while (i < text.length && /\d/.test(text[i])) {
         num += text[i];
         i++;
@@ -755,13 +712,11 @@ const renderDictionaryText = (
           {content}
         </Text>
       );
-      // After num, check if next is alpha and add space
       pushSpaceIfNeeded();
       previousType = "num";
     } else if (/[^\s]/.test(char)) {
-      // Non-space character (punctuation/symbols)
       let content = char;
-      i++; // move past current char
+      i++; 
       while (
         i < text.length &&
         /[^\s]/.test(text[i]) &&
@@ -780,20 +735,17 @@ const renderDictionaryText = (
             color: themeColors.tagColor,
             fontFamily,
           };
-      // No prepend for punct (attaches to previous alpha)
       parts.push(
         <Text key={`punct-${key++}`} style={punctStyle}>
           {content}
         </Text>
       );
-      // After punct, check if next is alpha and add space
       pushSpaceIfNeeded();
       previousType = "punct";
       lastPunctChar = content.length > 0 ? content[content.length - 1] : null;
     } else {
-      // Whitespace including newlines
       let ws = char;
-      i++; // move past current char
+      i++; 
       while (i < text.length && /[\s\n\r]/.test(text[i])) {
         ws += text[i];
         i++;
@@ -915,11 +867,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     const map: Record<string, number> = {};
     Object.entries(BIBLE_BOOKS_MAP).forEach(([dbNumStr, { long, short }]) => {
       const dbNum = parseInt(dbNumStr, 10);
-      // Add full name
       map[long] = dbNum;
-      // Add standard short
       map[short] = dbNum;
-      // Add additional abbreviations
       const abbrevs = BOOK_ABBREVS[long] || [];
       abbrevs.forEach((abb) => {
         if (!map[abb]) {
@@ -956,7 +905,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [dictHistory, setDictHistory] = useState<DictHistoryEntry[]>([]);
   const [currentDictIndex, setCurrentDictIndex] = useState<number>(-1);
 
-  // Sync states from top of stack
   useEffect(() => {
     if (modalStack.length === 0) {
       setShowTagModal(false);
@@ -988,7 +936,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const isNewTestament = testament === "NT";
   const language = isNewTestament ? "Greek" : "Hebrew";
 
-  // Load commentary when modal opens or changes
   useEffect(() => {
     if (!showTagModal || modalView !== "commentary") return;
 
@@ -1223,7 +1170,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
       let loadedVerses: Verse[] = [];
       try {
-        // Use secondary DB if displayVersion is provided, else fallback to primary
         if (displayVersion) {
           const dbFilename = getDatabaseFilename(displayVersion);
           if (dbFilename) {
@@ -1265,7 +1211,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     setModalStack([]);
   }, []);
 
-  // Sort verses by verse number
   const sortedVerses = useMemo(
     () => [...verses].sort((a, b) => a.verse - b.verse),
     [verses]
@@ -1298,7 +1243,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     [displayVersion]
   );
 
-  // Get book color and calculate contrast text color
   const bookColor = sortedVerses[0]?.book_color || themeColors.primary;
 
   const modalVerseTextColor =
@@ -1481,20 +1425,17 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     );
   };
 
-  // Container style
   const containerStyle: ViewStyle = {
     ...STYLES.container,
     backgroundColor: themeColors.card,
   };
 
-  // Adjust padding for full screen mode
   const adjustedStyle = isFullScreen
     ? { ...containerStyle, paddingHorizontal: 8 }
     : containerStyle;
 
   const chapterContent = (
     <View style={[adjustedStyle, style]}>
-      {/* Colored Header */}
       <View
         style={{
           backgroundColor: bookColor,
@@ -1540,7 +1481,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         </View>
       </View>
 
-      {/* Verse Content */}
       <View
         style={{
           padding: isFullScreen ? 8 : 16,
@@ -1549,7 +1489,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       >
         {renderVerses()}
 
-        {/* Footer */}
         <View
           style={{
             marginTop: isFullScreen ? 8 : 16,
@@ -1803,7 +1742,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     contentContainerStyle={{ paddingHorizontal: 8 }}
                   >
                     {isDictMode ? (
-                      // Dictionary content - with colored non-alphabets and numbers
                       (() => {
                         let remainingText = commentaryText;
                         const sections: React.ReactNode[] = [];
@@ -1871,13 +1809,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                           );
                         }
 
-                        // Handle See: sections specially for multiple occurrences
                         const lowerSee = "see:";
                         let seeStartIndex = remainingText
                           .toLowerCase()
                           .indexOf(lowerSee);
                         if (seeStartIndex !== -1) {
-                          // Add text before first See:
                           const beforeSee = remainingText.substring(
                             0,
                             seeStartIndex
@@ -1901,10 +1837,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             );
                           }
 
-                          // Collect See: contents
                           const seeContents: string[] = [];
                           let searchPos = seeStartIndex;
-                          let lastEnd = seeStartIndex; // Initialize to start of first See:
+                          let lastEnd = seeStartIndex; 
 
                           while (true) {
                             const colonIndex = remainingText.indexOf(
@@ -1916,7 +1851,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             }
 
                             const contentStart = colonIndex + 1;
-                            // Find next See:
                             const nextSeeIndex = remainingText
                               .toLowerCase()
                               .indexOf(lowerSee, contentStart);
@@ -1938,7 +1872,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                           }
 
                           if (seeContents.length > 0) {
-                            // Join with ", "
                             const joinedSeeContent = seeContents.join(", ");
 
                             sections.push(
@@ -1971,12 +1904,10 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                               </View>
                             );
 
-                            // Update remainingText to after last See:
                             remainingText = remainingText
                               .substring(lastEnd)
                               .trimStart();
                           } else {
-                            // No content, skip to after the See:
                             const colonIndex = remainingText.indexOf(
                               ":",
                               seeStartIndex
@@ -2024,7 +1955,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                         );
                       })()
                     ) : (
-                      // Commentary content - with verse links
                       <Text style={commentaryModalStyle}>
                         {renderCommentaryWithVerseLinks(
                           commentaryText,
