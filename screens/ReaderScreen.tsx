@@ -36,6 +36,7 @@ import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Verse } from "../types";
 import { getBookInfo } from "../utils/testamentUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTheme } from "../context/ThemeContext";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -135,7 +136,7 @@ export default function ReaderScreen({
     scrollY,
     setShowEnd,
     primaryScrollViewRef,
-    secondaryScrollViewRef,
+    secondaryScrollViewRef
   );
   const {
     handleScroll,
@@ -143,6 +144,8 @@ export default function ReaderScreen({
     updatePrimaryOffset,
     updateSecondaryOffset,
   } = scrollSync;
+
+  const { setShowColorPicker } = useTheme();
 
   const resetButtonOpacity = useCallback(() => {
     if (timeoutRef.current) {
@@ -287,7 +290,7 @@ export default function ReaderScreen({
       {
         key: "multi",
         name: "Toggle Multi-Version",
-        icon: showMultiVersion ? "copy-outline" : "copy-outline",
+        icon: "copy-outline",
         onPress: multiProps.toggleMultiVersion,
         color: showMultiVersion ? "#f6f0f0ff" : primaryTextColor,
       },
@@ -856,6 +859,9 @@ export default function ReaderScreen({
                     <TouchableOpacity
                       key={item.key}
                       onPress={item.onPress}
+                      {...(item.key === "color" && {
+                        onLongPress: () => setShowColorPicker(true),
+                      })}
                       style={{ padding: 8 }}
                     >
                       <Ionicons
@@ -895,6 +901,7 @@ export default function ReaderScreen({
                   {colorItem && (
                     <TouchableOpacity
                       onPress={colorItem.onPress}
+                      onLongPress={() => setShowColorPicker(true)}
                       style={{ padding: 2 }}
                     >
                       <Ionicons

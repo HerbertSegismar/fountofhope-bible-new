@@ -238,23 +238,27 @@ function HeaderActions({ navigation }: { navigation: any }) {
   // In landscape mode, show all icons except close
   if (!isPortrait) {
     return (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-        {menuItems.slice(0, -1).map((item) => (
-          <TouchableOpacity
-            key={item.key}
-            onPress={item.onPress}
-            onLongPress={
-              item.key === "colors" ? handleColorSchemeLongPress : undefined
-            }
-            style={{
-              paddingHorizontal: 8,
-              paddingVertical: 8,
-              marginRight: 8,
-            }}
-          >
-            <Ionicons name={item.icon} size={24} color={iconColor} />
-          </TouchableOpacity>
-        ))}
+      <View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {menuItems.slice(0, -1).map((item) => (
+            <TouchableOpacity
+              key={item.key}
+              onPress={item.onPress}
+              onLongPress={
+                item.key === "colors" ? handleColorSchemeLongPress : undefined
+              }
+              style={{
+                paddingHorizontal: 8,
+                paddingVertical: 8,
+                marginRight: 8,
+              }}
+            >
+              <Ionicons name={item.icon} size={24} color={iconColor} />
+            </TouchableOpacity>
+          ))}
+        </View>
+        {/* Color Wheel Picker */}
+        <ColorWheelPicker />
       </View>
     );
   }
@@ -363,7 +367,6 @@ function HeaderActions({ navigation }: { navigation: any }) {
 const RootStack = createStackNavigator<RootStackParamList>();
 
 function AppStack() {
-
   return (
     <RootStack.Navigator
       screenOptions={({ navigation, theme }) => ({
