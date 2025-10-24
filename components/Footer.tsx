@@ -1,5 +1,5 @@
 import React from "react";
-import { Text, View } from "react-native";
+import { Text, View, TouchableOpacity, Linking } from "react-native";
 import {
   useTheme,
   type ColorScheme,
@@ -102,6 +102,8 @@ type ThemeColors = BaseThemeColors & {
 export const Footer = () => {
   const { theme, colorScheme, fontFamily } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme);
+  const myBibleUrl = "https://mybible.zone/us/";
+  const contactEmail = "fountofhopedevotionals@gmail.com";
   return (
     <View className="px-4 mt-4 mb-20">
       <Text
@@ -122,12 +124,87 @@ export const Footer = () => {
       >
         App Created By: Herbert Segismar
       </Text>
-      <Text
-        className="text-center text-xs mt-1"
-        style={{ color: themeColors.primary }}
+      <View className="mt-1">
+        <View
+          style={{
+            flexDirection: "row",
+            justifyContent: "center",
+            alignItems: "baseline",
+          }}
+        >
+          <Text className="text-xs" style={{ color: themeColors.textMuted }}>
+            Contact:{" "}
+          </Text>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(`mailto:${contactEmail}`)}
+          >
+            <Text
+              className="text-xs"
+              style={{
+                color: themeColors.primary,
+                textDecorationLine: "underline",
+              }}
+            >
+              {contactEmail}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View
+        className="mt-4"
+        style={{
+          borderWidth: 1,
+          borderColor: themeColors.border,
+          borderRadius: 4,
+          padding: 8,
+        }}
       >
-        Contact: fountofhopedevotionals@gmail.com
-      </Text>
+        <View
+          style={{
+            flexDirection: "column",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              alignItems: "baseline",
+            }}
+          >
+            <Text
+              className="text-center text-xs"
+              style={{ color: themeColors.textMuted }}
+            >
+              Special thanks to the{" "}
+            </Text>
+            <TouchableOpacity onPress={() => Linking.openURL(myBibleUrl)}>
+              <Text
+                className="text-xs"
+                style={{
+                  color: themeColors.primary,
+                  textDecorationLine: "underline",
+                }}
+              >
+                MyBible
+              </Text>
+            </TouchableOpacity>
+            <Text
+              className="text-center text-xs"
+              style={{ color: themeColors.textMuted }}
+            >
+              {" "}
+              team
+            </Text>
+          </View>
+          <Text
+            className="text-center text-xs mt-1"
+            style={{ color: themeColors.textMuted }}
+          >
+            for making their modules available.
+          </Text>
+        </View>
+      </View>
     </View>
   );
 };

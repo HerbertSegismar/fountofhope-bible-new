@@ -1,11 +1,5 @@
 import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Animated,
-  Easing,
-} from "react-native";
+import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { Fonts } from "../utils/fonts";
 
@@ -170,20 +164,25 @@ interface Overlay {
   positionAnim: Animated.Value;
 }
 
+const primaryColors: Record<string, { light: string; dark: string }> = {
+  purple: { light: "#A855F7", dark: "#9333EA" },
+  green: { light: "#10B981", dark: "#059669" },
+  red: { light: "#c64141", dark: "#d44545" },
+  yellow: { light: "#F59E0B", dark: "#D97706" },
+};
+
 const MatrixNative = () => {
-  const { theme } = useTheme();
+  const { theme, colorScheme } = useTheme();
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const dropsRef = useRef<Drop[]>([]);
   const [containerWidth, setContainerWidth] = useState(0);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const getMatrixColor = useCallback(() => {
-    if (theme === "dark") {
-      return "#1ad73dff";
-    } else {
-      return "#15c641ff";
-    }
-  }, [theme]);
+    return primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
+  }, [theme, colorScheme]);
+
+  const bgColor = theme === "dark" ? "black" : "#F5F5DC";
 
   const matrixChars =
     "アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズブヅプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロヲゴゾドボポヴッン0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ~!@#$%^&*()_-+=ᜀᜁᜂᜃᜄᜅᜆᜇᜈᜉᜊᜋᜌᜎᜏᜐᜑ";
@@ -321,7 +320,7 @@ const MatrixNative = () => {
         overlayTimeoutRef.current = null;
       }
     };
-  }, [containerWidth]);
+  }, [containerWidth, theme, colorScheme]);
 
   useEffect(() => {
     return () => {
@@ -413,7 +412,7 @@ const MatrixNative = () => {
   const matrixColor = getMatrixColor();
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={[styles.outerContainer, { backgroundColor: bgColor }]}>
       <Text
         style={[
           styles.title,
@@ -427,7 +426,7 @@ const MatrixNative = () => {
       </Text>
       <View
         onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
-        style={styles.container}
+        style={[styles.container, { backgroundColor: bgColor }]}
       >
         {renderDrops()}
         <View style={styles.overlayContainer}>{renderOverlays()}</View>
@@ -438,11 +437,10 @@ const MatrixNative = () => {
 
 const styles = StyleSheet.create({
   outerContainer: {
-    backgroundColor: "black",
     borderRadius: 16,
     marginTop: 25,
     marginBottom: 24,
-    padding: 5
+    padding: 5,
   },
   title: {
     padding: 16,
@@ -452,7 +450,6 @@ const styles = StyleSheet.create({
   container: {
     width: "100%",
     height,
-    backgroundColor: "black",
     overflow: "hidden",
   },
   drop: {
@@ -483,9 +480,6 @@ const styles = StyleSheet.create({
   overlayTextContent: {
     fontWeight: "400",
     includeFontPadding: false,
-    textShadowColor: "rgba(0, 0, 0, 0.8)",
-    textShadowOffset: { width: 2, height: 2 },
-    textShadowRadius: 4,
   },
 });
 

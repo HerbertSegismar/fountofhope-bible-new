@@ -567,7 +567,7 @@ const SettingsScreen = () => {
           subtitle="App version and information"
           icon="information-circle-outline"
           onPress={() =>
-            Alert.alert("About", "Bible App v1.0.0\n\nFount of Hope Studios")
+            Alert.alert("About", "Bible App v1.0.0\n\nFount of Hope Bible")
           }
         >
           <Ionicons name="chevron-forward" size={20} color={colors.muted} />

@@ -1016,7 +1016,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const currentTitle = useMemo(() => {
     const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
-    if (!isDictMode) return `Commentary for marker "${tagContent}"`;
+    if (!isDictMode) return `Commentary for "${tagContent}"`;
 
     const prefix = isNewTestament ? "G" : "H";
     const full =
