@@ -5,7 +5,7 @@ import {
   generateColorPalette,
   getAccessibleTextColor,
   type ColorVariants,
-} from "../utils/colorUtils";
+} from "../utils/themeUtils";
 
 export const useColorUtils = () => {
   const { colorScheme, customColor } = useTheme();

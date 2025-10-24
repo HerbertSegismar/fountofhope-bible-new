@@ -3,7 +3,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  useColorScheme,
   Platform,
 } from "react-native";
 import { Verse } from "../types";
@@ -11,16 +10,14 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import {
   useTheme,
-  type ColorScheme,
-  type Theme,
   type FontFamily,
 } from "../context/ThemeContext";
 import { getBookInfo } from "../utils/testamentUtils";
 import {
   getThemeColors,
-  getContrastColor,
   type ThemeColors,
 } from "../utils/themeUtils";
+import { getAccessibleTextColor } from "../utils/themeUtils";
 
 
 interface VerseViewProps {
@@ -37,44 +34,6 @@ interface VerseViewProps {
   compact?: boolean; // compact mode for search results
   bookColor?: string;
 }
-
-// Base light theme colors (adjust accents based on scheme)
-const BASE_LIGHT_THEME_COLORS = {
-  card: "#FFFFFF",
-  background: "#FFFFFF",
-  surface: "#F8F9FA",
-  textPrimary: "#1F2937",
-  textSecondary: "#374151",
-  textMuted: "#6C757D",
-  highlightBg: "#FFF3CD",
-  highlightBorder: "#FFD700",
-  highlightText: "#8B4513",
-  highlightIcon: "#B8860B",
-  tagBg: "rgba(0,255,0,0.1)",
-  searchHighlightBg: "#FFFF99",
-  border: "#E9ECEF",
-} as const;
-
-// Base dark theme colors (adjust accents based on scheme)
-const BASE_DARK_THEME_COLORS = {
-  card: "#111827",
-  background: "#111827",
-  surface: "#1F2937",
-  textPrimary: "#F9FAFB",
-  textSecondary: "#D1D5DB",
-  textMuted: "#9CA3AF",
-  highlightBg: "#1F2937",
-  highlightBorder: "#FCD34D",
-  highlightText: "#FECACA",
-  highlightIcon: "#FCD34D",
-  tagBg: "rgba(255,255,255,0.1)",
-  searchHighlightBg: "#81df81ff",
-  border: "#374151",
-} as const;
-
-type BaseThemeColors =
-  | typeof BASE_LIGHT_THEME_COLORS
-  | typeof BASE_DARK_THEME_COLORS;
 
 
 // Improved XML parsing function that handles nested tags
@@ -491,7 +450,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
 
     // Get book color and calculate contrast text color
     const bookColor = sortedVerses[0]?.book_color || defaultColors.primary;
-    const headerTextColor = getContrastColor(bookColor, defaultColors);
+    const headerTextColor = getAccessibleTextColor(bookColor);
 
     if (sortedVerses.length === 0) {
       return (
@@ -573,9 +532,8 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
             {!compact && versionText && (
               <Text
                 style={{
-                  color: headerTextColor,
-                  fontSize: 11,
-                  opacity: 0.9,
+                  color: headerTextColor + "80",
+                  fontSize: 14,
                   marginLeft: 8,
                   fontFamily: actualFontFamily,
                 }}

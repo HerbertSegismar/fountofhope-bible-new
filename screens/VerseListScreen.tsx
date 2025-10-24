@@ -15,7 +15,7 @@ import { RootStackParamList } from "../types";
 import { Verse } from "../services/BibleDatabase";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
-import { lightenColor } from "../utils/colorUtils";
+import { lightenColor } from "../utils/themeUtils";
 import { getBookInfo } from "../utils/testamentUtils";
 
 type VerseListScreenNavigationProp = StackNavigationProp<

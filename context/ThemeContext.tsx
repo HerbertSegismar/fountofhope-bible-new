@@ -17,7 +17,7 @@ import {
   gradientSchemes,
   type ColorVariants,
   type GradientColors as GradientColorsInterface,
-} from "../utils/colorUtils";
+} from "../utils/themeUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ColorScheme = "purple" | "green" | "red" | "yellow" | "custom";

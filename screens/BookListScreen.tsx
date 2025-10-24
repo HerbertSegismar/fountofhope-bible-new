@@ -15,7 +15,7 @@ import { Book } from "../services/BibleDatabase";
 import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
-import { lightenColor } from "../utils/colorUtils";
+import { lightenColor } from "../utils/themeUtils";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 type BookListScreenNavigationProp = StackNavigationProp<
