@@ -164,23 +164,28 @@ interface Overlay {
   positionAnim: Animated.Value;
 }
 
-const primaryColors: Record<string, { light: string; dark: string }> = {
-  purple: { light: "#A855F7", dark: "#9333EA" },
-  green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#c64141", dark: "#d44545" },
-  yellow: { light: "#F59E0B", dark: "#D97706" },
-};
-
 const MatrixNative = () => {
-  const { theme, colorScheme } = useTheme();
+  const { theme, colorScheme, customColor } = useTheme();
   const [overlays, setOverlays] = useState<Overlay[]>([]);
   const dropsRef = useRef<Drop[]>([]);
   const [containerWidth, setContainerWidth] = useState(0);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Get the appropriate color based on theme and color scheme
   const getMatrixColor = useCallback(() => {
+    if (colorScheme === "custom") {
+      return customColor;
+    }
+
+    const primaryColors = {
+      purple: { light: "#A855F7", dark: "#9333EA" },
+      green: { light: "#10B981", dark: "#059669" },
+      red: { light: "#EF4444", dark: "#DC2626" },
+      yellow: { light: "#F59E0B", dark: "#D97706" },
+    };
+
     return primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
-  }, [theme, colorScheme]);
+  }, [theme, colorScheme, customColor]);
 
   const bgColor = theme === "dark" ? "black" : "#F5F5DC";
 
@@ -257,7 +262,7 @@ const MatrixNative = () => {
       positionAnim,
     };
 
-    setOverlays((prev) => [...prev, newOverlay]);
+    setOverlays([newOverlay]); // Replace state with new overlay (ensures single instance)
 
     // Animate in
     Animated.parallel([
@@ -293,8 +298,7 @@ const MatrixNative = () => {
         }),
       ]).start(({ finished }) => {
         if (finished) {
-          setOverlays((prev) => prev.filter((o) => o.id !== newOverlay.id));
-          showRandomAttribute();
+          showRandomAttribute(); // Chain to next (will replace faded overlay)
         }
       });
     }, 2000);
@@ -310,8 +314,6 @@ const MatrixNative = () => {
       overlayTimeoutRef.current = null;
     }
 
-    setOverlays([]);
-
     showRandomAttribute();
 
     return () => {
@@ -320,7 +322,7 @@ const MatrixNative = () => {
         overlayTimeoutRef.current = null;
       }
     };
-  }, [containerWidth, theme, colorScheme]);
+  }, [containerWidth, theme, colorScheme, customColor]); // Added customColor dependency
 
   useEffect(() => {
     return () => {

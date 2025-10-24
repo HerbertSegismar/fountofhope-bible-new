@@ -11,9 +11,16 @@ import {
   DarkTheme,
   Theme as NavTheme,
 } from "@react-navigation/native";
+import {
+  calculateCustomColorVariants,
+  primaryColorSchemes,
+  gradientSchemes,
+  type ColorVariants,
+  type GradientColors as GradientColorsInterface,
+} from "../utils/colorUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-export type ColorScheme = "purple" | "green" | "red" | "yellow";
+export type ColorScheme = "purple" | "green" | "red" | "yellow" | "custom";
 export type Theme = "light" | "dark";
 export type FontFamily = "system" | "serif" | "sans-serif";
 
@@ -70,49 +77,54 @@ export const colorSchemes = [
       bg: "bg-gradient-to-r from-yellow-500 to-amber-400",
     },
   },
+  {
+    name: "custom" as const,
+    light: {
+      from: "from-purple-400",
+      to: "to-blue-300",
+      bg: "bg-gradient-to-r from-purple-400 to-blue-300",
+    },
+    dark: {
+      from: "from-purple-500",
+      to: "to-blue-400",
+      bg: "bg-gradient-to-r from-purple-500 to-blue-400",
+    },
+  },
 ];
 
-const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
-  purple: { light: "#A855F7", dark: "#9333EA" },
-  green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#c64141", dark: "#d44545" },
-  yellow: { light: "#F59E0B", dark: "#D97706" },
+// Module-level variables that can be updated
+let dynamicPrimaryColors: Record<ColorScheme, ColorVariants> = {
+  purple: primaryColorSchemes.purple,
+  green: primaryColorSchemes.green,
+  red: primaryColorSchemes.red,
+  yellow: primaryColorSchemes.yellow,
+  custom: { light: "#A855F7", dark: "#9333EA" },
 };
 
-const gradientMap: Record<
-  ColorScheme,
-  { light: [string, string]; dark: [string, string] }
-> = {
-  purple: {
-    light: ["#c084fc", "#93c5fd"],
-    dark: ["#a78bfa", "#60a5fa"],
-  },
-  green: {
-    light: ["#4ade80", "#5eead4"],
-    dark: ["#22c55e", "#2dd4bf"],
-  },
-  red: {
-    light: ["#fca5a5", "#fdba74"],
-    dark: ["#ef4444", "#fb923c"],
-  },
-  yellow: {
-    light: ["#facc15", "#fcd34d"],
-    dark: ["#eab308", "#fbbf24"],
-  },
+let dynamicGradientMap: Record<ColorScheme, GradientColorsInterface> = {
+  purple: gradientSchemes.purple,
+  green: gradientSchemes.green,
+  red: gradientSchemes.red,
+  yellow: gradientSchemes.yellow,
+  custom: gradientSchemes.purple,
 };
 
-type GradientColors = [string, string];
+type GradientColorsTuple = [string, string];
 
 interface ThemeContextType {
   theme: Theme;
   colorScheme: ColorScheme;
   fontFamily: FontFamily;
+  customColor: string;
   colorSchemes: typeof colorSchemes;
   navTheme: NavTheme;
-  gradientColors: GradientColors;
+  gradientColors: GradientColorsTuple;
   toggleTheme: () => void;
   setColorScheme: (scheme: ColorScheme) => void;
   setFontFamily: (family: FontFamily) => void;
+  setCustomColor: (color: string) => void;
+  showColorPicker: boolean;
+  setShowColorPicker: (show: boolean) => void;
 }
 
 export const ThemeContext = createContext<ThemeContextType | undefined>(
@@ -135,21 +147,32 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [theme, setTheme] = useState<Theme>("light");
   const [colorScheme, setColorScheme] = useState<ColorScheme>("green");
   const [fontFamily, setFontFamily] = useState<FontFamily>("system");
+  const [customColor, setCustomColorState] = useState<string>("#A855F7");
   const [isReady, setIsReady] = useState(false);
+  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Load saved values from AsyncStorage
   useEffect(() => {
     const loadSavedValues = async () => {
       try {
-        const [savedTheme, savedScheme, savedFont] = await Promise.all([
-          AsyncStorage.getItem("theme"),
-          AsyncStorage.getItem("colorScheme"),
-          AsyncStorage.getItem("fontFamily"),
-        ]);
+        const [savedTheme, savedScheme, savedFont, savedCustomColor] =
+          await Promise.all([
+            AsyncStorage.getItem("theme"),
+            AsyncStorage.getItem("colorScheme"),
+            AsyncStorage.getItem("fontFamily"),
+            AsyncStorage.getItem("customColor"),
+          ]);
 
         if (savedTheme) setTheme(savedTheme as Theme);
         if (savedScheme) setColorScheme(savedScheme as ColorScheme);
         if (savedFont) setFontFamily(savedFont as FontFamily);
+        if (savedCustomColor) {
+          setCustomColorState(savedCustomColor);
+          // Always update dynamic colors for custom color, regardless of current scheme
+          const customVariants = calculateCustomColorVariants(savedCustomColor);
+          dynamicPrimaryColors.custom = customVariants.variants;
+          dynamicGradientMap.custom = customVariants.gradients;
+        }
       } catch (error) {
         console.error("Failed to load theme settings:", error);
       } finally {
@@ -205,60 +228,107 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     saveFontFamily();
   }, [fontFamily, isReady]);
 
-  const primaryColor =
-    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
+  // Sync customColor with AsyncStorage and update dynamic colors
+  useEffect(() => {
+    if (!isReady) return;
 
-  const gradientColors = useMemo(
-    () => gradientMap[colorScheme][theme],
-    [colorScheme, theme]
-  );
+    const saveCustomColor = async () => {
+      try {
+        await AsyncStorage.setItem("customColor", customColor);
+
+        // Always update dynamic colors when customColor changes
+        const customVariants = calculateCustomColorVariants(customColor);
+        dynamicPrimaryColors.custom = customVariants.variants;
+        dynamicGradientMap.custom = customVariants.gradients;
+      } catch (error) {
+        console.error("Failed to save custom color:", error);
+      }
+    };
+
+    saveCustomColor();
+  }, [customColor, isReady]);
+
+  const getPrimaryColor = () => {
+    if (colorScheme === "custom") {
+      return customColor;
+    }
+    return dynamicPrimaryColors[colorScheme][
+      theme === "dark" ? "dark" : "light"
+    ];
+  };
+
+  const primaryColor = getPrimaryColor();
+
+  const gradientColors = useMemo(() => {
+    if (colorScheme === "custom") {
+      return dynamicGradientMap.custom[theme];
+    }
+    return dynamicGradientMap[colorScheme][theme];
+  }, [colorScheme, theme, customColor]);
 
   const baseNavTheme = theme === "dark" ? DarkTheme : DefaultTheme;
 
-  const navTheme: NavTheme = {
-    dark: baseNavTheme.dark,
-    colors: {
-      ...baseNavTheme.colors,
-      primary: primaryColor,
-    },
-    fonts: {
-      regular: {
-        fontFamily: "",
-        fontWeight: "bold",
+  const navTheme: NavTheme = useMemo(
+    () => ({
+      dark: baseNavTheme.dark,
+      colors: {
+        ...baseNavTheme.colors,
+        primary: primaryColor,
       },
-      medium: {
-        fontFamily: "",
-        fontWeight: "bold",
+      fonts: {
+        regular: {
+          fontFamily: "",
+          fontWeight: "bold",
+        },
+        medium: {
+          fontFamily: "",
+          fontWeight: "bold",
+        },
+        bold: {
+          fontFamily: "",
+          fontWeight: "bold",
+        },
+        heavy: {
+          fontFamily: "",
+          fontWeight: "bold",
+        },
       },
-      bold: {
-        fontFamily: "",
-        fontWeight: "bold",
-      },
-      heavy: {
-        fontFamily: "",
-        fontWeight: "bold",
-      },
-    },
-  };
+    }),
+    [baseNavTheme, primaryColor]
+  );
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
+
+  const setColorSchemeInternal = (scheme: ColorScheme) => {
+    setColorScheme(scheme);
+    // REMOVED: Don't reset custom color when switching away from custom
+    // This allows the custom color to persist and be available when cycling back
+  };
+
+  const setCustomColor = (color: string) => {
+    setCustomColorState(color);
   };
 
   const value: ThemeContextType = {
     theme,
     colorScheme,
     fontFamily,
+    customColor,
     colorSchemes,
     navTheme,
     gradientColors,
     toggleTheme,
-    setColorScheme,
+    setColorScheme: setColorSchemeInternal,
     setFontFamily,
+    setCustomColor,
+    showColorPicker,
+    setShowColorPicker,
   };
 
   if (!isReady) {
-    return null; // or a loading component
+    return null;
   }
 
   return (
@@ -288,6 +358,13 @@ export const getColorClasses = (colorScheme: string) => {
         text: "text-yellow-500",
         lightBg: "bg-yellow-100",
         lightBorder: "border-yellow-100",
+      };
+    case "custom":
+      return {
+        gradient: "from-purple-500 to-blue-400",
+        text: "text-purple-400",
+        lightBg: "bg-purple-100",
+        lightBorder: "border-purple-100",
       };
     default:
       return {

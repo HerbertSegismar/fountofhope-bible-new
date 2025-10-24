@@ -14,9 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
-import {
-  useTheme,
-} from "../context/ThemeContext";
+import { useTheme } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
@@ -26,7 +24,11 @@ import {
   getDatabaseFilename,
 } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
-import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
+import {
+  getThemeColors,
+  type ThemeColors,
+  getAccessibleTextColor,
+} from "../utils/themeUtils";
 import { getFontFamily } from "../utils/fontUtils";
 import { useCommentary } from "../hooks/useCommentary";
 
@@ -647,7 +649,7 @@ const renderDictionaryText = (
         /\d/.test(text[i + 1])
       ) {
         let strong = char;
-        i++; 
+        i++;
         while (i < text.length && /\d/.test(text[i])) {
           strong += text[i];
           i++;
@@ -676,7 +678,7 @@ const renderDictionaryText = (
         continue;
       } else {
         let word = char;
-        i++; 
+        i++;
         while (i < text.length && isAlpha(text[i])) {
           word += text[i];
           i++;
@@ -690,7 +692,7 @@ const renderDictionaryText = (
       }
     } else if (/\d/.test(char)) {
       let num = char;
-      i++; 
+      i++;
       while (i < text.length && /\d/.test(text[i])) {
         num += text[i];
         i++;
@@ -716,7 +718,7 @@ const renderDictionaryText = (
       previousType = "num";
     } else if (/[^\s]/.test(char)) {
       let content = char;
-      i++; 
+      i++;
       while (
         i < text.length &&
         /[^\s]/.test(text[i]) &&
@@ -745,7 +747,7 @@ const renderDictionaryText = (
       lastPunctChar = content.length > 0 ? content[content.length - 1] : null;
     } else {
       let ws = char;
-      i++; 
+      i++;
       while (i < text.length && /[\s\n\r]/.test(text[i])) {
         ws += text[i];
         i++;
@@ -857,8 +859,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   isFullScreen,
   displayVersion,
 }) => {
-  const { theme, colorScheme, fontFamily } = useTheme();
-  const themeColors = getThemeColors(theme, colorScheme);
+  const { theme, colorScheme, fontFamily, customColor } = useTheme();
+  const themeColors = getThemeColors(theme, colorScheme, customColor);
   const actualFontFamily = getFontFamily(fontFamily);
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
   const { bibleDB, getDatabase } = useBibleDatabase();
@@ -1245,8 +1247,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const bookColor = sortedVerses[0]?.book_color || themeColors.primary;
 
-  const modalVerseTextColor =
-    theme === "dark" ? "#FFFFFF" : themeColors.textPrimary;
+  const modalVerseTextColor = themeColors.textPrimary;
 
   const commentaryModalStyle: TextStyle = {
     color: themeColors.textPrimary,
@@ -1255,11 +1256,15 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     fontFamily: actualFontFamily,
   };
 
+  const closeButtonTextColor = getAccessibleTextColor(themeColors.primary);
+
   const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
 
   const hasViewBack = modalStack.length > 1;
   const hasDictBack =
     modalView === "commentary" && isDictMode && currentDictIndex > 0;
+
+  const headerTextColor = getAccessibleTextColor(bookColor);
 
   if (sortedVerses.length === 0) {
     return (
@@ -1454,7 +1459,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           <View style={{ flex: 1 }}>
             <Text
               style={{
-                color: "#41315eff",
+                color: headerTextColor,
                 fontSize: 14,
                 fontWeight: "600",
                 fontFamily: actualFontFamily,
@@ -1468,7 +1473,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           {versionText && (
             <Text
               style={{
-                color: "#654f74ff",
+                color: headerTextColor + "80",
                 fontSize: isFullScreen ? 10 : 12,
                 opacity: 0.9,
                 marginLeft: 8,
@@ -1687,7 +1692,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 >
                   <Text
                     style={{
-                      color: "#FFFFFF",
+                      color: closeButtonTextColor,
                       fontWeight: "600",
                     }}
                   >
@@ -1839,7 +1844,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
                           const seeContents: string[] = [];
                           let searchPos = seeStartIndex;
-                          let lastEnd = seeStartIndex; 
+                          let lastEnd = seeStartIndex;
 
                           while (true) {
                             const colonIndex = remainingText.indexOf(
@@ -1982,7 +1987,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 >
                   <Text
                     style={{
-                      color: "#FFFFFF",
+                      color: closeButtonTextColor,
                       fontWeight: "600",
                     }}
                   >

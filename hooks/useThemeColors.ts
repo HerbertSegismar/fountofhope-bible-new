@@ -1,19 +1,28 @@
-// Updated hooks/useThemeColors.ts
-import { useCallback } from "react";
+// Alternative hooks/useThemeColors.ts with backward compatibility
+import { useCallback, useMemo } from "react";
 import { useTheme } from "../context/ThemeContext";
+import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 
 export const useThemeColors = () => {
   const {
     theme,
     navTheme,
     colorScheme,
+    customColor,
     setColorScheme,
     colorSchemes,
     toggleTheme,
   } = useTheme();
+
   const isDark = theme === "dark";
   const primaryColor = navTheme.colors.primary;
   const primaryTextColor = "#ffffff";
+
+  // Get the base theme colors
+  const baseThemeColors = useMemo(
+    () => getThemeColors(theme, colorScheme, customColor),
+    [theme, colorScheme, customColor]
+  );
 
   const handleColorSchemePress = useCallback(() => {
     const currentIndex = colorSchemes.findIndex((s) => s.name === colorScheme);
@@ -21,72 +30,90 @@ export const useThemeColors = () => {
     setColorScheme(colorSchemes[nextIndex].name);
   }, [colorScheme, colorSchemes, setColorScheme]);
 
-  // Light theme colors (unchanged)
-  const lightColors = {
-    primary: "#3B82F6",
-    secondary: "#1E40AF",
-    accent: "#FF6B6B",
-    background: { target: "#FFF9E6", highlight: "#EFF6FF", default: "#FFFFFF" },
-    border: { target: "#FFD700", highlight: "#3B82F6", default: "#E5E7EB" },
-    text: {
-      primary: "#1F2937",
-      secondary: "#374151",
-      verseNumber: "#1E40AF",
-      target: "#DC2626",
-    },
-    muted: "#6B7280",
-    card: "#FFFFFF",
-  };
+  // Light theme colors (customized for your app)
+  const lightColors = useMemo(
+    () => ({
+      primary: primaryColor,
+      secondary: baseThemeColors.verseNumber,
+      accent: baseThemeColors.tagColor,
+      background: {
+        target: baseThemeColors.highlightBg,
+        highlight: baseThemeColors.surface,
+        default: baseThemeColors.background,
+      },
+      border: {
+        target: baseThemeColors.highlightBorder,
+        highlight: primaryColor,
+        default: baseThemeColors.border,
+      },
+      text: {
+        primary: baseThemeColors.textPrimary,
+        secondary: baseThemeColors.textSecondary,
+        verseNumber: baseThemeColors.verseNumber,
+        target: baseThemeColors.highlightText,
+      },
+      muted: baseThemeColors.textMuted,
+      card: baseThemeColors.card,
+    }),
+    [primaryColor, baseThemeColors]
+  );
 
-  // Dark theme colors (unchanged)
-  const darkColors = {
-    primary: "#60A5FA",
-    secondary: "#3B82F6",
-    accent: "#F87171",
-    background: { target: "#1F2937", highlight: "#1E3A8A", default: "#111827" },
-    border: { target: "#FCD34D", highlight: "#60A5FA", default: "#374151" },
-    text: {
-      primary: "#F9FAFB",
-      secondary: "#D1D5DB",
-      verseNumber: "#93C5FD",
-      target: "#FECACA",
-    },
-    muted: "#9CA3AF",
-    card: "#111827",
-  };
+  // Dark theme colors (customized for your app)
+  const darkColors = useMemo(
+    () => ({
+      primary: primaryColor,
+      secondary: baseThemeColors.verseNumber,
+      accent: baseThemeColors.tagColor,
+      background: {
+        target: baseThemeColors.highlightBg,
+        highlight: baseThemeColors.surface,
+        default: baseThemeColors.background,
+      },
+      border: {
+        target: baseThemeColors.highlightBorder,
+        highlight: primaryColor,
+        default: baseThemeColors.border,
+      },
+      text: {
+        primary: baseThemeColors.textPrimary,
+        secondary: baseThemeColors.textSecondary,
+        verseNumber: baseThemeColors.verseNumber,
+        target: baseThemeColors.highlightText,
+      },
+      muted: baseThemeColors.textMuted,
+      card: baseThemeColors.card,
+    }),
+    [primaryColor, baseThemeColors]
+  );
 
   const themeColors = isDark ? darkColors : lightColors;
 
-  const colors = {
-    primary: primaryColor,
-    background: themeColors.background,
-    text: themeColors.text,
-    border: themeColors.border,
-    secondary: themeColors.secondary,
-    accent: themeColors.accent,
-    muted: isDark ? "#9ca3af" : "#6b7280",
-    card: isDark ? "#1e293b" : "#ffffff",
-  };
+  const colors = themeColors;
 
-  const versionSelectorColors = {
-    primary: primaryColor,
-    background: themeColors.background.default,
-    text: themeColors.text.primary,
-    muted: colors.muted,
-    card: colors.card,
-    border: themeColors.border.default,
-    secondary: themeColors.secondary,
-    accent: themeColors.accent,
-  };
+  const versionSelectorColors = useMemo(
+    () => ({
+      primary: primaryColor,
+      background: baseThemeColors.background,
+      text: baseThemeColors.textPrimary,
+      muted: baseThemeColors.textMuted,
+      card: baseThemeColors.card,
+      border: baseThemeColors.border,
+      secondary: baseThemeColors.verseNumber,
+      accent: baseThemeColors.tagColor,
+    }),
+    [primaryColor, baseThemeColors]
+  );
 
   return {
     colors,
     versionSelectorColors,
     primaryTextColor,
     isDark,
-    themeColors, // Inner theme colors object
-    theme, // Added this line to fix the error
+    themeColors: colors, // For backward compatibility
+    theme,
     handleColorSchemePress,
     toggleTheme,
+    colorScheme,
+    customColor,
   };
 };

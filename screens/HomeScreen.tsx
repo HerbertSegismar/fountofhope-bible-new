@@ -26,6 +26,8 @@ import {
 import Footer from "../components/Footer";
 import { getBookInfo } from "../utils/testamentUtils";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getThemeColors } from "../utils/themeUtils";
+
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -41,26 +43,7 @@ const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   green: { light: "#10B981", dark: "#059669" },
   red: { light: "#EF4444", dark: "#DC2626" },
   yellow: { light: "#F59E0B", dark: "#D97706" },
-};
-
-// Generate lighter/darker variants for verseNumber, tagColor, etc.
-const getLighterColor = (hex: string, amount: number = 50): string => {
-  const num = parseInt(hex.replace("#", ""), 16);
-  const amt = Math.round(2.55 * amount);
-  const R = (num >> 16) + amt;
-  const G = ((num >> 8) & 0x00ff) + amt;
-  const B = (num & 0x0000ff) + amt;
-  return (
-    "#" +
-    (
-      0x1000000 +
-      (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-      (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-      (B < 255 ? (B < 1 ? 0 : B) : 255)
-    )
-      .toString(16)
-      .slice(1)
-  );
+  custom: { light: "#A855F7", dark: "#9333EA" }, // Add custom to prevent undefined
 };
 
 // Base light theme colors (adjust accents based on scheme)
@@ -101,26 +84,6 @@ type BaseThemeColors =
   | typeof BASE_LIGHT_THEME_COLORS
   | typeof BASE_DARK_THEME_COLORS;
 
-// Dynamic theme colors function
-const getThemeColors = (
-  theme: Theme,
-  colorScheme: ColorScheme
-): ThemeColors => {
-  const primary =
-    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
-  const baseColors =
-    theme === "dark" ? BASE_DARK_THEME_COLORS : BASE_LIGHT_THEME_COLORS;
-
-  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 80 : 30);
-
-  return {
-    ...baseColors,
-    primary,
-    verseNumber: lighterPrimary,
-    tagColor: primary,
-  } as const;
-};
-
 type ThemeColors = BaseThemeColors & {
   primary: string;
   verseNumber: string;
@@ -141,9 +104,17 @@ const getFontFamily = (fontFamily: FontFamily): string | undefined => {
 };
 
 export default function HomeScreen({ navigation }: Props) {
-  // Theme
-  const { theme, colorScheme, fontFamily } = useTheme();
-  const themeColors = getThemeColors(theme, colorScheme);
+
+  const { theme, colorScheme, fontFamily, customColor } = useTheme();
+  const themeColors = getThemeColors(theme, colorScheme, customColor);
+
+
+  // Update primaryColors for custom scheme if needed
+  if (colorScheme === "custom" && customColor) {
+    primaryColors.custom.light = customColor;
+    primaryColors.custom.dark = customColor;
+  }
+
   const actualFontFamily = getFontFamily(fontFamily);
 
   const {

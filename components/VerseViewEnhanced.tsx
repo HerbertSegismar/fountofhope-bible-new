@@ -14,8 +14,14 @@ import {
   type ColorScheme,
   type Theme,
   type FontFamily,
-} from "../context/ThemeContext"; // Adjust path as needed
+} from "../context/ThemeContext";
 import { getBookInfo } from "../utils/testamentUtils";
+import {
+  getThemeColors,
+  getContrastColor,
+  type ThemeColors,
+} from "../utils/themeUtils";
+
 
 interface VerseViewProps {
   verses: Verse[];
@@ -31,14 +37,6 @@ interface VerseViewProps {
   compact?: boolean; // compact mode for search results
   bookColor?: string;
 }
-
-// Primary colors for each scheme and theme
-const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
-  purple: { light: "#A855F7", dark: "#9333EA" },
-  green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#EF4444", dark: "#DC2626" },
-  yellow: { light: "#F59E0B", dark: "#D97706" },
-};
 
 // Base light theme colors (adjust accents based on scheme)
 const BASE_LIGHT_THEME_COLORS = {
@@ -78,51 +76,6 @@ type BaseThemeColors =
   | typeof BASE_LIGHT_THEME_COLORS
   | typeof BASE_DARK_THEME_COLORS;
 
-// Dynamic theme colors function
-const getThemeColors = (
-  theme: Theme,
-  colorScheme: ColorScheme
-): ThemeColors => {
-  const primary =
-    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
-  const baseColors =
-    theme === "dark" ? BASE_DARK_THEME_COLORS : BASE_LIGHT_THEME_COLORS;
-
-  // Generate lighter/darker variants for verseNumber, tagColor, etc.
-  const getLighterColor = (hex: string, amount: number = 50): string => {
-    const num = parseInt(hex.replace("#", ""), 16);
-    const amt = Math.round(2.55 * amount);
-    const R = (num >> 16) + amt;
-    const G = ((num >> 8) & 0x00ff) + amt;
-    const B = (num & 0x0000ff) + amt;
-    return (
-      "#" +
-      (
-        0x1000000 +
-        (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-        (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-        (B < 255 ? (B < 1 ? 0 : B) : 255)
-      )
-        .toString(16)
-        .slice(1)
-    );
-  };
-
-  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 40 : -10);
-
-  return {
-    ...baseColors,
-    primary,
-    verseNumber: lighterPrimary,
-    tagColor: primary,
-  } as const;
-};
-
-type ThemeColors = BaseThemeColors & {
-  primary: string;
-  verseNumber: string;
-  tagColor: string;
-};
 
 // Improved XML parsing function that handles nested tags
 const parseXmlTags = (text: string): any[] => {
@@ -367,26 +320,6 @@ const renderVerseTextWithXmlHighlight = (
   }
 };
 
-// Helper function to determine text color based on background color
-const getContrastColor = (
-  backgroundColor: string,
-  themeColors: ThemeColors
-): string => {
-  // Default to theme text primary if no background color
-  if (!backgroundColor) return themeColors.textPrimary;
-
-  // Convert hex color to RGB
-  const hex = backgroundColor.replace("#", "");
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // Calculate luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-  // Return dark text for light colors, light text for dark colors
-  return luminance > 0.5 ? themeColors.textSecondary : themeColors.textPrimary;
-};
 
 // Map fontFamily to actual font family string
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
@@ -529,8 +462,9 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
   }) => {
     const bookInfo = bookNumber ? getBookInfo(Number(bookNumber)) : null;
     const longName = bookInfo?.long || bookName;
-    const { theme, colorScheme, fontFamily } = useTheme();
-    const defaultColors = getThemeColors(theme, colorScheme);
+    const { theme, colorScheme, fontFamily, customColor } = useTheme();
+    const defaultColors = getThemeColors(theme, colorScheme, customColor);
+
     const { currentVersion } = useBibleDatabase();
     const actualFontFamily = getFontFamily(fontFamily);
 
@@ -625,7 +559,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
             <View style={{ flex: 1 }}>
               <Text
                 style={{
-                  color: "#41315eff",
+                  color: headerTextColor,
                   fontSize: compact ? 12 : 14,
                   fontWeight: "600",
                   fontFamily: actualFontFamily,
@@ -639,7 +573,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
             {!compact && versionText && (
               <Text
                 style={{
-                  color: "#654f74ff",
+                  color: headerTextColor,
                   fontSize: 11,
                   opacity: 0.9,
                   marginLeft: 8,

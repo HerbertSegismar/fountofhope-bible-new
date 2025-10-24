@@ -87,6 +87,7 @@ const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   green: { light: "#10B981", dark: "#059669" },
   red: { light: "#da4242ff", dark: "#b93b3bff" },
   yellow: { light: "#F59E0B", dark: "#D97706" },
+  custom: { light: "#A855F7", dark: "#9333EA" }, // Add custom to prevent undefined
 };
 
 // Base light theme colors (adjust accents based on scheme)

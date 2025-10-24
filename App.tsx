@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
-import { Platform, StatusBar as RNStatusBar } from "react-native";
+import ColorWheelPicker from "./components/ColorWheelPicker";
 import {
   NavigationContainer,
   useTheme as useNavigationTheme,
@@ -141,18 +141,27 @@ interface MenuItem {
   onPress: () => void;
 }
 
-// Enhanced Header Actions Component with Conditional Display
 function HeaderActions({ navigation }: { navigation: any }) {
   const isPortrait = usePortraitMode();
   const [showDropdown, setShowDropdown] = useState(false);
   const navigationTheme = useNavigationTheme();
-  const { toggleTheme, theme, colorScheme, setColorScheme, colorSchemes } =
-    useTheme();
+  const {
+    toggleTheme,
+    theme,
+    colorScheme,
+    setColorScheme,
+    colorSchemes,
+    setShowColorPicker,
+  } = useTheme();
 
   const handleColorSchemePress = () => {
     const currentIndex = colorSchemes.findIndex((s) => s.name === colorScheme);
     const nextIndex = (currentIndex + 1) % colorSchemes.length;
     setColorScheme(colorSchemes[nextIndex].name);
+  };
+
+  const handleColorSchemeLongPress = () => {
+    setShowColorPicker(true);
   };
 
   const menuItems: MenuItem[] = [
@@ -234,6 +243,9 @@ function HeaderActions({ navigation }: { navigation: any }) {
           <TouchableOpacity
             key={item.key}
             onPress={item.onPress}
+            onLongPress={
+              item.key === "colors" ? handleColorSchemeLongPress : undefined
+            }
             style={{
               paddingHorizontal: 8,
               paddingVertical: 8,
@@ -257,7 +269,11 @@ function HeaderActions({ navigation }: { navigation: any }) {
           </TouchableOpacity>
         )}
         {colorItem && (
-          <TouchableOpacity onPress={colorItem.onPress} style={{ padding: 8 }}>
+          <TouchableOpacity
+            onPress={colorItem.onPress}
+            onLongPress={handleColorSchemeLongPress}
+            style={{ padding: 8 }}
+          >
             <Ionicons name={colorItem.icon} size={24} color={iconColor} />
           </TouchableOpacity>
         )}
@@ -336,6 +352,9 @@ function HeaderActions({ navigation }: { navigation: any }) {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Color Wheel Picker */}
+      <ColorWheelPicker />
     </View>
   );
 }
@@ -344,7 +363,6 @@ function HeaderActions({ navigation }: { navigation: any }) {
 const RootStack = createStackNavigator<RootStackParamList>();
 
 function AppStack() {
-  const isPortrait = usePortraitMode();
 
   return (
     <RootStack.Navigator
