@@ -786,8 +786,8 @@ export default function ReaderScreen({
               style={{ opacity: 0.8, marginLeft: isLandscape ? 40 : 0 }}
             >
               <Ionicons
-                name="chevron-back"
-                size={isLandscape ? 20 : 24}
+                name="arrow-back"
+                size={24}
                 color={primaryTextColor}
               />
             </TouchableOpacity>

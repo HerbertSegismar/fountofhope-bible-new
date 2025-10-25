@@ -6,6 +6,7 @@ import React, {
   useCallback,
   ReactNode,
 } from "react";
+import { DeviceEventEmitter } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BibleDatabase } from "../services/BibleDatabase";
 import { Verse, SearchOptions } from "../types";
@@ -468,6 +469,28 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     setBibleDB(db);
   }, [currentVersion, initializeDatabase]);
 
+  // Listen for low memory warnings (iOS) and close secondary databases
+  useEffect(() => {
+    const handleMemoryWarning = async () => {
+      console.log("Low memory warning received - closing secondary databases");
+      try {
+        await closeSecondaryDatabases();
+      } catch (error) {
+        console.error("Error handling low memory warning:", error);
+      }
+    };
+
+    // Add listener for iOS memory warnings
+    const subscription = DeviceEventEmitter.addListener(
+      "memoryWarning",
+      handleMemoryWarning
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, [closeSecondaryDatabases]);
+
   const value: BibleDatabaseContextType = {
     bibleDB,
     currentVersion,
@@ -488,7 +511,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
   React.useEffect(() => {
     return () => {
-      // Close all databases on unmount
+      // Close all databases on unmount (app termination)
       openDatabases.current.forEach((db) => {
         try {
           db.close();

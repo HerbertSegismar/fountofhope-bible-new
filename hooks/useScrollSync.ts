@@ -4,7 +4,7 @@ import {
   NativeScrollEvent,
   ScrollView,
 } from "react-native";
-import { Animated } from "react-native";
+import { Animated, Easing } from "react-native"; // Added Easing import if needed, but using default for now
 import { Verse } from "../types";
 
 export const useScrollSync = (
@@ -85,9 +85,10 @@ export const useScrollSync = (
           maxSecondary,
         });
 
+        // Changed to animated: true for ease-in-out scroll
         secondaryScrollViewRef.current.scrollTo({
           y: targetY,
-          animated: false,
+          animated: true,
         });
       }
     } catch (error) {
@@ -148,11 +149,17 @@ export const useScrollSync = (
           progress: (progress * 100).toFixed(1) + "%",
         });
 
+        // Changed to animated: true for ease-in-out scroll
         primaryScrollViewRef.current.scrollTo({
           y: targetY,
-          animated: false,
+          animated: true,
         });
-        scrollY.setValue(targetY);
+        // Animate scrollY as well for consistency
+        Animated.timing(scrollY, {
+          toValue: targetY,
+          duration: 250, // Match default scrollTo duration
+          useNativeDriver: false, // Since scrollY might be used elsewhere
+        }).start();
       }
     } catch (error) {
       console.error("Error in syncToPrimary:", error);

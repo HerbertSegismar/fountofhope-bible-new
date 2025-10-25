@@ -22,7 +22,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ColorScheme = "purple" | "green" | "red" | "yellow" | "custom";
 export type Theme = "light" | "dark";
-export type FontFamily = "system" | "serif" | "sans-serif";
+export type FontFamily = "system" | "serif" | "sans-serif" | "oswald" | "rubik-glitch" | "poppins";
 
 export const colorSchemes = [
   {

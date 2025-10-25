@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Book, ChapterInfo } from "../types";
-import { lightenColor } from "../utils/colorUtils";
+import { lightenColor } from "../utils/themeUtils";
 
 interface NavigationModalProps {
   visible: boolean;

@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+} from "react";
 import {
   View,
   Modal,
@@ -39,6 +45,11 @@ const ColorWheelPicker = () => {
   const colorPickerRef = useRef<any>(null);
   const hexInputRef = useRef<TextInput>(null);
 
+  // Refs for tracking drag state and manual input
+  const isDraggingRef = useRef(false);
+  const isManualInputRef = useRef(false);
+  const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const palette = [
     "#FF0000",
     "#00FF00",
@@ -71,6 +82,7 @@ const ColorWheelPicker = () => {
       setSelectedColor(customColor);
       setHexInput(customColor);
       setIsValidHex(true);
+      isManualInputRef.current = false;
     }
   }, [showColorPicker, customColor]);
 
@@ -95,15 +107,33 @@ const ColorWheelPicker = () => {
     return `#${formatted}`;
   };
 
-  // Handle color change from wheel or swatch
-  const handleColorChange = (color: string) => {
-    setSelectedColor(color);
-    setHexInput(color);
-    setIsValidHex(true);
-  };
+  // Handle color change from wheel during drag
+  const handleColorChange = useCallback((color: string) => {
+    // Only update if we're not in manual input mode
+    if (!isManualInputRef.current) {
+      setSelectedColor(color);
 
-  // Handle hex input change
-  const handleHexInputChange = (text: string) => {
+      // Update hex input immediately during drag for better UX
+      setHexInput(color);
+      setIsValidHex(true);
+    }
+  }, []);
+
+  // Handle color change complete (when drag ends)
+  const handleColorChangeComplete = useCallback((color: string) => {
+    isDraggingRef.current = false;
+    if (!isManualInputRef.current) {
+      setSelectedColor(color);
+      setHexInput(color);
+      setIsValidHex(true);
+    }
+  }, []);
+
+  // Handle hex input change - user is manually typing
+  const handleHexInputChange = useCallback((text: string) => {
+    // Set manual input mode when user starts typing
+    isManualInputRef.current = true;
+
     let newText = text;
 
     // Add # if user types without it and it's the first character
@@ -132,19 +162,22 @@ const ColorWheelPicker = () => {
         if (colorPickerRef.current) {
           colorPickerRef.current.setState({ currentColor: formattedHex });
         }
+        // Exit manual input mode once we have a complete valid color
+        isManualInputRef.current = false;
       }
     } else if (newText === "#") {
       setIsValidHex(true); // Reset validation when only # is present
     }
-  };
+  }, []);
 
   // Handle hex input submit
-  const handleHexSubmit = () => {
+  const handleHexSubmit = useCallback(() => {
     if (validateHex(hexInput)) {
       const formattedHex = formatHex(hexInput);
       setSelectedColor(formattedHex);
       setHexInput(formattedHex);
       setIsValidHex(true);
+      isManualInputRef.current = false;
 
       if (colorPickerRef.current) {
         colorPickerRef.current.setState({ currentColor: formattedHex });
@@ -156,14 +189,38 @@ const ColorWheelPicker = () => {
         "Please enter a valid hex color code (e.g., #FF0000)"
       );
     }
-  };
+  }, [hexInput]);
+
+  // Handle swatch color selection
+  const handleSwatchPress = useCallback((color: string) => {
+    isManualInputRef.current = false;
+    setSelectedColor(color);
+    setHexInput(color);
+    setIsValidHex(true);
+
+    if (colorPickerRef.current) {
+      colorPickerRef.current.setState({ currentColor: color });
+    }
+  }, []);
 
   // Focus hex input when preview is pressed
-  const handlePreviewPress = () => {
+  const handlePreviewPress = useCallback(() => {
     hexInputRef.current?.focus();
-  };
+  }, []);
 
-  const handleSave = () => {
+  // Handle input focus
+  const handleInputFocus = useCallback(() => {
+    setIsInputFocused(true);
+    isManualInputRef.current = true;
+  }, []);
+
+  // Handle input blur
+  const handleInputBlur = useCallback(() => {
+    setIsInputFocused(false);
+    // Don't reset manualInputRef here - wait for submit or valid complete input
+  }, []);
+
+  const handleSave = useCallback(() => {
     if (!isValidHex) {
       Alert.alert("Invalid Color", "Please fix the color code before saving.");
       return;
@@ -172,14 +229,31 @@ const ColorWheelPicker = () => {
     setCustomColor(selectedColor);
     setColorScheme("custom");
     setShowColorPicker(false);
-  };
+    isManualInputRef.current = false;
+  }, [
+    isValidHex,
+    selectedColor,
+    setCustomColor,
+    setColorScheme,
+    setShowColorPicker,
+  ]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setShowColorPicker(false);
     setSelectedColor(customColor);
     setHexInput(customColor);
     setIsValidHex(true);
-  };
+    isManualInputRef.current = false;
+  }, [setShowColorPicker, customColor]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (colorChangeTimeoutRef.current) {
+        clearTimeout(colorChangeTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const isPortrait = screenDimensions.height >= screenDimensions.width;
   const minDim = Math.min(screenDimensions.width, screenDimensions.height);
@@ -305,7 +379,7 @@ const ColorWheelPicker = () => {
         },
         button: {
           flex: 1,
-          paddingVertical: 6,
+          paddingVertical: 10,
           borderRadius: 6,
           alignItems: "center",
           justifyContent: "center",
@@ -379,7 +453,7 @@ const ColorWheelPicker = () => {
                         ref={colorPickerRef}
                         color={selectedColor}
                         onColorChange={handleColorChange}
-                        onColorChangeComplete={handleColorChange}
+                        onColorChangeComplete={handleColorChangeComplete}
                         thumbSize={30}
                         sliderSize={25}
                         noSnap={true}
@@ -420,8 +494,8 @@ const ColorWheelPicker = () => {
                             autoCapitalize="characters"
                             autoCorrect={false}
                             selectionColor={themeColors.primary}
-                            onFocus={() => setIsInputFocused(true)}
-                            onBlur={() => setIsInputFocused(false)}
+                            onFocus={handleInputFocus}
+                            onBlur={handleInputBlur}
                           />
                         </TouchableOpacity>
 
@@ -446,7 +520,7 @@ const ColorWheelPicker = () => {
                                 dynamicStyles.swatch,
                                 { backgroundColor: color },
                               ]}
-                              onPress={() => handleColorChange(color)}
+                              onPress={() => handleSwatchPress(color)}
                             />
                           ))}
                         </View>

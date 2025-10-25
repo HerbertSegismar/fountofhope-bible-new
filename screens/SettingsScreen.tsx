@@ -11,12 +11,17 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
-import { useTheme, ColorScheme } from "../context/ThemeContext";
+import {
+  useTheme,
+  ColorScheme,
+  Theme,
+  FontFamily,
+} from "../context/ThemeContext";
 import { VersionSelector } from "../components/VersionSelector";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Fonts } from "../utils/fonts";
+import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import Footer from "../components/Footer";
-import { primaryColors } from "../utils/themeUtils";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -31,6 +36,7 @@ const SettingsScreen = () => {
     theme,
     colorScheme,
     fontFamily,
+    customColor,
     colorSchemes,
     toggleTheme,
     setColorScheme,
@@ -40,6 +46,8 @@ const SettingsScreen = () => {
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
+
+  const themeColors = getThemeColors(theme, colorScheme, customColor);
 
   useEffect(() => {
     const updateLayout = () => {
@@ -107,29 +115,7 @@ const SettingsScreen = () => {
   const isLoading = isInitializing || isSwitching;
   const isDark = theme === "dark";
 
-  // Get current color scheme configuration
-  const currentColorScheme = colorSchemes.find(
-    (scheme) => scheme.name === colorScheme
-  );
-  const schemeColors = currentColorScheme
-    ? currentColorScheme[isDark ? "dark" : "light"]
-    : colorSchemes[0][isDark ? "dark" : "light"];
-
-  // Get primary color - now properly typed
-  const primaryColor =
-    primaryColors[colorScheme as ColorScheme][isDark ? "dark" : "light"];
-
-  // Create a colors object based on theme
-  const colors = {
-    primary: primaryColor,
-    background: schemeColors.bg || (isDark ? "#0f172a" : "#f8fafc"),
-    text: isDark ? "#ffffff" : "#000000",
-    muted: isDark ? "#9ca3af" : "#6b7280",
-    card: isDark ? "#1e293b" : "#ffffff",
-    border: isDark ? "#374151" : "#e5e7eb",
-  };
-
-  const getFontFamilyStyle = (family: string): string | undefined => {
+  const getFontFamilyStyle = (family: FontFamily): string | undefined => {
     switch (family) {
       case "system":
         return undefined;
@@ -148,7 +134,7 @@ const SettingsScreen = () => {
     }
   };
 
-  const getFontDisplayName = (family: string): string => {
+  const getFontDisplayName = (family: FontFamily): string => {
     switch (family) {
       case "system":
         return "System Default";
@@ -181,29 +167,38 @@ const SettingsScreen = () => {
     <View
       className="mx-4 mb-4 rounded-2xl shadow-sm border overflow-hidden"
       style={{
-        backgroundColor: colors.card,
-        borderColor: colors.border,
+        backgroundColor: themeColors.card,
+        borderColor: themeColors.border,
       }}
     >
-      <View className="p-5 border-b" style={{ borderColor: colors.border }}>
+      <View
+        className="p-5 border-b"
+        style={{ borderColor: themeColors.border }}
+      >
         <View className="flex-row items-center">
           {icon && (
             <Ionicons
               name={icon as any}
               size={20}
-              color={colors.primary}
+              color={themeColors.primary}
               className="mr-3"
             />
           )}
           <View className="flex-1">
             <Text
               className="text-lg font-bold"
-              style={{ color: colors.text, fontFamily: Fonts.OswaldVariable }}
+              style={{
+                color: themeColors.textPrimary,
+                fontFamily: Fonts.OswaldVariable,
+              }}
             >
               {title}
             </Text>
             {subtitle && (
-              <Text className="text-sm mt-1" style={{ color: colors.muted }}>
+              <Text
+                className="text-sm mt-1"
+                style={{ color: themeColors.textMuted }}
+              >
                 {subtitle}
               </Text>
             )}
@@ -236,20 +231,27 @@ const SettingsScreen = () => {
         {icon && (
           <View
             className="w-10 h-10 rounded-full items-center justify-center mr-3"
-            style={{ backgroundColor: colors.primary + "20" }} // 20% opacity
+            style={{ backgroundColor: themeColors.primary + "20" }}
           >
-            <Ionicons name={icon as any} size={18} color={colors.primary} />
+            <Ionicons
+              name={icon as any}
+              size={18}
+              color={themeColors.primary}
+            />
           </View>
         )}
         <View className="flex-1">
           <Text
             className="text-base font-medium"
-            style={{ color: colors.text }}
+            style={{ color: themeColors.textPrimary }}
           >
             {title}
           </Text>
           {subtitle && (
-            <Text className="text-sm mt-1" style={{ color: colors.muted }}>
+            <Text
+              className="text-sm mt-1"
+              style={{ color: themeColors.textMuted }}
+            >
               {subtitle}
             </Text>
           )}
@@ -268,11 +270,15 @@ const SettingsScreen = () => {
     isSelected: boolean;
     onPress: () => void;
   }) => {
-    const previewColors = scheme[isDark ? "dark" : "light"];
-    const previewPrimary =
-      primaryColors[scheme.name as ColorScheme][isDark ? "dark" : "light"];
-    const previewBg = previewColors.bg || (isDark ? "#0f172a" : "#f8fafc");
-    const previewText = isDark ? "#ffffff" : "#000000";
+    const previewThemeColors = getThemeColors(
+      theme,
+      scheme.name as ColorScheme,
+      colorScheme === scheme.name ? customColor : undefined
+    );
+    const previewPrimary = previewThemeColors.primary;
+    const previewBg = previewThemeColors.background;
+    const previewText = previewThemeColors.textPrimary;
+    const contrastColor = getContrastColor(previewPrimary, previewThemeColors);
 
     return (
       <TouchableOpacity
@@ -280,7 +286,7 @@ const SettingsScreen = () => {
         className={`mr-3 p-3 rounded-xl border-2 items-center`}
         style={{
           minWidth: 90,
-          borderColor: isSelected ? previewPrimary : "#CCCCCC",
+          borderColor: isSelected ? previewPrimary : themeColors.border,
           backgroundColor: previewBg,
         }}
       >
@@ -307,7 +313,7 @@ const SettingsScreen = () => {
               borderColor: previewBg,
             }}
           >
-            <Ionicons name="checkmark" size={12} color="#ffffff" />
+            <Ionicons name="checkmark" size={12} color={contrastColor} />
           </View>
         )}
       </TouchableOpacity>
@@ -319,7 +325,7 @@ const SettingsScreen = () => {
     isSelected,
     onPress,
   }: {
-    font: string;
+    font: FontFamily;
     isSelected: boolean;
     onPress: () => void;
   }) => {
@@ -329,14 +335,14 @@ const SettingsScreen = () => {
         onPress={onPress}
         className={`m-1 flex-1 min-w-[45%] p-3 rounded-xl border-2`}
         style={{
-          borderColor: isSelected ? colors.primary : colors.border,
-          backgroundColor: colors.card,
+          borderColor: isSelected ? themeColors.primary : themeColors.border,
+          backgroundColor: themeColors.card,
         }}
       >
         <Text
           className={`text-center text-sm font-medium`}
           style={{
-            color: isSelected ? colors.primary : colors.text,
+            color: isSelected ? themeColors.primary : themeColors.textPrimary,
             fontFamily: isSelected ? Fonts.RubikGlitchRegular : fontStyle,
           }}
           numberOfLines={1}
@@ -346,7 +352,7 @@ const SettingsScreen = () => {
         <Text
           className="text-xs text-center mt-1"
           style={{
-            color: colors.muted,
+            color: themeColors.textMuted,
             fontFamily: fontStyle,
           }}
           numberOfLines={1}
@@ -360,7 +366,7 @@ const SettingsScreen = () => {
   return (
     <ScrollView
       className="flex-1"
-      style={{ backgroundColor: colors.background }}
+      style={{ backgroundColor: themeColors.background }}
       contentContainerStyle={{ paddingVertical: 16 }}
       showsVerticalScrollIndicator={false}
     >
@@ -369,14 +375,14 @@ const SettingsScreen = () => {
         <Text
           className="text-2xl font-bold"
           style={{
-            color: colors.text,
+            color: themeColors.textPrimary,
             fontFamily: Fonts.RubikGlitchRegular,
             fontSize: 28,
           }}
         >
           Settings
         </Text>
-        <Text className="text-sm mt-2" style={{ color: colors.muted }}>
+        <Text className="text-sm mt-2" style={{ color: themeColors.textMuted }}>
           Customize your Bible reading experience
         </Text>
       </View>
@@ -390,11 +396,14 @@ const SettingsScreen = () => {
         {isLoading && (
           <View
             className="mb-4 p-3 rounded-lg"
-            style={{ backgroundColor: colors.primary + "20" }}
+            style={{ backgroundColor: themeColors.primary + "20" }}
           >
             <View className="flex-row items-center">
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text className="text-sm ml-3" style={{ color: colors.primary }}>
+              <ActivityIndicator size="small" color={themeColors.primary} />
+              <Text
+                className="text-sm ml-3"
+                style={{ color: themeColors.primary }}
+              >
                 Switching version... Please wait
               </Text>
             </View>
@@ -415,15 +424,18 @@ const SettingsScreen = () => {
 
         <View
           className="mt-4 p-3 rounded-lg"
-          style={{ backgroundColor: colors.border }}
+          style={{ backgroundColor: themeColors.border }}
         >
-          <Text className="text-sm font-medium" style={{ color: colors.muted }}>
+          <Text
+            className="text-sm font-medium"
+            style={{ color: themeColors.textMuted }}
+          >
             Current Version
           </Text>
           <Text
             className="text-lg font-bold mt-1"
             style={{
-              color: colors.text,
+              color: themeColors.textPrimary,
               fontFamily: Fonts.OswaldVariable,
             }}
           >
@@ -447,21 +459,24 @@ const SettingsScreen = () => {
           <Switch
             value={isDark}
             onValueChange={toggleTheme}
-            thumbColor={isDark ? colors.primary : "#f4f3f4"}
-            trackColor={{ false: "#D1D5DB", true: colors.primary + "80" }}
+            thumbColor={isDark ? themeColors.primary : "#f4f3f4"}
+            trackColor={{
+              false: themeColors.textMuted,
+              true: themeColors.primary + "80",
+            }}
           />
         </SettingItem>
 
         <View
           className="border-t my-3"
-          style={{ borderColor: colors.border }}
+          style={{ borderColor: themeColors.border }}
         />
 
         {/* Color Scheme */}
         <View className="mb-4">
           <Text
             className="text-sm font-semibold mb-3"
-            style={{ color: colors.text }}
+            style={{ color: themeColors.textPrimary }}
           >
             Color Scheme
           </Text>
@@ -484,14 +499,14 @@ const SettingsScreen = () => {
 
         <View
           className="border-t my-3"
-          style={{ borderColor: colors.border }}
+          style={{ borderColor: themeColors.border }}
         />
 
         {/* Font Family */}
         <View>
           <Text
             className="text-sm font-semibold mb-3"
-            style={{ color: colors.text }}
+            style={{ color: themeColors.textPrimary }}
           >
             Font Family
           </Text>
@@ -504,11 +519,11 @@ const SettingsScreen = () => {
               "rubik-glitch",
               "poppins",
             ].map((familyStr) => {
-              const family = familyStr as any;
+              const family = familyStr as FontFamily;
               return (
                 <FontButton
                   key={familyStr}
-                  font={familyStr}
+                  font={family}
                   isSelected={fontFamily === family}
                   onPress={() => setFontFamily(family)}
                 />
@@ -535,12 +550,16 @@ const SettingsScreen = () => {
             )
           }
         >
-          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={themeColors.textMuted}
+          />
         </SettingItem>
 
         <View
           className="border-t my-3"
-          style={{ borderColor: colors.border }}
+          style={{ borderColor: themeColors.border }}
         />
 
         <SettingItem
@@ -554,12 +573,16 @@ const SettingsScreen = () => {
             )
           }
         >
-          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={themeColors.textMuted}
+          />
         </SettingItem>
 
         <View
           className="border-t my-3"
-          style={{ borderColor: colors.border }}
+          style={{ borderColor: themeColors.border }}
         />
 
         <SettingItem
@@ -570,7 +593,11 @@ const SettingsScreen = () => {
             Alert.alert("About", "Bible App v1.0.0\n\nFount of Hope Bible")
           }
         >
-          <Ionicons name="chevron-forward" size={20} color={colors.muted} />
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={themeColors.textMuted}
+          />
         </SettingItem>
       </SettingSection>
 
@@ -583,7 +610,7 @@ const SettingsScreen = () => {
         <View className="flex-row flex-wrap -mx-1">
           <TouchableOpacity
             className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center"
-            style={{ backgroundColor: colors.primary }}
+            style={{ backgroundColor: themeColors.primary }}
             onPress={() =>
               Alert.alert(
                 "Reset Settings",
@@ -591,10 +618,17 @@ const SettingsScreen = () => {
               )
             }
           >
-            <Ionicons name="refresh" size={20} color="#ffffff" />
+            <Ionicons
+              name="refresh"
+              size={20}
+              color={getContrastColor(themeColors.primary, themeColors)}
+            />
             <Text
               className="text-white font-medium mt-2 text-center"
-              style={{ fontFamily: Fonts.OswaldVariable }}
+              style={{
+                color: getContrastColor(themeColors.primary, themeColors),
+                fontFamily: Fonts.OswaldVariable,
+              }}
             >
               Reset Settings
             </Text>
@@ -603,18 +637,18 @@ const SettingsScreen = () => {
           <TouchableOpacity
             className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center border"
             style={{
-              borderColor: colors.primary,
-              backgroundColor: colors.primary + "10",
+              borderColor: themeColors.primary,
+              backgroundColor: themeColors.primary + "10",
             }}
             onPress={() =>
               Alert.alert("Feedback", "Share your feedback with us.")
             }
           >
-            <Ionicons name="chatbubble" size={20} color={colors.primary} />
+            <Ionicons name="chatbubble" size={20} color={themeColors.primary} />
             <Text
               className="font-medium mt-2 text-center"
               style={{
-                color: colors.primary,
+                color: themeColors.primary,
                 fontFamily: Fonts.OswaldVariable,
               }}
             >
@@ -623,7 +657,7 @@ const SettingsScreen = () => {
           </TouchableOpacity>
         </View>
       </SettingSection>
-      <Footer/>
+      <Footer />
     </ScrollView>
   );
 };

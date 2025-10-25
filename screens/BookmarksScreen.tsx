@@ -29,6 +29,7 @@ import {
   type Theme,
   type FontFamily,
 } from "../context/ThemeContext";
+import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import { getBookInfo } from "../utils/testamentUtils";
 
 type BookmarksScreenNavigationProp = StackNavigationProp<
@@ -81,152 +82,6 @@ const FALLBACK_COLORS = [
   "#6366F1",
 ];
 
-// Primary colors for each scheme and theme
-const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
-  purple: { light: "#A855F7", dark: "#9333EA" },
-  green: { light: "#10B981", dark: "#059669" },
-  red: { light: "#da4242ff", dark: "#b93b3bff" },
-  yellow: { light: "#F59E0B", dark: "#D97706" },
-  custom: { light: "#A855F7", dark: "#9333EA" }, // Add custom to prevent undefined
-};
-
-// Base light theme colors (adjust accents based on scheme)
-const BASE_LIGHT_THEME_COLORS = {
-  card: "#FFFFFF",
-  background: "#FFFFFF",
-  surface: "#F8F9FA",
-  textPrimary: "#1F2937",
-  textSecondary: "#374151",
-  textMuted: "#6C757D",
-  highlightBg: "#FFF3CD",
-  highlightBorder: "#FFD700",
-  highlightText: "#8B4513",
-  highlightIcon: "#B8860B",
-  tagBg: "rgba(0,255,0,0.1)",
-  searchHighlightBg: "#FFFF99",
-  border: "#E9ECEF",
-} as const;
-
-// Base dark theme colors (adjust accents based on scheme)
-const BASE_DARK_THEME_COLORS = {
-  card: "#111827",
-  background: "#111827",
-  surface: "#1F2937",
-  textPrimary: "#F9FAFB",
-  textSecondary: "#D1D5DB",
-  textMuted: "#9CA3AF",
-  highlightBg: "#1F2937",
-  highlightBorder: "#FCD34D",
-  highlightText: "#FECACA",
-  highlightIcon: "#FCD34D",
-  tagBg: "rgba(255,255,255,0.1)",
-  searchHighlightBg: "#374151",
-  border: "#374151",
-} as const;
-
-type BaseThemeColors =
-  | typeof BASE_LIGHT_THEME_COLORS
-  | typeof BASE_DARK_THEME_COLORS;
-
-// Dynamic theme colors function
-const getThemeColors = (
-  theme: Theme,
-  colorScheme: ColorScheme
-): ThemeColors => {
-  const primary =
-    primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
-  const baseColors =
-    theme === "dark" ? BASE_DARK_THEME_COLORS : BASE_LIGHT_THEME_COLORS;
-
-  // Generate lighter/darker variants for verseNumber, tagColor, etc.
-  const getLighterColor = (hex: string, amount: number = 50): string => {
-    const num = parseInt(hex.replace("#", ""), 16);
-    const amt = Math.round(2.55 * amount);
-    const R = (num >> 16) + amt;
-    const G = ((num >> 8) & 0x00ff) + amt;
-    const B = (num & 0x0000ff) + amt;
-    return (
-      "#" +
-      (
-        0x1000000 +
-        (R < 255 ? (R < 1 ? 0 : R) : 255) * 0x10000 +
-        (G < 255 ? (G < 1 ? 0 : G) : 255) * 0x100 +
-        (B < 255 ? (B < 1 ? 0 : B) : 255)
-      )
-        .toString(16)
-        .slice(1)
-    );
-  };
-
-  const lighterPrimary = getLighterColor(primary, theme === "dark" ? 80 : 30);
-
-  return {
-    ...baseColors,
-    primary,
-    verseNumber: lighterPrimary,
-    tagColor: primary,
-  } as const;
-};
-
-type ThemeColors = BaseThemeColors & {
-  primary: string;
-  verseNumber: string;
-  tagColor: string;
-};
-
-// Helper function to determine text color based on background color
-const getContrastColor = (
-  backgroundColor: string,
-  themeColors: ThemeColors
-): string => {
-  // Default to theme text primary if no background color
-  if (!backgroundColor) return themeColors.textPrimary;
-
-  // Convert hex color to RGB
-  const hex = backgroundColor.replace("#", "");
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // Calculate luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-  // Return dark text for light colors, light text for dark colors
-  return luminance > 0.5 ? themeColors.textSecondary : themeColors.textPrimary;
-};
-
-// Map fontFamily to actual font family string
-const getFontFamily = (fontFamily: FontFamily): string | undefined => {
-  switch (fontFamily) {
-    case "serif":
-      return Platform.OS === "ios" ? "Georgia" : "serif";
-    case "sans-serif":
-      return Platform.OS === "ios" ? "Helvetica Neue" : "sans-serif";
-    case "system":
-    default:
-      return undefined;
-  }
-};
-
-// Helper functions
-const getBookColor = (bookName: string, verse?: Verse): string => {
-  if (verse?.book_color) return verse.book_color;
-
-  const normalizedBookName = bookName.toLowerCase().trim();
-  const color = BOOK_COLORS[normalizedBookName];
-  if (color) return color;
-
-  return generateColorFromString(bookName);
-};
-
-const generateColorFromString = (str: string): string => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
-};
-
 const getVersionDisplayName = (version: string): string => {
   return version.replace(".sqlite3", "").toUpperCase();
 };
@@ -248,8 +103,22 @@ const getBookmarksKey = (bookmarks: ContextBookmark[]): string => {
 
 export default function BookmarksScreen({ navigation }: Props) {
   // Theme
-  const { theme, colorScheme, fontFamily } = useTheme();
-  const themeColors = getThemeColors(theme, colorScheme);
+  const { theme, colorScheme, fontFamily, customColor } = useTheme();
+  const themeColors = getThemeColors(theme, colorScheme, customColor);
+
+  // Map fontFamily to actual font family string
+  const getFontFamily = (fontFamily: FontFamily): string | undefined => {
+    switch (fontFamily) {
+      case "serif":
+        return Platform.OS === "ios" ? "Georgia" : "serif";
+      case "sans-serif":
+        return Platform.OS === "ios" ? "Helvetica Neue" : "sans-serif";
+      case "system":
+      default:
+        return undefined;
+    }
+  };
+
   const actualFontFamily = getFontFamily(fontFamily);
 
   // Context and state
@@ -435,6 +304,25 @@ export default function BookmarksScreen({ navigation }: Props) {
     loadVerseDetails();
   }, [bibleDB, bookmarksKey, sortedBookmarks, bookLongNames]);
 
+  // Helper functions
+  const getBookColor = (bookName: string, verse?: Verse): string => {
+    if (verse?.book_color) return verse.book_color;
+
+    const normalizedBookName = bookName.toLowerCase().trim();
+    const color = BOOK_COLORS[normalizedBookName];
+    if (color) return color;
+
+    return generateColorFromString(bookName);
+  };
+
+  const generateColorFromString = (str: string): string => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
+  };
+
   // Component render functions
   const renderLoading = () => (
     <SafeAreaView
@@ -576,10 +464,14 @@ export default function BookmarksScreen({ navigation }: Props) {
           alignItems: "center",
         }}
       >
-        <Ionicons name="book" size={18} color="white" />
+        <Ionicons
+          name="book"
+          size={18}
+          color={getContrastColor(themeColors.primary, themeColors)}
+        />
         <Text
           style={{
-            color: "white",
+            color: getContrastColor(themeColors.primary, themeColors),
             fontWeight: "600",
             marginLeft: 8,
             fontFamily: actualFontFamily,
@@ -751,10 +643,14 @@ export default function BookmarksScreen({ navigation }: Props) {
                   borderRadius: 999,
                 }}
               >
-                <Ionicons name="eye" size={12} color="white" />
+                <Ionicons
+                  name="eye"
+                  size={12}
+                  color={getContrastColor(themeColors.primary, themeColors)}
+                />
                 <Text
                   style={{
-                    color: "white",
+                    color: getContrastColor(themeColors.primary, themeColors),
                     fontSize: 12,
                     fontWeight: "500",
                     marginLeft: 4,
