@@ -1441,7 +1441,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const chapterContent = (
     <View style={[adjustedStyle, style]}>
-      <View
+      {/*Chapter Header Hidden */}
+      {/*<View
         style={{
           backgroundColor: bookColor,
           padding: 8,
@@ -1484,7 +1485,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
             </Text>
           )}
         </View>
-      </View>
+      </View> */}
 
       <View
         style={{

@@ -1,24 +1,12 @@
 import React, { useMemo } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Platform,
-} from "react-native";
+import { View, Text, TouchableOpacity, Platform } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import {
-  useTheme,
-  type FontFamily,
-} from "../context/ThemeContext";
+import { useTheme, type FontFamily } from "../context/ThemeContext";
 import { getBookInfo } from "../utils/testamentUtils";
-import {
-  getThemeColors,
-  type ThemeColors,
-} from "../utils/themeUtils";
+import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 import { getAccessibleTextColor } from "../utils/themeUtils";
-
 
 interface VerseViewProps {
   verses: Verse[];
@@ -34,7 +22,6 @@ interface VerseViewProps {
   compact?: boolean; // compact mode for search results
   bookColor?: string;
 }
-
 
 // Improved XML parsing function that handles nested tags
 const parseXmlTags = (text: string): any[] => {
@@ -279,7 +266,6 @@ const renderVerseTextWithXmlHighlight = (
   }
 };
 
-
 // Map fontFamily to actual font family string
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
@@ -317,6 +303,23 @@ const VerseText = React.memo(
   }) => {
     const adjustedFontSize = compact ? fontSize - 2 : fontSize;
     const actualFontFamily = getFontFamily(fontFamily);
+    const indicatorSize = compact
+      ? adjustedFontSize * 0.7
+      : adjustedFontSize * 0.8;
+    const numberStyle = {
+      fontSize: indicatorSize,
+      fontWeight: "600" as const,
+      color: isHighlighted
+        ? themeColors.highlightIcon
+        : themeColors.verseNumber,
+      fontFamily: actualFontFamily,
+    };
+
+    const starStyle = {
+      fontSize: indicatorSize * 0.9,
+      color: themeColors.highlightIcon,
+      fontFamily: actualFontFamily,
+    };
 
     const renderedText = useMemo(
       () =>
@@ -329,6 +332,10 @@ const VerseText = React.memo(
         ),
       [verse.text, adjustedFontSize, highlight, themeColors, actualFontFamily]
     );
+
+    const verseTextColor = isHighlighted
+      ? themeColors.highlightText
+      : themeColors.textPrimary;
 
     return (
       <TouchableOpacity
@@ -350,56 +357,27 @@ const VerseText = React.memo(
         }}
       >
         <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-          {showVerseNumbers && (
-            <View
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text
               style={{
-                flexDirection: "row",
-                alignItems: "center",
-                minWidth: compact ? 18 : 20,
-                marginRight: compact ? 0 : 2,
+                fontSize: compact ? fontSize - 2 : fontSize,
+                lineHeight: adjustedFontSize * 1.4,
+                flexShrink: 1,
+                flexWrap: "wrap",
+                color: verseTextColor,
+                fontFamily: actualFontFamily,
               }}
+              numberOfLines={compact ? 7 : 0}
+              ellipsizeMode="tail"
             >
-              <Text
-                style={{
-                  fontSize: compact
-                    ? adjustedFontSize - 6
-                    : adjustedFontSize - 4,
-                  fontWeight: "600",
-                  color: isHighlighted
-                    ? themeColors.highlightIcon
-                    : themeColors.verseNumber,
-                  fontFamily: actualFontFamily,
-                }}
-              >
-                {verse.verse}
-              </Text>
-              {isHighlighted && (
-                <Ionicons
-                  name="star"
-                  size={compact ? 10 : 12}
-                  color={themeColors.highlightIcon}
-                  style={{ marginLeft: 2 }}
-                />
+              {showVerseNumbers && (
+                <Text style={numberStyle}>{verse.verse}</Text>
               )}
-            </View>
-          )}
-          {/* Remove fontSize from parent Text to allow children to control their sizes */}
-          <Text
-            style={{
-              fontSize: compact ? fontSize - 2 : fontSize,
-              lineHeight: adjustedFontSize * 1.4,
-              flexShrink: 1,
-              flexWrap: "wrap",
-              color: isHighlighted
-                ? themeColors.highlightText
-                : themeColors.textPrimary,
-              fontFamily: actualFontFamily,
-            }}
-            numberOfLines={compact ? 7 : 0}
-            ellipsizeMode="tail"
-          >
-            {renderedText}
-          </Text>
+              {isHighlighted && <Text style={starStyle}>★</Text>}
+              {(showVerseNumbers || isHighlighted) && " "}
+              {renderedText}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -520,7 +498,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
                 style={{
                   color: headerTextColor,
                   fontSize: compact ? 12 : 14,
-                  fontWeight: "600",
+                  fontWeight: "600" as const,
                   fontFamily: actualFontFamily,
                 }}
                 numberOfLines={2}

@@ -52,6 +52,8 @@ interface MenuItem {
   color: string;
 }
 
+type MultiViewLayout = "horizontal" | "vertical";
+
 export default function ReaderScreen({
   navigation,
   route,
@@ -80,6 +82,10 @@ export default function ReaderScreen({
   const [maxChapter, setMaxChapter] = useState(0);
   const [openSelector, setOpenSelector] = useState<SelectorType>(null);
   const [selectorLoading, setSelectorLoading] = useState(false);
+
+  // Multi-view layout state
+  const [multiViewLayout, setMultiViewLayout] =
+    useState<MultiViewLayout>("horizontal");
 
   // Hooks
   const themeColors = useThemeColors();
@@ -117,6 +123,12 @@ export default function ReaderScreen({
   const scrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Long press ref
+  const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
   const isFullScreen = uiMode === 1;
   const hideHeader = uiMode === 1;
   const scrollSync = useScrollSync(
@@ -165,11 +177,43 @@ export default function ReaderScreen({
     }, 5000);
   }, [buttonOpacity]);
 
+  // Reset scroll position when chapter changes
+  const resetScrollPosition = useCallback(() => {
+    // Reset scrollY animated value
+    scrollY.setValue(0);
+    lastScrollYRef.current = 0;
+
+    // Reset primary scroll view
+    if (primaryScrollViewRef.current) {
+      primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updatePrimaryOffset(0);
+    }
+
+    // Reset secondary scroll view if multi-version is enabled
+    if (showMultiVersion && secondaryScrollViewRef.current) {
+      secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updateSecondaryOffset(0);
+    }
+
+    resetButtonOpacity();
+  }, [
+    scrollY,
+    primaryScrollViewRef,
+    secondaryScrollViewRef,
+    showMultiVersion,
+    updatePrimaryOffset,
+    updateSecondaryOffset,
+    resetButtonOpacity,
+  ]);
+
   useEffect(() => {
     resetButtonOpacity();
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+      }
+      if (longPressTimeoutRef.current) {
+        clearTimeout(longPressTimeoutRef.current);
       }
     };
   }, [resetButtonOpacity]);
@@ -188,6 +232,28 @@ export default function ReaderScreen({
     };
     loadData();
   }, [bibleDB, bookId]);
+
+  // Load multi-view layout preference
+  useEffect(() => {
+    const loadLayoutPreference = async () => {
+      try {
+        const savedLayout = await AsyncStorage.getItem("multiViewLayout");
+        if (savedLayout === "vertical" || savedLayout === "horizontal") {
+          setMultiViewLayout(savedLayout);
+        }
+      } catch (error) {
+        console.error("Failed to load layout preference:", error);
+      }
+    };
+    loadLayoutPreference();
+  }, []);
+
+  // Save multi-view layout preference
+  useEffect(() => {
+    AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
+      console.error("Failed to save layout preference", e)
+    );
+  }, [multiViewLayout]);
 
   const currentVerse = targetVerse || 1;
   const versionName = getVersionDisplayName(currentVersion);
@@ -229,6 +295,20 @@ export default function ReaderScreen({
     [currentVersion, switchVersion, multiProps.setIsSwitchingVersion]
   );
 
+  // Original press handler - toggle multi-version view
+  const handleTogglePress = useCallback(() => {
+    multiProps.toggleMultiVersion();
+    resetButtonOpacity();
+  }, [multiProps.toggleMultiVersion, resetButtonOpacity]);
+
+  // Long press handler - change layout
+  const handleToggleLongPress = useCallback(() => {
+    setMultiViewLayout((prev) =>
+      prev === "horizontal" ? "vertical" : "horizontal"
+    );
+    resetButtonOpacity();
+  }, [resetButtonOpacity]);
+
   const bookmarkedVerses = useMemo(() => {
     const chapterBookmarks = bookmarks.filter(
       (b) => b.book_number === bookId && b.chapter === chapter
@@ -242,7 +322,7 @@ export default function ReaderScreen({
     [bookId, chapter, getChapterHighlights]
   );
 
-  // Then update your menuItems to use proper icon names:
+  // Update menu items to include layout information
   const menuItems: MenuItem[] = useMemo(
     () => [
       {
@@ -290,7 +370,7 @@ export default function ReaderScreen({
       {
         key: "multi",
         name: "Toggle Multi-Version",
-        icon: "copy-outline",
+        icon: multiViewLayout === "horizontal" ? "copy-outline" : "copy",
         onPress: multiProps.toggleMultiVersion,
         color: showMultiVersion ? "#f6f0f0ff" : primaryTextColor,
       },
@@ -313,6 +393,7 @@ export default function ReaderScreen({
       themeColors.theme,
       primaryTextColor,
       showMultiVersion,
+      multiViewLayout,
       toggleTheme,
       handleColorSchemePress,
       multiProps.toggleMultiVersion,
@@ -392,17 +473,19 @@ export default function ReaderScreen({
   );
 
   const goToPreviousChapter = useCallback(() => {
-    if (chapter > 1)
+    if (chapter > 1) {
+      resetScrollPosition();
       navigation.navigate("Reader", {
         ...route.params,
         chapter: chapter - 1,
         verse: undefined,
       });
-  }, [chapter, navigation, route.params]);
+    }
+  }, [chapter, navigation, route.params, resetScrollPosition]);
 
-  // REFACTOR: Use getChapterCount (cached MAX) instead of getVerseCount (COUNT) for faster next-chapter check (Bible chapters are consecutive)
   const goToNextChapter = useCallback(() => {
     if (chapter < maxChapter) {
+      resetScrollPosition();
       navigation.navigate("Reader", {
         ...route.params,
         chapter: chapter + 1,
@@ -411,7 +494,7 @@ export default function ReaderScreen({
     } else {
       Alert.alert("End of Book", "This is the last chapter.");
     }
-  }, [maxChapter, chapter, navigation, route.params]);
+  }, [maxChapter, chapter, navigation, route.params, resetScrollPosition]);
 
   const progress = Animated.divide(
     scrollY,
@@ -607,124 +690,251 @@ export default function ReaderScreen({
       return renderPrimaryContent();
     }
 
-    return (
-      <View style={{ flex: 1, flexDirection: "row" }}>
-        <View
-          style={{
-            flex: 1,
-            borderRightWidth: 1,
-            borderRightColor: colors.border?.default,
-          }}
-        >
+    // Render based on selected layout
+    if (multiViewLayout === "horizontal") {
+      return (
+        <View style={{ flex: 1, flexDirection: "row" }}>
           <View
             style={{
-              backgroundColor: colors.muted + "20",
-              paddingVertical: versionHeaderPaddingVertical,
-              paddingHorizontal: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border?.default,
+              flex: 1,
+              borderRightWidth: 1,
+              borderRightColor: colors.border?.default,
             }}
           >
-            <Text
-              style={{
-                color: colors.primary,
-                fontSize: isLandscape ? 12 : 14,
-                fontWeight: "600",
-              }}
-            >
-              {primaryDisplay}
-            </Text>
-          </View>
-          {renderPrimaryContent()}
-        </View>
-        <View style={{ flex: 1 }}>
-          <View
-            style={{
-              backgroundColor: colors.muted + "20",
-              paddingVertical: versionHeaderPaddingVertical,
-              paddingHorizontal: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border?.default,
-            }}
-          >
-            <Text
-              style={{
-                color: colors.primary,
-                fontSize: isLandscape ? 12 : 14,
-                fontWeight: "600",
-              }}
-            >
-              {secondaryDisplay}
-            </Text>
-          </View>
-          {secondaryLoading ? (
             <View
               style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
+                backgroundColor: colors.muted + "20",
+                paddingVertical: versionHeaderPaddingVertical,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default,
               }}
             >
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={{ color: colors.muted, marginTop: 8 }}>Loading</Text>
-            </View>
-          ) : secondaryVerses.length === 0 ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: colors.muted, textAlign: "center" }}>
-                Unable to load {secondaryDisplay} version
-              </Text>
               <Text
                 style={{
-                  color: colors.muted + "80",
-                  fontSize: 12,
-                  textAlign: "center",
-                  marginTop: 4,
+                  color: colors.primary,
+                  fontSize: isLandscape ? 12 : 14,
+                  fontWeight: "600",
                 }}
               >
-                This version may not be available
+                {primaryDisplay}
               </Text>
             </View>
-          ) : (
-            <ScrollView
-              style={{ flex: 1 }}
-              ref={secondaryScrollViewRef}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingBottom: 40,
-                paddingTop: 0,
+            {renderPrimaryContent()}
+          </View>
+          <View style={{ flex: 1 }}>
+            <View
+              style={{
+                backgroundColor: colors.muted + "20",
+                paddingVertical: versionHeaderPaddingVertical,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default,
               }}
-              onScroll={handleSecondaryScroll}
-              scrollEventThrottle={16}
-              onContentSizeChange={handleSecondaryContentSizeChange}
-              onLayout={multiProps.handleSecondaryScroll}
             >
-              <ChapterViewEnhanced
-                verses={secondaryVerses}
-                bookName={bookName}
-                chapterNumber={chapter}
-                bookId={bookId}
-                showVerseNumbers
-                fontSize={fontSize}
-                onVersePress={handleVersePress}
-                onVerseLayout={multiProps.handleSecondaryVerseLayout}
-                highlightVerse={targetVerse}
-                highlightedVerses={new Set(highlightedVerses)}
-                bookmarkedVerses={bookmarkedVerses}
-                isFullScreen={isFullScreen}
-                displayVersion={secondaryDisplay}
-                colors={colors}
-              />
-            </ScrollView>
-          )}
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: isLandscape ? 12 : 14,
+                  fontWeight: "600",
+                }}
+              >
+                {secondaryDisplay}
+              </Text>
+            </View>
+            {secondaryLoading ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ color: colors.muted, marginTop: 8 }}>
+                  Loading
+                </Text>
+              </View>
+            ) : secondaryVerses.length === 0 ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: colors.muted, textAlign: "center" }}>
+                  Unable to load {secondaryDisplay} version
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted + "80",
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  This version may not be available
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={{ flex: 1 }}
+                ref={secondaryScrollViewRef}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: 40,
+                  paddingTop: 0,
+                }}
+                onScroll={handleSecondaryScroll}
+                scrollEventThrottle={16}
+                onContentSizeChange={handleSecondaryContentSizeChange}
+                onLayout={multiProps.handleSecondaryScroll}
+              >
+                <ChapterViewEnhanced
+                  verses={secondaryVerses}
+                  bookName={bookName}
+                  chapterNumber={chapter}
+                  bookId={bookId}
+                  showVerseNumbers
+                  fontSize={fontSize}
+                  onVersePress={handleVersePress}
+                  onVerseLayout={multiProps.handleSecondaryVerseLayout}
+                  highlightVerse={targetVerse}
+                  highlightedVerses={new Set(highlightedVerses)}
+                  bookmarkedVerses={bookmarkedVerses}
+                  isFullScreen={isFullScreen}
+                  displayVersion={secondaryDisplay}
+                  colors={colors}
+                />
+              </ScrollView>
+            )}
+          </View>
         </View>
-      </View>
-    );
+      );
+    } else {
+      // Vertical layout
+      return (
+        <View style={{ flex: 1, flexDirection: "column" }}>
+          <View style={{ flex: 1 }}>
+            <View
+              style={{
+                backgroundColor: colors.muted + "20",
+                paddingVertical: versionHeaderPaddingVertical,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: isLandscape ? 12 : 14,
+                  fontWeight: "600",
+                }}
+              >
+                {primaryDisplay}
+              </Text>
+            </View>
+            {renderPrimaryContent()}
+          </View>
+          <View
+            style={{
+              flex: 1,
+              borderTopWidth: 1,
+              borderTopColor: colors.border?.default,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: colors.muted + "20",
+                paddingVertical: versionHeaderPaddingVertical,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default,
+              }}
+            >
+              <Text
+                style={{
+                  color: colors.primary,
+                  fontSize: isLandscape ? 12 : 14,
+                  fontWeight: "600",
+                }}
+              >
+                {secondaryDisplay}
+              </Text>
+            </View>
+            {secondaryLoading ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ color: colors.muted, marginTop: 8 }}>
+                  Loading
+                </Text>
+              </View>
+            ) : secondaryVerses.length === 0 ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: colors.muted, textAlign: "center" }}>
+                  Unable to load {secondaryDisplay} version
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted + "80",
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  This version may not be available
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={{ flex: 1 }}
+                ref={secondaryScrollViewRef}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: 40,
+                  paddingTop: 0,
+                }}
+                onScroll={handleSecondaryScroll}
+                scrollEventThrottle={16}
+                onContentSizeChange={handleSecondaryContentSizeChange}
+                onLayout={multiProps.handleSecondaryScroll}
+              >
+                <ChapterViewEnhanced
+                  verses={secondaryVerses}
+                  bookName={bookName}
+                  chapterNumber={chapter}
+                  bookId={bookId}
+                  showVerseNumbers
+                  fontSize={fontSize}
+                  onVersePress={handleVersePress}
+                  onVerseLayout={multiProps.handleSecondaryVerseLayout}
+                  highlightVerse={targetVerse}
+                  highlightedVerses={new Set(highlightedVerses)}
+                  bookmarkedVerses={bookmarkedVerses}
+                  isFullScreen={isFullScreen}
+                  displayVersion={secondaryDisplay}
+                  colors={colors}
+                />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      );
+    }
   };
 
   if (!bibleDB || highlightedVersesLoading) {
@@ -785,11 +995,7 @@ export default function ReaderScreen({
               onPress={() => navigation.goBack()}
               style={{ opacity: 0.8, marginLeft: isLandscape ? 40 : 0 }}
             >
-              <Ionicons
-                name="arrow-back"
-                size={24}
-                color={primaryTextColor}
-              />
+              <Ionicons name="arrow-back" size={24} color={primaryTextColor} />
             </TouchableOpacity>
             <View
               style={{ flex: 1, alignItems: "center", paddingHorizontal: 10 }}
@@ -877,11 +1083,16 @@ export default function ReaderScreen({
                   style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
                   <TouchableOpacity
-                    onPress={multiProps.toggleMultiVersion}
+                    onPress={handleTogglePress}
+                    onLongPress={handleToggleLongPress}
                     style={{ padding: 2 }}
                   >
                     <Ionicons
-                      name="copy-outline"
+                      name={
+                        multiViewLayout === "horizontal"
+                          ? "copy-outline"
+                          : "copy"
+                      }
                       size={24}
                       color={showMultiVersion ? "#f6f0f0ff" : primaryTextColor}
                     />
@@ -1156,10 +1367,7 @@ export default function ReaderScreen({
           }}
         >
           <TouchableOpacity
-            onPress={() => {
-              goToPreviousChapter();
-              resetButtonOpacity();
-            }}
+            onPress={goToPreviousChapter}
             disabled={chapter <= 1}
             style={{
               width: buttonSize,
@@ -1176,10 +1384,7 @@ export default function ReaderScreen({
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: "center" }} />
           <TouchableOpacity
-            onPress={() => {
-              goToNextChapter();
-              resetButtonOpacity();
-            }}
+            onPress={goToNextChapter}
             style={{
               width: buttonSize,
               height: buttonSize,
