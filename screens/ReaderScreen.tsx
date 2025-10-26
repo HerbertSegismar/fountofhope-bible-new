@@ -38,11 +38,11 @@ import { getBookInfo } from "../utils/testamentUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const initialDimensions = Dimensions.get("window");
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-type SelectorType = "version" | null;
+type SelectorType = "primary" | "secondary" | null;
 
 interface MenuItem {
   key: string;
@@ -87,6 +87,23 @@ export default function ReaderScreen({
   const [multiViewLayout, setMultiViewLayout] =
     useState<MultiViewLayout>("horizontal");
 
+  // Header position states
+  const [primaryHeaderX, setPrimaryHeaderX] = useState(0);
+  const [primaryHeaderY, setPrimaryHeaderY] = useState(0);
+  const [primaryHeaderWidth, setPrimaryHeaderWidth] = useState(0);
+  const [primaryHeaderHeight, setPrimaryHeaderHeight] = useState(0);
+  const [secondaryHeaderX, setSecondaryHeaderX] = useState(0);
+  const [secondaryHeaderY, setSecondaryHeaderY] = useState(0);
+  const [secondaryHeaderWidth, setSecondaryHeaderWidth] = useState(0);
+  const [secondaryHeaderHeight, setSecondaryHeaderHeight] = useState(0);
+  const primaryHeaderRef = useRef<View>(null);
+  const secondaryHeaderRef = useRef<View>(null);
+
+  // Dynamic dimensions
+  const [dimensions, setDimensions] = useState(initialDimensions);
+  const screenWidth = dimensions.width;
+  const screenHeight = dimensions.height;
+
   // Hooks
   const themeColors = useThemeColors();
   const {
@@ -114,7 +131,9 @@ export default function ReaderScreen({
   } = multiVersion;
   const [fontSize, setFontSize] = useState(16);
   const [uiMode, setUiMode] = useState(0);
-  const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
+  const [isLandscape, setIsLandscape] = useState(
+    initialDimensions.width > initialDimensions.height
+  );
   const [_showEnd, setShowEnd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -123,6 +142,12 @@ export default function ReaderScreen({
   const scrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Effective layout considering orientation
+  const effectiveLayout = useMemo(
+    () => (isLandscape ? "horizontal" : multiViewLayout),
+    [isLandscape, multiViewLayout]
+  );
 
   // Long press ref
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -269,12 +294,22 @@ export default function ReaderScreen({
     });
   }, [navigation, showMultiVersion, multiProps.secondaryVersion]);
 
-  const openVersionSelector = useCallback(() => setOpenSelector("version"), []);
+  const openPrimaryVersionSelector = useCallback(
+    () => setOpenSelector("primary"),
+    []
+  );
+
+  const openSecondaryVersionSelector = useCallback(
+    () => setOpenSelector("secondary"),
+    []
+  );
 
   const selectorTitle = useMemo(() => {
     switch (openSelector) {
-      case "version":
-        return "Select Version";
+      case "primary":
+        return "Select Primary Version";
+      case "secondary":
+        return "Select Secondary Version";
       default:
         return "";
     }
@@ -370,7 +405,7 @@ export default function ReaderScreen({
       {
         key: "multi",
         name: "Toggle Multi-Version",
-        icon: multiViewLayout === "horizontal" ? "copy-outline" : "copy",
+        icon: effectiveLayout === "horizontal" ? "copy-outline" : "copy",
         onPress: multiProps.toggleMultiVersion,
         color: showMultiVersion ? "#f6f0f0ff" : primaryTextColor,
       },
@@ -393,7 +428,7 @@ export default function ReaderScreen({
       themeColors.theme,
       primaryTextColor,
       showMultiVersion,
-      multiViewLayout,
+      effectiveLayout,
       toggleTheme,
       handleColorSchemePress,
       multiProps.toggleMultiVersion,
@@ -503,17 +538,20 @@ export default function ReaderScreen({
 
   useFocusEffect(
     useCallback(() => {
-      const { width, height } = Dimensions.get("window");
-      const currentIsLandscape = width > height;
+      const currentDimensions = Dimensions.get("window");
+      const currentIsLandscape =
+        currentDimensions.width > currentDimensions.height;
+      setDimensions(currentDimensions);
       setIsLandscape(currentIsLandscape);
     }, [])
   );
 
   useEffect(() => {
     const updateLayout = () => {
-      const { width: newWidth, height: newHeight } = Dimensions.get("window");
-      const newIsLandscape = newWidth > newHeight;
+      const newDimensions = Dimensions.get("window");
+      const newIsLandscape = newDimensions.width > newDimensions.height;
       setShowDropdown(false);
+      setDimensions(newDimensions);
       setIsLandscape(newIsLandscape);
     };
     updateLayout();
@@ -690,8 +728,8 @@ export default function ReaderScreen({
       return renderPrimaryContent();
     }
 
-    // Render based on selected layout
-    if (multiViewLayout === "horizontal") {
+    // Render based on effective layout
+    if (effectiveLayout === "horizontal") {
       return (
         <View style={{ flex: 1, flexDirection: "row" }}>
           <View
@@ -702,45 +740,129 @@ export default function ReaderScreen({
             }}
           >
             <View
+              ref={primaryHeaderRef}
+              onLayout={() => {
+                primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                  setPrimaryHeaderX(x);
+                  setPrimaryHeaderY(y);
+                  setPrimaryHeaderWidth(w);
+                  setPrimaryHeaderHeight(h);
+                });
+              }}
               style={{
                 backgroundColor: colors.muted + "20",
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border?.default,
+                flexDirection: "row",
+                gap: 5,
               }}
             >
-              <Text
+              <TouchableOpacity
+                onPress={openNavigationSelector}
                 style={{
-                  color: colors.primary,
-                  fontSize: isLandscape ? 12 : 14,
-                  fontWeight: "600",
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 4,
                 }}
               >
-                {primaryDisplay}
-              </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${displayBookName} ${chapter}`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openPrimaryVersionSelector}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {primaryDisplay}
+                </Text>
+              </TouchableOpacity>
             </View>
             {renderPrimaryContent()}
           </View>
           <View style={{ flex: 1 }}>
             <View
+              ref={secondaryHeaderRef}
+              onLayout={() => {
+                secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                  setSecondaryHeaderX(x);
+                  setSecondaryHeaderY(y);
+                  setSecondaryHeaderWidth(w);
+                  setSecondaryHeaderHeight(h);
+                });
+              }}
               style={{
                 backgroundColor: colors.muted + "20",
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border?.default,
+                flexDirection: "row",
+                gap: 5,
               }}
             >
-              <Text
+              <TouchableOpacity
+                onPress={openNavigationSelector}
                 style={{
-                  color: colors.primary,
-                  fontSize: isLandscape ? 12 : 14,
-                  fontWeight: "600",
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 4,
                 }}
               >
-                {secondaryDisplay}
-              </Text>
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${displayBookName} ${chapter}`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openSecondaryVersionSelector}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {secondaryDisplay}
+                </Text>
+              </TouchableOpacity>
             </View>
             {secondaryLoading ? (
               <View
@@ -817,25 +939,69 @@ export default function ReaderScreen({
       return (
         <View style={{ flex: 1, flexDirection: "column" }}>
           <View style={{ flex: 1 }}>
-            <View
-              style={{
-                backgroundColor: colors.muted + "20",
-                paddingVertical: versionHeaderPaddingVertical,
-                paddingHorizontal: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border?.default,
-              }}
-            >
-              <Text
+            {hideHeader && (
+              <View
+                ref={primaryHeaderRef}
+                onLayout={() => {
+                  primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                    setPrimaryHeaderX(x);
+                    setPrimaryHeaderY(y);
+                    setPrimaryHeaderWidth(w);
+                    setPrimaryHeaderHeight(h);
+                  });
+                }}
                 style={{
-                  color: colors.primary,
-                  fontSize: isLandscape ? 12 : 14,
-                  fontWeight: "600",
+                  backgroundColor: colors.primary,
+                  paddingVertical: versionHeaderPaddingVertical,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border?.default,
+                  flexDirection: "row",
+                  gap: 5,
                 }}
               >
-                {primaryDisplay}
-              </Text>
-            </View>
+                <TouchableOpacity
+                  onPress={openNavigationSelector}
+                  style={{
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    backgroundColor: "rgba(255,255,255,0.15)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontWeight: "500",
+                      fontSize: 16,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {`${displayBookName} ${chapter}`}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openPrimaryVersionSelector}
+                  style={{
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    backgroundColor: "rgba(255,255,255,0.15)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontWeight: "500",
+                      fontSize: 16,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {primaryDisplay}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
             {renderPrimaryContent()}
           </View>
           <View
@@ -846,23 +1012,65 @@ export default function ReaderScreen({
             }}
           >
             <View
+              ref={secondaryHeaderRef}
+              onLayout={() => {
+                secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                  setSecondaryHeaderX(x);
+                  setSecondaryHeaderY(y);
+                  setSecondaryHeaderWidth(w);
+                  setSecondaryHeaderHeight(h);
+                });
+              }}
               style={{
-                backgroundColor: colors.muted + "20",
+                backgroundColor: colors.primary,
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border?.default,
+                flexDirection: "row",
+                gap: 5,
               }}
             >
-              <Text
+              <TouchableOpacity
+                onPress={openNavigationSelector}
                 style={{
-                  color: colors.primary,
-                  fontSize: isLandscape ? 12 : 14,
-                  fontWeight: "600",
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.15)",
+                  borderRadius: 4,
                 }}
               >
-                {secondaryDisplay}
-              </Text>
+                <Text
+                  style={{
+                    color: "white",
+                    fontWeight: "500",
+                    fontSize: 16,
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${displayBookName} ${chapter}`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openSecondaryVersionSelector}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: "rgba(255,255,255,0.15)",
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "white",
+                    fontWeight: "500",
+                    fontSize: 16,
+                  }}
+                  numberOfLines={1}
+                >
+                  {secondaryDisplay}
+                </Text>
+              </TouchableOpacity>
             </View>
             {secondaryLoading ? (
               <View
@@ -962,6 +1170,29 @@ export default function ReaderScreen({
   const buttonSize = 35;
   const iconSize = 24;
   const toggleSize = 48;
+  const selectorWidth = 200;
+
+  // Dynamic selector position
+  let selectorTop = headerTotalHeight;
+  let selectorLeft = (screenWidth - selectorWidth) / 2;
+
+  if (openSelector === "primary") {
+    if (primaryHeaderY > 0 && primaryHeaderHeight > 0) {
+      selectorTop = primaryHeaderY + primaryHeaderHeight;
+      selectorLeft =
+        primaryHeaderX + primaryHeaderWidth / 2 - selectorWidth / 2;
+    }
+  } else if (openSelector === "secondary") {
+    if (secondaryHeaderY > 0 && secondaryHeaderHeight > 0) {
+      selectorTop = secondaryHeaderY + secondaryHeaderHeight;
+      if (isLandscape) {
+        selectorLeft =
+          secondaryHeaderX + secondaryHeaderWidth / 2 - selectorWidth / 2;
+      } else {
+        selectorLeft = (screenWidth - selectorWidth) / 2;
+      }
+    }
+  }
 
   return (
     <SafeAreaView
@@ -1029,7 +1260,7 @@ export default function ReaderScreen({
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={openVersionSelector}
+                  onPress={openPrimaryVersionSelector}
                   style={{
                     paddingHorizontal: 5,
                     paddingVertical: 4,
@@ -1089,7 +1320,7 @@ export default function ReaderScreen({
                   >
                     <Ionicons
                       name={
-                        multiViewLayout === "horizontal"
+                        effectiveLayout === "horizontal"
                           ? "copy-outline"
                           : "copy"
                       }
@@ -1247,9 +1478,9 @@ export default function ReaderScreen({
           <View
             style={{
               position: "absolute",
-              top: headerTotalHeight,
-              left: (screenWidth - 160) / 2,
-              width: 160,
+              top: selectorTop,
+              left: selectorLeft,
+              width: selectorWidth,
               backgroundColor: colors.primary,
               borderRadius: 8,
               paddingVertical: 8,
@@ -1258,17 +1489,32 @@ export default function ReaderScreen({
               shadowOpacity: 0.25,
               shadowRadius: 4,
               elevation: 5,
+              flexDirection: "column",
+              alignItems: "center",
             }}
             onStartShouldSetResponder={() => true}
           >
-            <View className="border-b border-white">
-              <Text className="text-center text-white text-sm font-bold">
-                Select Bible Version
+            <View
+              style={{
+                borderBottomWidth: 1,
+                borderBottomColor: "white",
+                paddingBottom: 8,
+                width: "100%",
+                alignItems: "center",
+              }}
+            >
+              <Text
+                style={{ color: "white", fontSize: 16, fontWeight: "bold" }}
+              >
+                {selectorTitle}
               </Text>
             </View>
             <ScrollView
               showsVerticalScrollIndicator={true}
-              style={{ maxHeight: 300 }}
+              style={{
+                maxHeight: 300,
+                width: "100%",
+              }}
             >
               {selectorLoading ? (
                 <View
@@ -1279,12 +1525,16 @@ export default function ReaderScreen({
                 >
                   <ActivityIndicator size="small" color={primaryTextColor} />
                 </View>
-              ) : openSelector === "version" ? (
+              ) : openSelector ? (
                 availableBibleVersions.map((v, index) => (
                   <TouchableOpacity
                     key={v}
                     onPress={async () => {
-                      await handleVersionSelect(v);
+                      if (openSelector === "primary") {
+                        await handleVersionSelect(v);
+                      } else {
+                        await multiProps.handleSecondaryVersionSelect(v);
+                      }
                       closeSelector();
                     }}
                     style={{

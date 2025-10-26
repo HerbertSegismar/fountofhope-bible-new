@@ -1329,6 +1329,28 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       ]
     );
 
+    const indicatorSize = isFullScreen ? fontSize * 0.7 : fontSize * 0.8;
+    const numberStyle = {
+      fontSize: indicatorSize,
+      fontWeight: "600" as const,
+      color: isHighlighted
+        ? themeColors.highlightIcon
+        : themeColors.verseNumber,
+      fontFamily: actualFontFamily,
+    };
+
+    const starStyle = {
+      fontSize: indicatorSize * 0.9,
+      color: themeColors.highlightIcon,
+      fontFamily: actualFontFamily,
+    };
+
+    const bookmarkStyle = {
+      fontSize: indicatorSize * 0.9,
+      color: themeColors.primary,
+      fontFamily: actualFontFamily,
+    };
+
     return (
       <TouchableOpacity
         key={verse.verse}
@@ -1354,68 +1376,28 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           onLayout={(event) => handleVerseLayout(verse.verse, event)}
           ref={(ref) => handleVerseRef(verse.verse, ref)}
         >
-          <View style={{ flexDirection: "row", alignItems: "flex-start" }}>
-            {showVerseNumbers && (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  minWidth: isFullScreen ? 18 : 20,
-                  marginRight: isFullScreen ? 0 : 2,
-                  ...STYLES.verseNumber,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: isFullScreen ? fontSize - 6 : fontSize - 4,
-                    fontWeight: "600",
-                    color: isHighlighted
-                      ? themeColors.highlightIcon
-                      : themeColors.verseNumber,
-                    fontFamily: actualFontFamily,
-                  }}
-                >
-                  {verse.verse}
-                </Text>
-                {isHighlighted && (
-                  <Ionicons
-                    name="star"
-                    size={isFullScreen ? 10 : 12}
-                    color={themeColors.highlightIcon}
-                    style={{ marginLeft: 2 }}
-                  />
-                )}
-              </View>
-            )}
-            <View
+          <View style={{ ...STYLES.verseText }}>
+            <Text
               style={{
-                ...STYLES.verseText,
-                flexDirection: "row",
-                alignItems: "flex-start",
+                fontSize,
+                lineHeight: fontSize * 1.4,
+                flexShrink: 1,
+                flexWrap: "wrap",
+                color: verseTextColor,
+                fontFamily: actualFontFamily,
               }}
+              numberOfLines={0}
             >
-              <Text
-                style={{
-                  fontSize,
-                  lineHeight: fontSize * 1.4,
-                  flexShrink: 1,
-                  flexWrap: "wrap",
-                  color: verseTextColor,
-                  fontFamily: actualFontFamily,
-                }}
-                numberOfLines={0}
-              >
-                {renderedText}
-              </Text>
-              {bookmarkedVerses.has(verse.verse) && (
-                <Ionicons
-                  name="bookmark"
-                  size={isFullScreen ? 14 : 16}
-                  color={themeColors.primary}
-                  style={{ marginLeft: 8, marginTop: 2 }}
-                />
+              {showVerseNumbers && (
+                <Text style={numberStyle}>{verse.verse}</Text>
               )}
-            </View>
+              {bookmarkedVerses.has(verse.verse) && (
+                <Text style={bookmarkStyle}>🔖</Text>
+              )}
+              {isHighlighted && <Text style={starStyle}>★</Text>}
+              {showVerseNumbers || bookmarkedVerses.has(verse.verse) || isHighlighted ? " " : ""}
+              {renderedText}
+            </Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -1441,7 +1423,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const chapterContent = (
     <View style={[adjustedStyle, style]}>
-      {/*Chapter Header Hidden */}
+      {/*Hide Chapter Header */}
       {/*<View
         style={{
           backgroundColor: bookColor,
@@ -1625,56 +1607,39 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                   >
                     {verseVerses.map((verse) => (
                       <View key={verse.verse} style={{ marginBottom: 8 }}>
-                        <View
+                        <Text
                           style={{
-                            flexDirection: "row",
-                            alignItems: "flex-start",
+                            fontSize: 16,
+                            lineHeight: 24,
+                            flexShrink: 1,
+                            flexWrap: "wrap",
+                            color: modalVerseTextColor,
+                            fontFamily: actualFontFamily,
                           }}
+                          numberOfLines={0}
                         >
-                          <View
+                          <Text
                             style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              minWidth: 20,
-                              marginRight: 2,
+                              fontSize: 12,
+                              fontWeight: "600",
+                              color: themeColors.verseNumber,
+                              fontFamily: actualFontFamily,
                             }}
                           >
-                            <Text
-                              style={{
-                                fontSize: 12,
-                                fontWeight: "600",
-                                color: themeColors.verseNumber,
-                                fontFamily: actualFontFamily,
-                              }}
-                            >
-                              {verse.verse}
-                            </Text>
-                          </View>
-                          <View style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                              style={{
-                                fontSize: 16,
-                                lineHeight: 24,
-                                flexShrink: 1,
-                                flexWrap: "wrap",
-                                color: modalVerseTextColor,
-                                fontFamily: actualFontFamily,
-                              }}
-                              numberOfLines={0}
-                            >
-                              {renderVerseTextWithXmlHighlight(
-                                verse.text,
-                                16,
-                                themeColors,
-                                undefined,
-                                actualFontFamily,
-                                (content: string) =>
-                                  handleTagPressFromModal(content, verse),
-                                modalVerseTextColor
-                              )}
-                            </Text>
-                          </View>
-                        </View>
+                            {verse.verse}
+                          </Text>
+                          {" "}
+                          {renderVerseTextWithXmlHighlight(
+                            verse.text,
+                            16,
+                            themeColors,
+                            undefined,
+                            actualFontFamily,
+                            (content: string) =>
+                              handleTagPressFromModal(content, verse),
+                            modalVerseTextColor
+                          )}
+                        </Text>
                       </View>
                     ))}
                   </ScrollView>
