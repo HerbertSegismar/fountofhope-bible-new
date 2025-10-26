@@ -7,7 +7,6 @@ import {
   Verse,
   Story,
   Introduction,
-  DatabaseInfo,
   DatabaseMigration,
   DatabaseStats,
   SearchOptions,
@@ -24,7 +23,6 @@ class BibleDatabaseError extends Error {
   }
 }
 
-// Cache manager for better cache organization
 class DatabaseCache {
   private queryCache = new Map<string, any>();
   private tableExistsCache = new Map<string, boolean>();
@@ -114,8 +112,6 @@ class BibleDatabase {
     this.dbPath = `${this.sqliteDirectory}/${this.dbName}`;
   }
 
-  // ==================== PUBLIC INTERFACE ====================
-
   async init(): Promise<void> {
     if (this.isInitialized) return;
     if (this.initializationPromise) return this.initializationPromise;
@@ -151,8 +147,6 @@ class BibleDatabase {
   isSameDatabase(dbName: string): boolean {
     return this.dbName === dbName;
   }
-
-  // ==================== CORE DATABASE OPERATIONS ====================
 
   async searchVerses(query: string, options?: SearchOptions): Promise<Verse[]> {
     await this.ensureInitialized();
@@ -229,7 +223,6 @@ class BibleDatabase {
     return book;
   }
 
-  // In BibleDatabase class, update the getVerses method with better error handling
   async getVerses(bookNumber: number, chapter: number): Promise<Verse[]> {
     const cacheKey = `getVerses:${bookNumber}:${chapter}`;
     const cached = this.cache.getQuery<Verse[]>(cacheKey);
@@ -238,7 +231,6 @@ class BibleDatabase {
     return this.withRetry(async () => {
       await this.ensureInitialized();
 
-      // Add additional validation
       if (!this.db) {
         throw new BibleDatabaseError(
           "Database not available",
@@ -285,8 +277,6 @@ class BibleDatabase {
     }, `getVerse(${bookNumber}, ${chapter}, ${verse})`);
   }
 
-  // ==================== COMMENTARY OPERATIONS ====================
-
   async getCommentary(
     bookNumber: number,
     chapter: number,
@@ -331,8 +321,6 @@ class BibleDatabase {
       return results.map((r) => r.marker);
     }, `getAvailableCommentaryMarkers(${bookNumber}, ${chapter}, ${verse})`);
   }
-
-  // ==================== METADATA OPERATIONS ====================
 
   async getChapterCount(bookNumber: number): Promise<number> {
     const cached = this.cache.getChapterCount(bookNumber);
@@ -409,8 +397,6 @@ class BibleDatabase {
     this.cache.setStats(stats);
     return stats;
   }
-
-  // ==================== PRIVATE METHODS ====================
 
   private async initializeDatabase(): Promise<void> {
     try {
@@ -583,7 +569,6 @@ class BibleDatabase {
     }
   }
 
-  // In BibleDatabase class, update the verifyDatabase method
   private async verifyDatabase(): Promise<void> {
     if (!this.db)
       throw new BibleDatabaseError("Database not open", null, "verifyDatabase");
@@ -605,12 +590,10 @@ class BibleDatabase {
     }
   }
 
-  // Add this method to check if it's a dictionary database
   private isDictionaryDatabase(): boolean {
     return this.dbName.toLowerCase().includes("dictionary");
   }
 
-  // In BibleDatabase class, update verifyDictionaryDatabase
   private async verifyDictionaryDatabase(): Promise<void> {
     const tableRows = await this.db!.getAllAsync<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type='table'"
@@ -619,9 +602,7 @@ class BibleDatabase {
 
     console.log(`Dictionary database tables: ${foundTables.join(", ")}`);
 
-    // Check for dictionary table
     if (!foundTables.includes("dictionary")) {
-      // If no dictionary table, check if it's an empty/invalid dictionary DB
       const rowCount = await this.db!.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name != 'schema_version'`
       );
@@ -630,14 +611,11 @@ class BibleDatabase {
         console.warn(
           `Dictionary database ${this.dbName} appears to be empty or invalid`
         );
-        // Don't throw error - just warn and continue
         return;
       } else {
         throw new Error("Dictionary table not found in dictionary database");
       }
     }
-
-    // Verify dictionary table structure - now checking for 'topic' column
     const columnsInfo = await this.db!.getAllAsync<any>(
       `PRAGMA table_info(dictionary);`
     );
@@ -656,7 +634,6 @@ class BibleDatabase {
       );
     }
 
-    // Check data existence
     const rowCount = await this.db!.getFirstAsync<{ count: number }>(
       `SELECT COUNT(*) as count FROM dictionary`
     );
@@ -707,9 +684,7 @@ class BibleDatabase {
 
     console.log(`Commentary database tables: ${foundTables.join(", ")}`);
 
-    // Check for commentaries table specifically
     if (!foundTables.includes("commentaries")) {
-      // If no commentaries table, check if it's an empty/invalid commentary DB
       const rowCount = await this.db!.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name != 'schema_version'`
       );
@@ -718,14 +693,12 @@ class BibleDatabase {
         console.warn(
           `Commentary database ${this.dbName} appears to be empty or invalid`
         );
-        // Don't throw error - just warn and continue
         return;
       } else {
         throw new Error("Commentaries table not found in commentary database");
       }
     }
 
-    // Verify commentaries table structure
     const columnsInfo = await this.db!.getAllAsync<any>(
       `PRAGMA table_info(commentaries);`
     );
@@ -749,8 +722,6 @@ class BibleDatabase {
         `Missing required columns in commentaries table: ${missingColumns.join(", ")}`
       );
     }
-
-    // Check data existence
     const rowCount = await this.db!.getFirstAsync<{ count: number }>(
       `SELECT COUNT(*) as count FROM commentaries`
     );
@@ -831,8 +802,6 @@ class BibleDatabase {
     }
     if (!this.isInitialized) await this.init();
   }
-
-  // In BibleDatabase class, update the getDictionaryDefinition method
   async getDictionaryDefinition(strongNumber: string): Promise<string | null> {
     return this.withRetry(async () => {
       await this.ensureInitialized();
@@ -849,8 +818,6 @@ class BibleDatabase {
       return result?.definition || null;
     }, `getDictionaryDefinition(${strongNumber})`);
   }
-
-  // Keep the existing getDatabaseAsset method unchanged
   private getDatabaseAsset(): number {
     switch (this.dbName) {
       case "kj2.sqlite3":

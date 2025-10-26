@@ -43,12 +43,10 @@ export const HighlightsProvider: React.FC<{ children: ReactNode }> = ({
   >(new Map());
   const [loading, setLoading] = useState(true);
 
-  // Load highlights from storage on app start
   useEffect(() => {
     loadHighlightsFromStorage();
   }, []);
 
-  // Save highlights to storage whenever they change
   useEffect(() => {
     if (!loading) {
       saveHighlightsToStorage();
@@ -64,7 +62,6 @@ export const HighlightsProvider: React.FC<{ children: ReactNode }> = ({
         const parsedHighlights = JSON.parse(storedHighlights);
         const highlightsMap = new Map<string, HighlightedVerse>();
 
-        // Convert array back to Map
         parsedHighlights.forEach(([key, value]: [string, HighlightedVerse]) => {
           highlightsMap.set(key, value);
         });
@@ -80,7 +77,6 @@ export const HighlightsProvider: React.FC<{ children: ReactNode }> = ({
 
   const saveHighlightsToStorage = async () => {
     try {
-      // Convert Map to array for storage
       const highlightsArray = Array.from(highlightedVerses.entries());
       await AsyncStorage.setItem(
         HIGHLIGHTS_STORAGE_KEY,

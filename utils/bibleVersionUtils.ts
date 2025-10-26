@@ -1,5 +1,3 @@
-// utils/bibleVersionUtils.ts
-
 export const VERSION_DISPLAY_NAMES: Record<string, string> = {
   "ampc.sqlite3": "AMPC",
   "niv11.sqlite3": "NIV11",

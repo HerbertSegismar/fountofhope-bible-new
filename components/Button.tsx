@@ -26,47 +26,9 @@ export const Button: React.FC<ButtonProps> = ({
   size = "medium",
 }) => {
   const { theme, colorScheme, customColor } = useTheme();
-
-  // For custom color scheme, we need to use inline styles
   const useInlineStyles = colorScheme === "custom";
 
-  const getThemeColors = () => {
-    const isDark = theme === "dark";
-
-    // Use the utility function to get primary color
-    const primaryColor =
-      colorScheme === "custom"
-        ? customColor
-        : isDark
-          ? colorScheme === "purple"
-            ? "#9333EA"
-            : colorScheme === "green"
-              ? "#059669"
-              : colorScheme === "red"
-                ? "#DC2626"
-                : "#D97706"
-          : colorScheme === "purple"
-            ? "#A855F7"
-            : colorScheme === "green"
-              ? "#10B981"
-              : colorScheme === "red"
-                ? "#EF4444"
-                : "#F59E0B";
-
-    const baseColors = {
-      primary: primaryColor,
-      background: isDark ? "#111827" : "#FFFFFF",
-      text: isDark ? "#F9FAFB" : "#1F2937",
-      border: isDark ? "#374151" : "#D1D5DB",
-      disabled: isDark ? "#4B5563" : "#9CA3AF",
-      disabledText: isDark ? "#6B7280" : "#6B7280",
-    };
-
-    return baseColors;
-  };
-
   if (useInlineStyles) {
-    // Inline styles version for custom colors
     const getButtonStyle = () => {
       const baseStyle = {
         borderRadius: 8,
@@ -76,7 +38,6 @@ export const Button: React.FC<ButtonProps> = ({
         opacity: disabled ? 0.6 : 1,
       };
 
-      // Size styles
       const sizeStyles = {
         small: { paddingVertical: 8, paddingHorizontal: 16 },
         medium: { paddingVertical: 12, paddingHorizontal: 20 },
@@ -98,7 +59,7 @@ export const Button: React.FC<ButtonProps> = ({
             borderWidth: 2,
             borderColor: customColor,
           };
-        default: // primary
+        default:
           return {
             ...baseStyle,
             ...sizeStyles[size],
@@ -127,7 +88,7 @@ export const Button: React.FC<ButtonProps> = ({
             fontWeight: "600" as const,
             color: customColor,
           };
-        default: // primary
+        default:
           return {
             ...sizeStyles[size],
             fontWeight: "600" as const,
@@ -142,7 +103,7 @@ export const Button: React.FC<ButtonProps> = ({
           return customColor;
         case "secondary":
           return theme === "dark" ? "#F9FAFB" : "#374151";
-        default: // primary
+        default:
           return "#FFFFFF";
       }
     };
@@ -165,8 +126,6 @@ export const Button: React.FC<ButtonProps> = ({
       </TouchableOpacity>
     );
   }
-
-  // Tailwind version for predefined color schemes
   const getButtonStyle = () => {
     const baseStyle = "rounded-lg flex-row justify-center items-center";
 

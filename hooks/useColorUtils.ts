@@ -1,4 +1,3 @@
-// hooks/useColorUtils.ts
 import { useTheme } from "../context/ThemeContext";
 import {
   calculateCustomColorVariants,
@@ -15,7 +14,6 @@ export const useColorUtils = () => {
       return calculateCustomColorVariants(customColor).variants;
     }
 
-    // For predefined schemes, return their variants
     const schemes = {
       purple: { light: "#A855F7", dark: "#9333EA" },
       green: { light: "#10B981", dark: "#059669" },

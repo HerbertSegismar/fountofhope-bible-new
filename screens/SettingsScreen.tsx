@@ -14,7 +14,6 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import {
   useTheme,
   ColorScheme,
-  Theme,
   FontFamily,
 } from "../context/ThemeContext";
 import { VersionSelector } from "../components/VersionSelector";
@@ -28,7 +27,7 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 const SettingsScreen = () => {
   const {
     currentVersion,
-    availableBibleVersions, // Changed from availableVersions
+    availableBibleVersions,
     switchVersion,
     isInitializing,
   } = useBibleDatabase();
@@ -290,7 +289,6 @@ const SettingsScreen = () => {
           backgroundColor: previewBg,
         }}
       >
-        {/* Simple color preview */}
         <View
           className="w-full h-8 rounded mb-2"
           style={{ backgroundColor: previewPrimary }}
@@ -370,7 +368,6 @@ const SettingsScreen = () => {
       contentContainerStyle={{ paddingVertical: 16 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
       <View className="px-4 mb-6">
         <Text
           className="text-2xl font-bold"
@@ -387,7 +384,6 @@ const SettingsScreen = () => {
         </Text>
       </View>
 
-      {/* Bible Version Section */}
       <SettingSection
         title="Bible Version"
         subtitle="Choose your preferred translation"
@@ -413,7 +409,7 @@ const SettingsScreen = () => {
         <VersionSelector
           currentVersion={currentVersion}
           selectedVersion={selectedVersion}
-          availableVersions={availableBibleVersions} // Changed
+          availableVersions={availableBibleVersions}
           onVersionSelect={handleVersionSelect}
           title=""
           description=""
@@ -444,13 +440,11 @@ const SettingsScreen = () => {
         </View>
       </SettingSection>
 
-      {/* Appearance Section */}
       <SettingSection
         title="Appearance"
         subtitle="Customize look and feel"
         icon="color-palette-outline"
       >
-        {/* Theme Toggle */}
         <SettingItem
           title="Dark Mode"
           subtitle="Toggle between light and dark themes"
@@ -472,7 +466,6 @@ const SettingsScreen = () => {
           style={{ borderColor: themeColors.border }}
         />
 
-        {/* Color Scheme */}
         <View className="mb-4">
           <Text
             className="text-sm font-semibold mb-3"
@@ -502,7 +495,6 @@ const SettingsScreen = () => {
           style={{ borderColor: themeColors.border }}
         />
 
-        {/* Font Family */}
         <View>
           <Text
             className="text-sm font-semibold mb-3"
@@ -533,7 +525,6 @@ const SettingsScreen = () => {
         </View>
       </SettingSection>
 
-      {/* Additional Settings Section */}
       <SettingSection
         title="More Options"
         subtitle="Additional preferences"
@@ -601,7 +592,6 @@ const SettingsScreen = () => {
         </SettingItem>
       </SettingSection>
 
-      {/* Action Buttons */}
       <SettingSection
         title="Quick Actions"
         subtitle="Common tasks"

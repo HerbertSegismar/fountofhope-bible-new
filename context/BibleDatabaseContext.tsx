@@ -15,8 +15,8 @@ interface BibleDatabaseContextType {
   bibleDB: BibleDatabase | null;
   currentVersion: string;
   availableVersions: string[];
-  availableBibleVersions: string[]; // Main Bibles only (no commentary)
-  availableCommentaryVersions: string[]; // Commentary databases only
+  availableBibleVersions: string[];
+  availableCommentaryVersions: string[];
   switchVersion: (newVersion: string) => Promise<void>;
   isInitializing: boolean;
   initializationError: string | null;
@@ -26,7 +26,6 @@ interface BibleDatabaseContextType {
   retryInitialization: () => Promise<void>;
   preloadCurrentCommentary: () => Promise<void>;
   recoverDatabaseConnection: () => Promise<void>;
-  // Add method to explicitly close secondary databases
   closeSecondaryDatabases: (keepVersions?: string[]) => Promise<void>;
 }
 
@@ -39,8 +38,6 @@ interface BibleDatabaseProviderProps {
 }
 
 const STORAGE_KEY = "selected_bible_version";
-
-// Map main Bible versions to their commentary versions
 const BIBLE_TO_COMMENTARY_MAP: Record<string, string> = {
   "ampc.sqlite3": "ampccom.sqlite3",
   "niv11.sqlite3": "niv11com.sqlite3",
@@ -61,8 +58,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   const [initializationError, setInitializationError] = useState<string | null>(
     null
   );
-
-  // Separate arrays for better organization
   const availableBibleVersions = [
     "ampc.sqlite3",
     "niv11.sqlite3",
@@ -95,7 +90,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     "rv1895com.sqlite3",
   ];
 
-  // Combined list for backward compatibility
   const availableVersions = [
     ...availableBibleVersions,
     ...availableCommentaryVersions,
@@ -106,7 +100,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     new Map()
   );
 
-  // Initialize a database version if not already open
   const initializeDatabase = useCallback(
     async (
       version: string,
@@ -142,7 +135,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         try {
           db = new BibleDatabase(version);
 
-          // Add timeout to prevent hanging indefinitely
           const dbInitPromise = db.init();
           const timeoutPromise = new Promise<BibleDatabase>((_, reject) =>
             setTimeout(
@@ -173,7 +165,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
             version,
           });
 
-          // Only set error if it's the primary Bible database
           if (isPrimary) {
             setInitializationError(errorMessage);
             setBibleDB(null);
@@ -195,15 +186,12 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     []
   );
 
-  // Preload only the commentary for the current main Bible version
   const preloadCurrentCommentary = useCallback(async (version: string) => {
     const commentaryVersion = BIBLE_TO_COMMENTARY_MAP[version];
 
     if (commentaryVersion) {
-      // Skip if already loaded
       if (openDatabases.current.has(commentaryVersion)) {
         console.log(`Commentary already loaded: ${commentaryVersion}`);
-        // Still proceed to check dictionary
       } else {
         try {
           console.log(`Preloading commentary: ${commentaryVersion}`);
@@ -218,7 +206,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
             `Failed to preload commentary ${commentaryVersion}:`,
             error
           );
-          // Don't throw - commentary databases are optional
         }
       }
     } else {
@@ -231,8 +218,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         try {
           console.log(`Preloading dictionary: ${dictionaryVersion}`);
           const db = new BibleDatabase(dictionaryVersion);
-
-          // Add timeout for dictionary loading
           const initPromise = db.init();
           const timeoutPromise = new Promise((_, reject) =>
             setTimeout(
@@ -251,36 +236,27 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
             `Failed to preload dictionary ${dictionaryVersion}:`,
             error
           );
-          // Don't throw - dictionary databases are optional
         }
       }
     }
   }, []);
 
-  // Public wrapper for preloadCurrentCommentary that uses currentVersion
   const preloadCurrentCommentaryPublic = useCallback(async () => {
     await preloadCurrentCommentary(currentVersion);
   }, [currentVersion, preloadCurrentCommentary]);
 
-  // Retry initialization
   const retryInitialization = useCallback(async () => {
     const db = await initializeDatabase(currentVersion, true);
     setBibleDB(db);
   }, [currentVersion, initializeDatabase]);
 
-  // NEW: Close secondary databases (commentaries and dictionaries) except those to keep
   const closeSecondaryDatabases = useCallback(
     async (keepVersions: string[] = []) => {
       const versionsToClose: string[] = [];
 
       openDatabases.current.forEach((db, version) => {
-        // Don't close the current main Bible version
         if (version === currentVersion) return;
-
-        // Don't close versions in the keep list
         if (keepVersions.includes(version)) return;
-
-        // Close secondary databases (commentaries and dictionaries)
         if (version.includes("com") || version.includes("dictionary")) {
           versionsToClose.push(version);
         }
@@ -302,7 +278,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     [currentVersion]
   );
 
-  // Load persisted version on mount and preload current commentary
   useEffect(() => {
     const loadVersion = async () => {
       try {
@@ -314,9 +289,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         setCurrentVersion(versionToLoad);
         setBibleDB(db);
 
-        // Preload current commentary in background
         if (versionToLoad === "nasb.sqlite3") {
-          // Immediate preload for NASB to ensure dictionary is loaded without delay
           await preloadCurrentCommentary(versionToLoad);
         } else {
           setTimeout(() => {
@@ -337,8 +310,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       if (newVersion === currentVersion || isInitializing) {
         return;
       }
-
-      // Only allow switching to main Bible versions, not commentary versions
       if (newVersion.includes("com")) {
         console.warn("Cannot switch to commentary database as main Bible");
         return;
@@ -350,48 +321,33 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
       try {
         await AsyncStorage.setItem(STORAGE_KEY, newVersion);
-
-        // Get the commentary version for the current Bible before switching
         const currentCommentaryVersion =
           BIBLE_TO_COMMENTARY_MAP[currentVersion];
-        // Get the commentary version for the new Bible
         const newCommentaryVersion = BIBLE_TO_COMMENTARY_MAP[newVersion];
-
-        // Determine which secondary databases to keep
         const keepVersions: string[] = [];
-
-        // If switching to a different version but keeping the same commentary,
-        // don't close the commentary database
         if (
           currentCommentaryVersion &&
           currentCommentaryVersion === newCommentaryVersion
         ) {
           keepVersions.push(currentCommentaryVersion);
         }
-
-        // Always keep the dictionary if NASB is involved
         if (
           currentVersion === "nasb.sqlite3" ||
           newVersion === "nasb.sqlite3"
         ) {
           keepVersions.push("secedictionary.sqlite3");
         }
-
-        // Close secondary databases except those we want to keep
         await closeSecondaryDatabases(keepVersions);
 
         const db = await initializeDatabase(newVersion, true);
         setCurrentVersion(newVersion);
         setBibleDB(db);
         console.log(`Successfully switched to: ${newVersion}`);
-
-        // Preload commentary for the new version if not already loaded
         if (
           newCommentaryVersion &&
           !openDatabases.current.has(newCommentaryVersion)
         ) {
           if (newVersion === "nasb.sqlite3") {
-            // Immediate preload for NASB to ensure dictionary is loaded without delay
             await preloadCurrentCommentary(newVersion);
           } else {
             setTimeout(() => {
@@ -435,7 +391,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     async (version: string): Promise<BibleDatabase | undefined> => {
       try {
         const db = await initializeDatabase(version, false);
-        // Preload commentary after secondary bible version initialization
         if (!version.includes("com")) {
           preloadCurrentCommentary(version).catch((error) => {
             console.warn(`Failed to preload commentary for ${version}:`, error);
@@ -452,8 +407,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
   const recoverDatabaseConnection = useCallback(async () => {
     console.log("Attempting to recover database connection...");
-
-    // Close all existing databases
     openDatabases.current.forEach((db, version) => {
       try {
         db.close();
@@ -463,13 +416,10 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     });
     openDatabases.current.clear();
     pendingInits.current.clear();
-
-    // Reinitialize current version
     const db = await initializeDatabase(currentVersion, true);
     setBibleDB(db);
   }, [currentVersion, initializeDatabase]);
 
-  // Listen for low memory warnings (iOS) and close secondary databases
   useEffect(() => {
     const handleMemoryWarning = async () => {
       console.log("Low memory warning received - closing secondary databases");
@@ -479,8 +429,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         console.error("Error handling low memory warning:", error);
       }
     };
-
-    // Add listener for iOS memory warnings
     const subscription = DeviceEventEmitter.addListener(
       "memoryWarning",
       handleMemoryWarning
@@ -506,12 +454,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     retryInitialization,
     preloadCurrentCommentary: preloadCurrentCommentaryPublic,
     recoverDatabaseConnection,
-    closeSecondaryDatabases, // Export the new method
+    closeSecondaryDatabases,
   };
 
   React.useEffect(() => {
     return () => {
-      // Close all databases on unmount (app termination)
       openDatabases.current.forEach((db) => {
         try {
           db.close();

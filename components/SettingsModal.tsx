@@ -16,7 +16,7 @@ interface SettingsModalProps {
   showMultiVersion: boolean;
   toggleMultiVersion: () => void;
   currentVersion: string;
-  availableBibleVersions: string[]; // Changed from availableVersions
+  availableBibleVersions: string[];
   handleVersionSelect: (version: string) => void;
   handleSecondaryVersionSelect: (version: string) => void;
   secondaryVersion: string | null;
@@ -36,7 +36,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   showMultiVersion,
   toggleMultiVersion,
   currentVersion,
-  availableBibleVersions, // Changed from availableVersions
+  availableBibleVersions,
   handleVersionSelect,
   handleSecondaryVersionSelect,
   secondaryVersion,
@@ -84,7 +84,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </Text>
           </View>
           <ScrollView className="flex-1 mx-4">
-            {/* Font Size Controls */}
             <View
               style={{
                 paddingHorizontal: 16,
@@ -145,8 +144,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Multi-Version Toggle */}
             <View
               style={{
                 paddingHorizontal: 16,
@@ -189,14 +186,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Bible Version Selection */}
             {isLandscape && showMultiVersion ? (
               <View className="flex-row gap-4">
                 <View className="flex-1">
                   <VersionSelector
                     currentVersion={currentVersion}
-                    availableVersions={availableBibleVersions} // Changed
+                    availableVersions={availableBibleVersions}
                     onVersionSelect={handleVersionSelect}
                     title="Primary Bible Version"
                     description="Choose your preferred Bible translation"
@@ -211,7 +206,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     currentVersion={secondaryVersion || ""}
                     selectedVersion={secondaryVersion || ""}
                     availableVersions={availableBibleVersions.filter(
-                      // Changed
                       (v) => v !== currentVersion
                     )}
                     onVersionSelect={handleSecondaryVersionSelect}
@@ -226,7 +220,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <>
                 <VersionSelector
                   currentVersion={currentVersion}
-                  availableVersions={availableBibleVersions} // Changed
+                  availableVersions={availableBibleVersions}
                   onVersionSelect={handleVersionSelect}
                   title="Primary Bible Version"
                   description="Choose your preferred Bible translation"
@@ -240,7 +234,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     currentVersion={secondaryVersion || ""}
                     selectedVersion={secondaryVersion || ""}
                     availableVersions={availableBibleVersions.filter(
-                      // Changed
                       (v) => v !== currentVersion
                     )}
                     onVersionSelect={handleSecondaryVersionSelect}

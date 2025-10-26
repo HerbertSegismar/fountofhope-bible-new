@@ -18,12 +18,10 @@ export const useCommentary = (displayVersion: string | undefined) => {
 
       const versionKey = getVersionKey(displayVersion);
 
-      // For NASB, check if this is a Strong's number (numeric tag)
       if (versionKey === "NASB" && /^\d+$/.test(tagContent)) {
         return await loadDictionaryDefinition(verse, tagContent);
       }
 
-      // Original commentary logic for other versions
       const dbName = versionKey
         ? commentaryDBMap[versionKey as keyof typeof commentaryDBMap]
         : undefined;

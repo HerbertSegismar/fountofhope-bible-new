@@ -39,21 +39,16 @@ interface Props {
   navigation: SearchScreenNavigationProp;
 }
 
-// Helper function to get book color with fallbacks
 const getBookColor = (bookName: string, verse?: Verse): string => {
-  // Priority 1: book_color from verse object
   if (verse?.book_color) return verse.book_color;
 
-  // Priority 2: Lookup in our color mapping
   const normalizedBookName = bookName.toLowerCase().trim();
   const color = BOOK_COLORS[normalizedBookName];
   if (color) return color;
 
-  // Priority 3: Generate consistent color from book name
   return generateColorFromString(bookName);
 };
 
-// Generate consistent color from string (fallback)
 const generateColorFromString = (str: string): string => {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -76,7 +71,6 @@ const generateColorFromString = (str: string): string => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-// Helper function to enhance search results with colors
 const enhanceSearchResultsWithColors = async (
   results: Verse[],
   bibleDB: any
@@ -84,10 +78,8 @@ const enhanceSearchResultsWithColors = async (
   if (!results.length || !bibleDB) return results;
 
   try {
-    // Get unique book numbers from results
     const uniqueBookNumbers = [...new Set(results.map((r) => r.book_number))];
 
-    // Fetch book details for each unique book
     const bookPromises = uniqueBookNumbers.map(async (bookNumber) => {
       try {
         const book = await bibleDB.getBook(bookNumber);
@@ -110,14 +102,12 @@ const enhanceSearchResultsWithColors = async (
       bookColors.map((bc) => [bc.bookNumber, bc.bookColor])
     );
 
-    // Add colors to results
     return results.map((result) => ({
       ...result,
       book_color: colorMap[result.book_number],
     }));
   } catch (error) {
     console.error("Error enhancing search results with colors:", error);
-    // Fallback: generate colors from book names
     return results.map((result) => ({
       ...result,
       book_color: getBookColor(result.book_name || "Unknown", result),
@@ -125,7 +115,6 @@ const enhanceSearchResultsWithColors = async (
   }
 };
 
-// Memoized components
 const SearchResultItem = React.memo(
   ({
     verse,
@@ -158,7 +147,7 @@ const SearchResultItem = React.memo(
           onVersePress={onVersePress}
           highlight={query}
           compact={true}
-          bookColor={bookColor} // Pass the book color explicitly
+          bookColor={bookColor}
         />
       </View>
     );
@@ -378,7 +367,6 @@ const EmptyStates = React.memo(
   }
 );
 
-// Updated Scope Dropdown Component with Individual Books and Fixed Header
 const ScopeDropdown = React.memo(
   ({
     scope,
@@ -460,7 +448,6 @@ const ScopeDropdown = React.memo(
               className="rounded-lg max-h-[90%]"
               style={{ backgroundColor: colors.card }}
             >
-              {/* Fixed Header - Not Scrollable */}
               <View style={headerStyle} className="px-4 py-3 sticky top-0 z-10">
                 <View className="flex-row justify-between items-center">
                   <Text className="font-bold text-center text-base text-white flex-1">
@@ -544,14 +531,11 @@ export default function SearchScreen({ navigation }: Props) {
   const [scope, setScope] = useState<SearchScope>("whole");
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [showScopeDropdown, setShowScopeDropdown] = useState(false);
-  const [showResultsStats, setShowResultsStats] = useState(false); // NEW: Track when to show results stats
-
-  // Refs and animations
+  const [showResultsStats, setShowResultsStats] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
   const backToTopAnimation = useRef(new Animated.Value(0)).current;
 
-  // Handle scroll to show/hide back to top button
   const handleScroll = useCallback(
     (event: any) => {
       const currentScrollY = event.nativeEvent.contentOffset.y;
@@ -576,7 +560,6 @@ export default function SearchScreen({ navigation }: Props) {
     [showBackToTop, scrollY, backToTopAnimation]
   );
 
-  // Scroll to top function
   const scrollToTop = useCallback(() => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     setShowBackToTop(false);
@@ -587,19 +570,17 @@ export default function SearchScreen({ navigation }: Props) {
     }).start();
   }, [backToTopAnimation]);
 
-  // Handle query change - reset stats when typing
   const handleQueryChange = useCallback((text: string) => {
     setQuery(text);
-    setShowResultsStats(false); // Hide stats when user starts typing
+    setShowResultsStats(false);
   }, []);
 
-  // Handle search with debouncing and cancellation
   const handleSearch = useCallback(
     async (searchQuery?: string) => {
       const actualQuery = searchQuery || query;
 
       setHasSearched(true);
-      setShowResultsStats(false); // Hide stats when starting new search
+      setShowResultsStats(false);
 
       if (!actualQuery.trim()) {
         setResults([]);
@@ -610,32 +591,25 @@ export default function SearchScreen({ navigation }: Props) {
         setLoading(true);
         setError(null);
 
-        // Prepare search options based on scope
         let searchOptions: SearchOptions = {};
 
         if (isBookScope(scope)) {
-          // Handle individual book search
           const bookNumber = getBookNumberFromScope(scope);
           if (bookNumber) {
             searchOptions.bookRange = { start: bookNumber, end: bookNumber };
           }
         } else {
-          // Handle category-based search
           searchOptions.bookRange = SCOPE_RANGES[scope] || undefined;
         }
 
-        // Search with scope filtering
         const searchResults = await searchVerses(actualQuery, searchOptions);
 
-        // Enhance search results with book colors
         const enhancedResults = await enhanceSearchResultsWithColors(
           searchResults,
           bibleDB
         );
         setResults(enhancedResults);
-        setShowResultsStats(true); // Show stats only after search completes
-
-        // Reset scroll position when new search is performed
+        setShowResultsStats(true);
         setTimeout(() => {
           scrollToTop();
         }, 100);
@@ -649,7 +623,6 @@ export default function SearchScreen({ navigation }: Props) {
     [query, scope, searchVerses, scrollToTop, bibleDB]
   );
 
-  // Handle popular search term selection
   const handlePopularSearch = useCallback(
     (term: string) => {
       setQuery(term);
@@ -663,10 +636,9 @@ export default function SearchScreen({ navigation }: Props) {
   const handleScopeChange = useCallback((newScope: SearchScope) => {
     setScope(newScope);
     setShowScopeDropdown(false);
-    // Clear results when scope changes to avoid confusion
     setResults([]);
     setHasSearched(false);
-    setShowResultsStats(false); // Also reset stats
+    setShowResultsStats(false);
   }, []);
 
   const handleVersePress = useCallback(
@@ -675,7 +647,6 @@ export default function SearchScreen({ navigation }: Props) {
       const longName = bookInfo?.long || verse.book_name || "Unknown Book";
       const testament = verse.book_number >= 470 ? "NT" : "OT";
 
-      // Navigate directly to Reader screen (no tab navigator exists)
       navigation.navigate("Reader", {
         bookId: verse.book_number,
         chapter: verse.chapter,
@@ -691,7 +662,7 @@ export default function SearchScreen({ navigation }: Props) {
     setQuery("");
     setResults([]);
     setHasSearched(false);
-    setShowResultsStats(false); // Also reset stats
+    setShowResultsStats(false);
     setShowBackToTop(false);
     backToTopAnimation.setValue(0);
   }, [backToTopAnimation]);
@@ -717,17 +688,14 @@ export default function SearchScreen({ navigation }: Props) {
     return `Found ${results.length} result${results.length !== 1 ? "s" : ""} in ${bookCount} book${bookCount !== 1 ? "s" : ""} for "${query}"`;
   }, [hasSearched, loading, results, query, scope, showResultsStats]);
 
-  // Memoized search stats
   const resultStats = useMemo(() => getResultStats(), [getResultStats]);
 
-  // Memoized key extractor for FlatList
   const keyExtractor = useCallback(
     (item: Verse, index: number) =>
       `${item.book_number}-${item.chapter}-${item.verse}-${index}`,
     []
   );
 
-  // Memoized render item for FlatList
   const renderItem = useCallback(
     ({ item }: { item: Verse }) => (
       <SearchResultItem
@@ -739,11 +707,9 @@ export default function SearchScreen({ navigation }: Props) {
     [query, handleVersePress]
   );
 
-  // List header component
   const ListHeader = useMemo(
     () => (
       <View className="pb-4">
-        {/* Scope Selection Dropdown */}
         <ScopeDropdown
           scope={scope}
           onScopeChange={handleScopeChange}
@@ -751,8 +717,6 @@ export default function SearchScreen({ navigation }: Props) {
           onToggle={() => setShowScopeDropdown(!showScopeDropdown)}
           colors={colors}
         />
-
-        {/* Search Input */}
         <View className="flex-row items-center mb-4">
           <View
             className="flex-1 rounded-lg shadow-sm border"
@@ -766,7 +730,7 @@ export default function SearchScreen({ navigation }: Props) {
               placeholder={`Search ${getScopeConfig(scope).label.toLowerCase()}...`}
               placeholderTextColor={colors.muted}
               value={query}
-              onChangeText={handleQueryChange} // Use the new handler
+              onChangeText={handleQueryChange}
               onSubmitEditing={() => handleSearch()}
               returnKeyType="search"
               style={{ color: colors.text }}
@@ -783,8 +747,6 @@ export default function SearchScreen({ navigation }: Props) {
             </TouchableOpacity>
           )}
         </View>
-
-        {/* Search Button */}
         <TouchableOpacity
           className="p-4 rounded-lg shadow-sm mb-4"
           onPress={() => handleSearch()}
@@ -806,12 +768,10 @@ export default function SearchScreen({ navigation }: Props) {
       handleScopeChange,
       handleSearch,
       clearSearch,
-      handleQueryChange, // Include the new handler
+      handleQueryChange,
       colors,
     ]
   );
-
-  // Loading state
   if (loading) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -824,8 +784,6 @@ export default function SearchScreen({ navigation }: Props) {
       </SafeAreaView>
     );
   }
-
-  // Error state
   if (error) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
@@ -875,8 +833,6 @@ export default function SearchScreen({ navigation }: Props) {
           style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
         />
-
-        {/* Back to Top Button */}
         <BackToTopButton
           isVisible={showBackToTop && results.length > 10}
           onPress={scrollToTop}

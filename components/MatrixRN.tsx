@@ -170,8 +170,6 @@ const MatrixNative = () => {
   const dropsRef = useRef<Drop[]>([]);
   const [containerWidth, setContainerWidth] = useState(0);
   const overlayTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Get the appropriate color based on theme and color scheme
   const getMatrixColor = useCallback(() => {
     if (colorScheme === "custom") {
       return customColor;
@@ -206,12 +204,8 @@ const MatrixNative = () => {
       );
       newDrops.push({ id, headAnim, trailChars, x: i * fontSize });
     }
-
-    // Stop previous animations
     dropsRef.current.forEach((drop) => drop.headAnim.stopAnimation());
     dropsRef.current = newDrops;
-
-    // Start animations
     newDrops.forEach((drop) => startDropAnimation(drop.headAnim));
 
     return () => {
@@ -220,7 +214,7 @@ const MatrixNative = () => {
   }, [containerWidth]);
 
   const startDropAnimation = (anim: Animated.Value) => {
-    const duration = 2000 + Math.random() * 3000; // Slightly adjusted for smoother feel
+    const duration = 2000 + Math.random() * 3000;
     const totalHeight = height + trailLength * fontSize;
 
     Animated.timing(anim, {
@@ -230,7 +224,7 @@ const MatrixNative = () => {
       useNativeDriver: true,
     }).start(() => {
       anim.setValue(0);
-      const gapDelay = 500 + Math.random() * 2000; // Approximate web's probabilistic gap
+      const gapDelay = 500 + Math.random() * 2000;
       setTimeout(() => {
         startDropAnimation(anim);
       }, gapDelay);
@@ -262,9 +256,7 @@ const MatrixNative = () => {
       positionAnim,
     };
 
-    setOverlays([newOverlay]); // Replace state with new overlay (ensures single instance)
-
-    // Animate in
+    setOverlays([newOverlay]);
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -280,7 +272,6 @@ const MatrixNative = () => {
       }),
     ]).start();
 
-    // Animate out after 2s
     const stayTimeout = setTimeout(() => {
       overlayTimeoutRef.current = null;
       Animated.parallel([
@@ -298,7 +289,7 @@ const MatrixNative = () => {
         }),
       ]).start(({ finished }) => {
         if (finished) {
-          showRandomAttribute(); // Chain to next (will replace faded overlay)
+          showRandomAttribute();
         }
       });
     }, 2000);
@@ -322,7 +313,7 @@ const MatrixNative = () => {
         overlayTimeoutRef.current = null;
       }
     };
-  }, [containerWidth, theme, colorScheme, customColor]); // Added customColor dependency
+  }, [containerWidth, theme, colorScheme, customColor]);
 
   useEffect(() => {
     return () => {

@@ -48,15 +48,12 @@ export default function VerseListScreen({ navigation, route }: Props) {
   const primaryBorder = lightenColor(primaryColor, 0.5);
 
   const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
-  const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
-  const headerBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
   const textPrimaryClass = theme === "dark" ? "text-gray-100" : "text-gray-800";
   const textSecondaryClass =
     theme === "dark" ? "text-gray-400" : "text-gray-500";
   const textTertiaryClass =
     theme === "dark" ? "text-gray-300" : "text-gray-600";
   const borderClass = theme === "dark" ? "border-gray-700" : "border-gray-200";
-  const lightGrayClass = theme === "dark" ? "bg-gray-700" : "bg-gray-100";
   const warningBgClass = theme === "dark" ? "bg-yellow-900/20" : "bg-yellow-50";
   const warningBorderClass =
     theme === "dark" ? "border-yellow-800/50" : "border-yellow-200";
@@ -81,7 +78,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
     try {
       setLoading(true);
 
-      // Load verses and chapter count in parallel
       await Promise.all([loadVerses(), loadChapterCount()]);
     } catch (error) {
       console.error("Failed to load chapter data:", error);
@@ -119,11 +115,10 @@ export default function VerseListScreen({ navigation, route }: Props) {
   };
 
   const handleVersePress = (verseNumber: number) => {
-    // Navigate to Reader with the specific verse highlighted
     navigation.navigate("Reader", {
       bookId: book.book_number,
       chapter,
-      verse: verseNumber, // Pass the selected verse number
+      verse: verseNumber,
       bookName: longName,
       bookColor: book.book_color,
       testament: book.testament,
@@ -149,7 +144,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
   };
 
   const handleReadFullChapter = () => {
-    // Navigate to Reader without specific verse (starts from verse 1)
     navigation.navigate("Reader", {
       bookId: book.book_number,
       chapter,
@@ -239,7 +233,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
     <SafeAreaView className={`flex-1 ${bgClass}`}>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
         <View className="p-4">
-          {/* Header */}
           <View
             className="rounded-lg p-4 mb-4 shadow-sm h-30"
             style={{
@@ -259,7 +252,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
               {verseCount} verses
             </Text>
 
-            {/* Chapter Progress */}
             {chapterCount > 0 && (
               <View className="mt-2">
                 <Text className="text-xs text-white/70 text-center">
@@ -269,7 +261,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
             )}
           </View>
 
-          {/* Verse Selection Grid */}
           {verses.length > 0 ? (
             <View className="mb-6">
               <Text
@@ -332,7 +323,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {/* Full Chapter Reading */}
           {verses.length > 0 && (
             <View className="mb-6">
               <TouchableOpacity
@@ -350,7 +340,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {/* Chapter Navigation */}
           <View className="flex-row justify-between mb-6">
             <TouchableOpacity
               className={`flex-1 mr-2 px-4 py-3 rounded-lg ${isFirstChapter ? disabledBgClass : ""}`}

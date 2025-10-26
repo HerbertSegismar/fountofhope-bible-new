@@ -56,10 +56,8 @@ const ChapterMeasurementsContext = createContext<
   ChapterMeasurementsContextType | undefined
 >(undefined);
 
-// AsyncStorage key
 const STORAGE_KEY = "@chapter_measurements";
 
-// Cache expiration (7 days in milliseconds)
 const MEASUREMENT_EXPIRY = 7 * 24 * 60 * 60 * 1000;
 
 export const ChapterMeasurementsProvider: React.FC<{ children: ReactNode }> = ({
@@ -75,70 +73,6 @@ export const ChapterMeasurementsProvider: React.FC<{ children: ReactNode }> = ({
   });
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load measurements from AsyncStorage on mount
-  const loadMeasurementsFromStorage = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as {
-          measurements?: { [version: string]: VersionMeasurements };
-          stats?: {
-            totalStored: number;
-            cacheHits: number;
-            cacheMisses: number;
-          };
-          lastUpdated?: number;
-        };
-        const now = Date.now();
-        const filteredMeasurements: {
-          [version: string]: VersionMeasurements;
-        } = {};
-
-        Object.entries(parsed.measurements || {}).forEach(
-          ([version, versionData]: [string, VersionMeasurements]) => {
-            const versionMeasurements: VersionMeasurements = {};
-            Object.entries(versionData).forEach(([bookId, bookData]) => {
-              const bookMeasurements: {
-                [chapter: number]: ChapterMeasurement;
-              } = {};
-              Object.entries(bookData).forEach(([chapter, measurement]) => {
-                const chapterNumber = Number(chapter);
-                if (isNaN(chapterNumber)) return;
-                if (now - measurement.timestamp < MEASUREMENT_EXPIRY) {
-                  bookMeasurements[chapterNumber] = measurement;
-                }
-              });
-              if (Object.keys(bookMeasurements).length > 0) {
-                versionMeasurements[bookId] = bookMeasurements;
-              }
-            });
-            if (Object.keys(versionMeasurements).length > 0) {
-              filteredMeasurements[version] = versionMeasurements;
-            }
-          }
-        );
-
-        setMeasurements(filteredMeasurements);
-        setStats(
-          parsed.stats || { totalStored: 0, cacheHits: 0, cacheMisses: 0 }
-        );
-
-        let total = 0;
-        Object.values(filteredMeasurements).forEach((version) => {
-          Object.values(version).forEach((book) => {
-            total += Object.keys(book).length;
-          });
-        });
-        setStats((prev) => ({ ...prev, totalStored: total }));
-      }
-    } catch (error) {
-      console.error("Failed to load measurements from storage:", error);
-    } finally {
-      setIsLoaded(true);
-    }
-  }, []);
-
-  // Debounced save to AsyncStorage
   const saveMeasurementsToStorage = useCallback(() => {
     if (!isLoaded) return;
     const timer = setTimeout(async () => {

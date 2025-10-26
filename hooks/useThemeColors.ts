@@ -1,7 +1,6 @@
-// Alternative hooks/useThemeColors.ts with backward compatibility
 import { useCallback, useMemo } from "react";
 import { useTheme } from "../context/ThemeContext";
-import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
+import { getThemeColors } from "../utils/themeUtils";
 
 export const useThemeColors = () => {
   const {
@@ -17,8 +16,6 @@ export const useThemeColors = () => {
   const isDark = theme === "dark";
   const primaryColor = navTheme.colors.primary;
   const primaryTextColor = "#ffffff";
-
-  // Get the base theme colors
   const baseThemeColors = useMemo(
     () => getThemeColors(theme, colorScheme, customColor),
     [theme, colorScheme, customColor]
@@ -30,7 +27,6 @@ export const useThemeColors = () => {
     setColorScheme(colorSchemes[nextIndex].name);
   }, [colorScheme, colorSchemes, setColorScheme]);
 
-  // Light theme colors (customized for your app)
   const lightColors = useMemo(
     () => ({
       primary: primaryColor,
@@ -58,7 +54,6 @@ export const useThemeColors = () => {
     [primaryColor, baseThemeColors]
   );
 
-  // Dark theme colors (customized for your app)
   const darkColors = useMemo(
     () => ({
       primary: primaryColor,
@@ -109,7 +104,7 @@ export const useThemeColors = () => {
     versionSelectorColors,
     primaryTextColor,
     isDark,
-    themeColors: colors, // For backward compatibility
+    themeColors: colors,
     theme,
     handleColorSchemePress,
     toggleTheme,

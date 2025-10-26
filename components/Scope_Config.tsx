@@ -1,6 +1,5 @@
 import { getBookInfo ,BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 
-// Updated SearchScope type with refined categories and individual books
 export type SearchScope =
   | "whole"
   | "old-testament"
@@ -14,30 +13,27 @@ export type SearchScope =
   | "historical-nt"
   | "letters"
   | "vision"
-  | `book-${number}`; // Add individual book scope
+  | `book-${number}`;
 
-// Book ranges for each category based on your BIBLE_BOOKS_MAP
 export const SCOPE_RANGES = {
   whole: null,
   "old-testament": { start: 10, end: 460 },
   "new-testament": { start: 470, end: 730 },
-  law: { start: 10, end: 50 }, // Genesis to Deuteronomy
-  historical: { start: 60, end: 190 }, // Joshua to Esther
-  poetic: { start: 220, end: 260 }, // Job to Song of Solomon
-  "major-prophets": { start: 290, end: 340 }, // Isaiah to Daniel
-  "minor-prophets": { start: 350, end: 460 }, // Hosea to Malachi
-  gospels: { start: 470, end: 500 }, // Matthew to John
-  "historical-nt": { start: 510, end: 510 }, // Acts only
-  letters: { start: 520, end: 720 }, // Romans to Jude
-  vision: { start: 730, end: 730 }, // Revelation only
+  law: { start: 10, end: 50 },
+  historical: { start: 60, end: 190 },
+  poetic: { start: 220, end: 260 },
+  "major-prophets": { start: 290, end: 340 },
+  "minor-prophets": { start: 350, end: 460 },
+  gospels: { start: 470, end: 500 },
+  "historical-nt": { start: 510, end: 510 },
+  letters: { start: 520, end: 720 },
+  vision: { start: 730, end: 730 }
 };
 
-// Helper function to check if a scope is a book scope
 export const isBookScope = (scope: SearchScope): scope is `book-${number}` => {
   return scope.startsWith("book-");
 };
 
-// Get book number from book scope
 export const getBookNumberFromScope = (scope: SearchScope): number | null => {
   if (isBookScope(scope)) {
     return parseInt(scope.replace("book-", ""), 10);
@@ -45,9 +41,7 @@ export const getBookNumberFromScope = (scope: SearchScope): number | null => {
   return null;
 };
 
-// Dynamic scope config that handles individual books
 export const getScopeConfig = (scope: SearchScope) => {
-  // Handle book scopes dynamically
   if (isBookScope(scope)) {
     const bookNumber = getBookNumberFromScope(scope);
     if (bookNumber) {
@@ -66,8 +60,6 @@ export const getScopeConfig = (scope: SearchScope) => {
       category: "Individual Books",
     };
   }
-
-  // Return existing config for non-book scopes
   return SCOPE_CONFIG[scope];
 };
 
@@ -136,12 +128,10 @@ export const SCOPE_CONFIG = {
   },
 };
 
-// Generate individual book scopes from BIBLE_BOOKS_MAP
 const INDIVIDUAL_BOOK_SCOPES: SearchScope[] = Object.keys(BIBLE_BOOKS_MAP).map(
   (bookNumber) => `book-${bookNumber}` as SearchScope
 );
 
-// Group scopes by category for the dropdown - now including Individual Books
 export const SCOPE_CATEGORIES = {
   All: ["whole"],
   "Old Testament": [
@@ -162,7 +152,6 @@ export const SCOPE_CATEGORIES = {
   "Individual Books": INDIVIDUAL_BOOK_SCOPES,
 };
 
-// Book color mapping for fallback colors
 export const BOOK_COLORS: { [key: string]: string } = {
   genesis: "#8B4513",
   exodus: "#FF8C00",

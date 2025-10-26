@@ -20,7 +20,6 @@ import { Fonts } from "../utils/fonts";
 import {
   useTheme,
   type ColorScheme,
-  type Theme,
   type FontFamily,
 } from "../context/ThemeContext";
 import Footer from "../components/Footer";
@@ -37,16 +36,14 @@ interface Props {
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
-// Primary colors for each scheme and theme
 const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
   green: { light: "#10B981", dark: "#059669" },
   red: { light: "#EF4444", dark: "#DC2626" },
   yellow: { light: "#F59E0B", dark: "#D97706" },
-  custom: { light: "#A855F7", dark: "#9333EA" }, // Add custom to prevent undefined
+  custom: { light: "#A855F7", dark: "#9333EA" },
 };
 
-// Base light theme colors (adjust accents based on scheme)
 const BASE_LIGHT_THEME_COLORS = {
   card: "#FFFFFF",
   background: "#FFFFFF",
@@ -63,7 +60,6 @@ const BASE_LIGHT_THEME_COLORS = {
   border: "#E9ECEF",
 } as const;
 
-// Base dark theme colors (adjust accents based on scheme)
 const BASE_DARK_THEME_COLORS = {
   card: "#111827",
   background: "#111827",
@@ -90,7 +86,6 @@ type ThemeColors = BaseThemeColors & {
   tagColor: string;
 };
 
-// Map fontFamily to actual font family string
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
     case "serif":
@@ -108,8 +103,6 @@ export default function HomeScreen({ navigation }: Props) {
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
 
-
-  // Update primaryColors for custom scheme if needed
   if (colorScheme === "custom" && customColor) {
     primaryColors.custom.light = customColor;
     primaryColors.custom.dark = customColor;
@@ -243,7 +236,6 @@ export default function HomeScreen({ navigation }: Props) {
     });
   };
 
-  // Early returns (must be before main return)
   if (initializationError) {
     return (
       <View
@@ -344,14 +336,12 @@ export default function HomeScreen({ navigation }: Props) {
     );
   }
 
-  // Main render
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: themeColors.background }}
       contentContainerStyle={{ padding: 16 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
       <SafeAreaView style={{ alignItems: "center", marginBottom: 24 }}>
         <Image
           source={require("../assets/fohs-512x512.png")}
@@ -384,7 +374,6 @@ export default function HomeScreen({ navigation }: Props) {
         </Text>
       </SafeAreaView>
 
-      {/* Verse of the Day */}
       <SafeAreaView style={{ marginBottom: 24 }}>
         <View
           style={{
@@ -452,7 +441,6 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </SafeAreaView>
 
-      {/* Daily Inspiration */}
       <SafeAreaView
         style={{
           padding: 16,
@@ -472,7 +460,6 @@ export default function HomeScreen({ navigation }: Props) {
         </Text>
       </SafeAreaView>
 
-      {/* Main Actions */}
       <SafeAreaView
         style={{
           gap: 8,
@@ -490,7 +477,6 @@ export default function HomeScreen({ navigation }: Props) {
         />
       </SafeAreaView>
 
-      {/* Quick Tips */}
       {verseRange && verseRange.length > 0 && (
         <SafeAreaView>
           <View

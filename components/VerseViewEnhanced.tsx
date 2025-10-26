@@ -2,7 +2,6 @@ import React, { useMemo } from "react";
 import { View, Text, TouchableOpacity, Platform } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
-import Ionicons from "react-native-vector-icons/Ionicons";
 import { useTheme, type FontFamily } from "../context/ThemeContext";
 import { getBookInfo } from "../utils/testamentUtils";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
@@ -18,12 +17,10 @@ interface VerseViewProps {
   fontSize?: number;
   onVersePress?: (verse: Verse) => void;
   style?: object;
-  highlight?: string; // verse number to highlight
-  compact?: boolean; // compact mode for search results
+  highlight?: string;
+  compact?: boolean;
   bookColor?: string;
 }
-
-// Improved XML parsing function that handles nested tags
 const parseXmlTags = (text: string): any[] => {
   if (!text) return [];
 
@@ -33,13 +30,10 @@ const parseXmlTags = (text: string): any[] => {
 
   while (i < text.length) {
     if (text[i] === "<") {
-      // Push any accumulated text before the tag
       if (currentText) {
         nodes.push({ type: "text", content: currentText });
         currentText = "";
       }
-
-      // Find the end of the tag
       const tagEnd = text.indexOf(">", i);
       if (tagEnd === -1) {
         currentText += text.substring(i);
@@ -49,15 +43,12 @@ const parseXmlTags = (text: string): any[] => {
       const fullTag = text.substring(i, tagEnd + 1);
 
       if (fullTag.startsWith("</")) {
-        // Closing tag
         nodes.push({ type: "closing-tag", tag: fullTag });
       } else if (fullTag.endsWith("/>")) {
-        // Self-closing tag
         const tagName = fullTag.slice(1, -2).trim();
         nodes.push({ type: "self-closing-tag", tag: tagName, fullTag });
       } else {
-        // Opening tag
-        const tagName = fullTag.slice(1, -1).trim().split(" ")[0]; // Get just the tag name, not attributes
+        const tagName = fullTag.slice(1, -1).trim().split(" ")[0];
         nodes.push({ type: "opening-tag", tag: tagName, fullTag });
       }
 
@@ -67,16 +58,12 @@ const parseXmlTags = (text: string): any[] => {
       i++;
     }
   }
-
-  // Push any remaining text
   if (currentText) {
     nodes.push({ type: "text", content: currentText });
   }
 
   return nodes;
 };
-
-// Build a tree structure from parsed nodes to handle nesting
 const buildTree = (nodes: any[]): any[] => {
   const stack: any[] = [];
   const root: any[] = [];
@@ -106,8 +93,6 @@ const buildTree = (nodes: any[]): any[] => {
 
   return root;
 };
-
-// Render the tree to React elements
 const renderTree = (
   tree: any[],
   baseFontSize: number,
@@ -146,7 +131,6 @@ const renderTree = (
         </Text>
       );
     } else if (node.type === "element") {
-      // Handle opening tags with children
       const children = node.children.map((child: any, idx: number) =>
         renderNode({ ...child, key: `${key}-${idx}` })
       );
@@ -180,15 +164,10 @@ const renderTree = (
 
   return elements;
 };
-
-// Extract content from between tags
 const extractContentFromTag = (tag: string): string => {
-  // For self-closing tags, extract any potential content
   const match = tag.match(/<[^>]+>([^<]*)<\/[^>]+>/);
   return match ? match[1] : "";
 };
-
-// Render text with highlighting
 const renderTextWithHighlight = (
   text: string,
   themeColors: ThemeColors,
@@ -231,13 +210,9 @@ const renderTextWithHighlight = (
     </Text>
   );
 };
-
-// Helper to escape regex special characters
 const escapeRegex = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
-
-// Improved verse text rendering
 const renderVerseTextWithXmlHighlight = (
   text: string,
   baseFontSize: number,
@@ -253,7 +228,6 @@ const renderVerseTextWithXmlHighlight = (
     return renderTree(tree, baseFontSize, themeColors, highlight, fontFamily);
   } catch (error) {
     console.error("Error parsing XML tags:", error);
-    // Fallback to simple text rendering
     return [
       renderTextWithHighlight(
         text,
@@ -265,8 +239,6 @@ const renderVerseTextWithXmlHighlight = (
     ];
   }
 };
-
-// Map fontFamily to actual font family string
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
     case "serif":
@@ -425,8 +397,6 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
           : "",
       [currentVersion]
     );
-
-    // Get book color and calculate contrast text color
     const bookColor = sortedVerses[0]?.book_color || defaultColors.primary;
     const headerTextColor = getAccessibleTextColor(bookColor);
 
@@ -471,12 +441,11 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
             minHeight: compact ? 20 : 40,
             borderWidth: compact ? 1 : 0,
             borderColor: compact ? defaultColors.border : "transparent",
-            overflow: "hidden", // Important for header corners
+            overflow: "hidden",
           },
           style,
         ]}
       >
-        {/* Colored Header */}
         <View
           style={{
             backgroundColor: bookColor,
@@ -521,12 +490,10 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
             )}
           </View>
         </View>
-
-        {/* Verse Content */}
         <View
           style={{
             padding: compact ? 8 : 16,
-            paddingTop: compact ? 6 : 12, // Less padding on top since header is separate
+            paddingTop: compact ? 6 : 12,
           }}
         >
           <View style={{ gap: compact ? 4 : 12 }}>
@@ -545,8 +512,6 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
               />
             ))}
           </View>
-
-          {/* Footer - Only show in compact mode or if there's additional info */}
           {compact && (
             <View
               style={{

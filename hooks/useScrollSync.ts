@@ -4,7 +4,7 @@ import {
   NativeScrollEvent,
   ScrollView,
 } from "react-native";
-import { Animated, Easing } from "react-native"; // Added Easing import if needed, but using default for now
+import { Animated } from "react-native";
 import { Verse } from "../types";
 
 export const useScrollSync = (
@@ -35,7 +35,6 @@ export const useScrollSync = (
   const lastScrollYMutableRef = useRef(lastScrollYRef.current || 0);
   const syncEnabled = useRef(true);
 
-  // Simplified sync function: proportional progress only (accurate for single-chapter views)
   const syncToSecondary = useCallback(() => {
     if (!showMultiVersion || !syncEnabled.current || isSyncing.current) return;
     isSyncing.current = true;
@@ -43,7 +42,6 @@ export const useScrollSync = (
     const primaryOffset = lastPrimaryOffset.current;
     const viewHeight = scrollViewHeight;
 
-    // Validation
     if (
       !primaryScrollViewRef.current ||
       !secondaryScrollViewRef.current ||
@@ -67,13 +65,11 @@ export const useScrollSync = (
     }
 
     try {
-      // Proportional progress (real-time heights ensure accuracy)
       const maxPrimary = Math.max(contentHeight - viewHeight, 1);
       const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
       const progress = Math.max(0, Math.min(1, primaryOffset / maxPrimary));
       let targetY = progress * maxSecondary;
 
-      // Ensure target is within bounds
       targetY = Math.max(0, Math.min(targetY, maxSecondary));
 
       if (secondaryScrollViewRef.current && targetY >= 0) {
@@ -85,7 +81,6 @@ export const useScrollSync = (
           maxSecondary,
         });
 
-        // Changed to animated: true for ease-in-out scroll
         secondaryScrollViewRef.current.scrollTo({
           y: targetY,
           animated: true,
@@ -94,7 +89,6 @@ export const useScrollSync = (
     } catch (error) {
       console.error("Error in syncToSecondary:", error);
     } finally {
-      // Use requestAnimationFrame to ensure sync completes before next frame
       requestAnimationFrame(() => {
         isSyncing.current = false;
       });
@@ -117,7 +111,6 @@ export const useScrollSync = (
     const secondaryOffset = lastSecondaryOffset.current;
     const viewHeight = scrollViewHeight;
 
-    // Validation
     if (
       !primaryScrollViewRef.current ||
       !secondaryScrollViewRef.current ||
@@ -139,7 +132,6 @@ export const useScrollSync = (
       const progress = Math.max(0, Math.min(1, secondaryOffset / maxSecondary));
       let targetY = progress * maxPrimary;
 
-      // Ensure target is within bounds
       targetY = Math.max(0, Math.min(targetY, maxPrimary));
 
       if (primaryScrollViewRef.current && targetY >= 0) {
@@ -149,16 +141,14 @@ export const useScrollSync = (
           progress: (progress * 100).toFixed(1) + "%",
         });
 
-        // Changed to animated: true for ease-in-out scroll
         primaryScrollViewRef.current.scrollTo({
           y: targetY,
           animated: true,
         });
-        // Animate scrollY as well for consistency
         Animated.timing(scrollY, {
           toValue: targetY,
-          duration: 250, // Match default scrollTo duration
-          useNativeDriver: false, // Since scrollY might be used elsewhere
+          duration: 250, 
+          useNativeDriver: false,
         }).start();
       }
     } catch (error) {
@@ -193,7 +183,6 @@ export const useScrollSync = (
     lastSecondaryOffset.current = y;
   }, []);
 
-  // Scroll handlers: debounced sync (updates only after scrolling stops) with isSyncing guard
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offsetY = event.nativeEvent.contentOffset.y;
@@ -206,12 +195,10 @@ export const useScrollSync = (
         }
       }
 
-      // Clear existing timeout
       if (primarySyncTimeout.current) {
         clearTimeout(primarySyncTimeout.current);
       }
 
-      // Debounced sync: only after scrolling stops (150ms delay for smooth feel)
       if (showMultiVersion && syncEnabled.current) {
         primarySyncTimeout.current = setTimeout(() => {
           if (!isSyncing.current) {
@@ -243,12 +230,10 @@ export const useScrollSync = (
         }
       }
 
-      // Clear existing timeout
       if (secondarySyncTimeout.current) {
         clearTimeout(secondarySyncTimeout.current);
       }
 
-      // Debounced sync: only after scrolling stops
       if (showMultiVersion && syncEnabled.current) {
         secondarySyncTimeout.current = setTimeout(() => {
           if (!isSyncing.current) {
@@ -268,7 +253,6 @@ export const useScrollSync = (
     ]
   );
 
-  // Scroll listener for end detection
   useEffect(() => {
     const listener = scrollY.addListener(({ value }) => {
       if (value + scrollViewHeight >= contentHeight - 20) {
@@ -298,7 +282,6 @@ export const useScrollSync = (
     setIsFullScreen,
   ]);
 
-  // Initialization: sync when heights are ready
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -326,7 +309,6 @@ export const useScrollSync = (
     scrollViewHeight,
   ]);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       if (primarySyncTimeout.current) {
@@ -339,7 +321,6 @@ export const useScrollSync = (
     };
   }, []);
 
-  // Function to manually trigger resync
   const forceResync = useCallback(() => {
     if (showMultiVersion) {
       syncToSecondary();

@@ -1,4 +1,3 @@
-// types/index.ts
 export interface Verse {
   book_number: number;
   chapter: number;
@@ -47,7 +46,6 @@ export type RootStackParamList = {
   };
 };
 
-// Additional interfaces for your 6-table structure
 export interface Story {
   book_number: number;
   chapter: number;
@@ -76,7 +74,6 @@ export interface DatabaseInfo {
   value: string;
 }
 
-// Search-related types
 export interface SearchOptions {
   limit?: number;
   exactMatch?: boolean;
@@ -92,22 +89,17 @@ export interface VerseRange {
   endVerse: number;
 }
 
-// Navigation helper types
 export type ScreenNames = keyof RootStackParamList;
 
-// Utility types for component props
 export type NavigationProps<T extends keyof RootStackParamList> = {
   navigation: {
     navigate: (screen: T, params?: RootStackParamList[T]) => void;
     goBack: () => void;
-    // Add other navigation methods as needed
   };
   route: {
     params: RootStackParamList[T];
   };
 };
-
-// Bible reference type for parsing and displaying references
 export interface BibleReference {
   bookNumber: number;
   bookName: string;
@@ -129,8 +121,6 @@ export interface DatabaseStats {
   introductionCount: number;
   lastUpdated?: Date;
 }
-
-// Reading progress type
 export interface ReadingProgress {
   bookNumber: number;
   chapter: number;
@@ -138,8 +128,6 @@ export interface ReadingProgress {
   timestamp: Date;
   percentage: number;
 }
-
-// Bookmark type
 export interface Bookmark {
   id: string;
   bookNumber: number;
@@ -150,8 +138,6 @@ export interface Bookmark {
   createdAt: Date;
   color?: string;
 }
-
-// Note type
 export interface Note {
   id: string;
   bookNumber: number;
@@ -161,8 +147,6 @@ export interface Note {
   createdAt: Date;
   updatedAt: Date;
 }
-
-// Highlight type
 export interface Highlight {
   id: string;
   bookNumber: number;
@@ -171,8 +155,6 @@ export interface Highlight {
   color: string;
   createdAt: Date;
 }
-
-// Theme types
 export interface Theme {
   primary: string;
   secondary: string;
@@ -182,8 +164,6 @@ export interface Theme {
   border: string;
   card: string;
 }
-
-// Settings types
 export interface Settings {
   fontSize: number;
   fontFamily: string;
@@ -193,20 +173,14 @@ export interface Settings {
   nightMode: boolean;
   lineSpacing: number;
 }
-
-// API response types (if you add API features later)
 export interface ApiResponse<T> {
   data: T;
   success: boolean;
   message?: string;
 }
-
-// Error boundary types
 export interface ErrorInfo {
   componentStack: string;
 }
-
-// Custom hook return types
 export interface UseBibleDataResult {
   books: Book[];
   loading: boolean;
@@ -227,8 +201,6 @@ export interface UseSearchResult {
   search: (query: string, options?: SearchOptions) => void;
   clear: () => void;
 }
-
-// Component prop types for reusability
 export interface VerseListProps {
   verses: Verse[];
   loading?: boolean;
@@ -254,15 +226,11 @@ export interface ChapterGridProps {
   chaptersPerRow?: number;
   showVerseCounts?: boolean;
 }
-
-// Event types
 export interface BibleEvent {
   type: "verse_click" | "chapter_change" | "search" | "bookmark_add";
   data: any;
   timestamp: Date;
 }
-
-// Analytics types (if you add analytics)
 export interface AnalyticsEvent {
   name: string;
   properties?: Record<string, any>;

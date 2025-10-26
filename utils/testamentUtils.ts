@@ -1,14 +1,10 @@
-// utils/testamentUtils.ts
-
 export const getTestament = (
   bookNumber: number,
   bookName: string
 ): "OT" | "NT" => {
-  // Books 10-460 are OT, 470-730 are NT
   if (bookNumber >= 10 && bookNumber <= 460) return "OT";
   if (bookNumber >= 470 && bookNumber <= 730) return "NT";
 
-  // Fallback for any outliers
   console.warn(
     `Unexpected book number: ${bookNumber}. Using fallback testament detection.`
   );
@@ -16,22 +12,17 @@ export const getTestament = (
 };
 
 export const getBookByNumber = (bookNumber: number) => {
-  // Convert your database number to standard number (divide by 10, but handle the gap)
   let standardNumber: number;
 
   if (bookNumber <= 460) {
-    // OT books: 10-460 -> standard 1-46 (but there are only 39 OT books)
-    // This suggests some numbers might be skipped or used for different purposes
     standardNumber = Math.floor(bookNumber / 10);
   } else {
-    // NT books: 470-730 -> standard 47-73 (but there are only 27 NT books)
     standardNumber = Math.floor(bookNumber / 10);
   }
 
   return { number: standardNumber };
 };
 
-// Utility to verify book distribution
 export const verifyBookDistribution = (books: any[]) => {
   const otBooks = books.filter(
     (book) => book.book_number >= 10 && book.book_number <= 460
@@ -65,11 +56,9 @@ export const verifyBookDistribution = (books: any[]) => {
   }
 };
 
-// Optional: Map specific book numbers to standard book information
 export const BIBLE_BOOKS_MAP: {
   [key: number]: { short: string; long: string; standardNumber: number };
 } = {
-  // Old Testament (10-460)
   10: { short: "Gen", long: "Genesis", standardNumber: 1 },
   20: { short: "Exo", long: "Exodus", standardNumber: 2 },
   30: { short: "Lev", long: "Leviticus", standardNumber: 3 },
@@ -110,7 +99,6 @@ export const BIBLE_BOOKS_MAP: {
   450: { short: "Zec", long: "Zechariah", standardNumber: 38 },
   460: { short: "Mal", long: "Malachi", standardNumber: 39 },
 
-  // New Testament (470-730)
   470: { short: "Mat", long: "Matthew", standardNumber: 40 },
   480: { short: "Mar", long: "Mark", standardNumber: 41 },
   490: { short: "Luk", long: "Luke", standardNumber: 42 },
@@ -140,7 +128,6 @@ export const BIBLE_BOOKS_MAP: {
   730: { short: "Rev", long: "Revelation", standardNumber: 66 },
 };
 
-// Enhanced getBookByNumber that returns proper book info
 export const getBookInfo = (bookNumber: number) => {
   return BIBLE_BOOKS_MAP[bookNumber] || null;
 };

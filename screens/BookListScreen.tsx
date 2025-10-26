@@ -34,7 +34,6 @@ export default function BookListScreen({ navigation }: Props) {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Use the context
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { theme, navTheme } = useTheme();
   const primaryColor = navTheme.colors.primary;
@@ -43,7 +42,7 @@ export default function BookListScreen({ navigation }: Props) {
 
   useEffect(() => {
     loadBooks();
-  }, [bibleDB, currentVersion]); // Reload when database or version changes
+  }, [bibleDB, currentVersion]);
 
   const loadBooks = async () => {
     if (!bibleDB) {
@@ -78,14 +77,10 @@ export default function BookListScreen({ navigation }: Props) {
   const newTestament = books.filter((book) => book.testament === "NT");
 
   const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
-  const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
-  const textPrimaryClass = theme === "dark" ? "text-gray-100" : "text-gray-800";
   const textSecondaryClass =
     theme === "dark" ? "text-gray-400" : "text-gray-500";
   const textTertiaryClass =
     theme === "dark" ? "text-gray-300" : "text-gray-600";
-  const borderClass = theme === "dark" ? "border-gray-700" : "border-gray-200";
-  const headerBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
 
   if (loading) {
     return (
@@ -118,7 +113,6 @@ export default function BookListScreen({ navigation }: Props) {
     );
   }
 
-  // Updated BookCard with book color punched into background
   const BookCard = ({ book, color }: { book: Book; color: string }) => {
     const borderColor = book.book_color ?? color;
 
@@ -184,13 +178,12 @@ export default function BookListScreen({ navigation }: Props) {
               <BookCard
                 key={book.book_number}
                 book={book}
-                color="#DC2626" // Fallback red for OT
+                color="#DC2626"
               />
             ))}
           </View>
         </View>
 
-        {/* New Testament Section */}
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xl font-bold" style={{ color: primaryColor }}>
@@ -205,13 +198,12 @@ export default function BookListScreen({ navigation }: Props) {
               <BookCard
                 key={book.book_number}
                 book={book}
-                color="#059669" // Fallback green for NT
+                color="#059669"
               />
             ))}
           </View>
         </View>
 
-        {/* Summary */}
         <View
           className={`p-4 rounded-lg border`}
           style={{

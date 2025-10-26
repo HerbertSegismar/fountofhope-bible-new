@@ -44,8 +44,6 @@ const ColorWheelPicker = () => {
   const [isValidHex, setIsValidHex] = useState(true);
   const colorPickerRef = useRef<any>(null);
   const hexInputRef = useRef<TextInput>(null);
-
-  // Refs for tracking drag state and manual input
   const isDraggingRef = useRef(false);
   const isManualInputRef = useRef(false);
   const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -65,7 +63,6 @@ const ColorWheelPicker = () => {
     "#FFFFFF",
   ];
 
-  // Listen for dimension changes
   useEffect(() => {
     const subscription = Dimensions.addEventListener("change", ({ window }) => {
       setScreenDimensions({
@@ -86,17 +83,14 @@ const ColorWheelPicker = () => {
     }
   }, [showColorPicker, customColor]);
 
-  // Validate hex color
   const validateHex = (hex: string): boolean => {
     const hexRegex = /^#?([0-9A-F]{3}|[0-9A-F]{6})$/i;
     return hexRegex.test(hex);
   };
 
-  // Format hex color (ensure it has # and 6 digits)
   const formatHex = (hex: string): string => {
     let formatted = hex.replace("#", "").toUpperCase();
 
-    // Handle 3-digit hex
     if (formatted.length === 3) {
       formatted = formatted
         .split("")
@@ -107,19 +101,14 @@ const ColorWheelPicker = () => {
     return `#${formatted}`;
   };
 
-  // Handle color change from wheel during drag
   const handleColorChange = useCallback((color: string) => {
-    // Only update if we're not in manual input mode
     if (!isManualInputRef.current) {
       setSelectedColor(color);
-
-      // Update hex input immediately during drag for better UX
       setHexInput(color);
       setIsValidHex(true);
     }
   }, []);
 
-  // Handle color change complete (when drag ends)
   const handleColorChangeComplete = useCallback((color: string) => {
     isDraggingRef.current = false;
     if (!isManualInputRef.current) {
@@ -129,48 +118,33 @@ const ColorWheelPicker = () => {
     }
   }, []);
 
-  // Handle hex input change - user is manually typing
   const handleHexInputChange = useCallback((text: string) => {
-    // Set manual input mode when user starts typing
     isManualInputRef.current = true;
 
     let newText = text;
-
-    // Add # if user types without it and it's the first character
     if (text.length === 1 && text !== "#") {
       newText = `#${text}`;
     }
-
-    // Allow deleting the # but then re-add it when typing
     if (text.length === 0) {
       newText = "#";
     }
 
     setHexInput(newText);
-
-    // Validate as user types
     if (newText.length >= 4) {
-      // Minimum: # + 3 digits
       const isValid = validateHex(newText);
       setIsValidHex(isValid);
-
-      // Update color if valid and complete
       if (isValid && newText.length === 7) {
-        // Full hex code
         const formattedHex = formatHex(newText);
         setSelectedColor(formattedHex);
         if (colorPickerRef.current) {
           colorPickerRef.current.setState({ currentColor: formattedHex });
         }
-        // Exit manual input mode once we have a complete valid color
         isManualInputRef.current = false;
       }
     } else if (newText === "#") {
-      setIsValidHex(true); // Reset validation when only # is present
+      setIsValidHex(true); 
     }
   }, []);
-
-  // Handle hex input submit
   const handleHexSubmit = useCallback(() => {
     if (validateHex(hexInput)) {
       const formattedHex = formatHex(hexInput);
@@ -190,8 +164,6 @@ const ColorWheelPicker = () => {
       );
     }
   }, [hexInput]);
-
-  // Handle swatch color selection
   const handleSwatchPress = useCallback((color: string) => {
     isManualInputRef.current = false;
     setSelectedColor(color);
@@ -202,22 +174,15 @@ const ColorWheelPicker = () => {
       colorPickerRef.current.setState({ currentColor: color });
     }
   }, []);
-
-  // Focus hex input when preview is pressed
   const handlePreviewPress = useCallback(() => {
     hexInputRef.current?.focus();
   }, []);
-
-  // Handle input focus
   const handleInputFocus = useCallback(() => {
     setIsInputFocused(true);
     isManualInputRef.current = true;
   }, []);
-
-  // Handle input blur
   const handleInputBlur = useCallback(() => {
     setIsInputFocused(false);
-    // Don't reset manualInputRef here - wait for submit or valid complete input
   }, []);
 
   const handleSave = useCallback(() => {
@@ -246,7 +211,6 @@ const ColorWheelPicker = () => {
     isManualInputRef.current = false;
   }, [setShowColorPicker, customColor]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (colorChangeTimeoutRef.current) {
@@ -337,7 +301,6 @@ const ColorWheelPicker = () => {
           borderWidth: 1,
           borderColor: themeColors.border,
         },
-        // Combined preview and hex editor
         combinedPreviewContainer: {
           flexDirection: "row",
           alignItems: "center",
@@ -409,7 +372,6 @@ const ColorWheelPicker = () => {
           marginTop: 12,
           fontStyle: "italic",
         },
-        // Style for when hex input is focused
         focusedPreviewContainer: {
           borderColor: themeColors.primary,
           borderWidth: 2,
@@ -447,7 +409,6 @@ const ColorWheelPicker = () => {
 
                 <View style={dynamicStyles.contentContainer}>
                   <View style={dynamicStyles.leftContainer}>
-                    {/* Color Wheel */}
                     <View style={dynamicStyles.colorWheelContainer}>
                       <ColorPicker
                         ref={colorPickerRef}
@@ -466,7 +427,6 @@ const ColorWheelPicker = () => {
 
                   <View style={dynamicStyles.rightContainer}>
                     <View>
-                      {/* Combined Color Preview and Hex Editor */}
                       <View style={dynamicStyles.previewSection}>
                         <Text style={dynamicStyles.previewText}>
                           Selected Color:
@@ -527,7 +487,6 @@ const ColorWheelPicker = () => {
                       )}
                     </View>
 
-                    {/* Action Buttons */}
                     <View style={dynamicStyles.buttonContainer}>
                       <TouchableOpacity
                         style={[

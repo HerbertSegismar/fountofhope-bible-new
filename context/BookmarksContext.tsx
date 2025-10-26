@@ -41,12 +41,10 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const STORAGE_KEY = "@bible_app_bookmarks";
 
-  // Generate consistent bookmark ID
   const getBookmarkId = useCallback((verse: Verse): string => {
     return `${verse.book_number}-${verse.chapter}-${verse.verse}`;
   }, []);
 
-  // Check if verse is bookmarked
   const isBookmarked = useCallback(
     (verse: Verse): boolean => {
       const id = getBookmarkId(verse);
@@ -55,7 +53,6 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
     [bookmarks, getBookmarkId]
   );
 
-  // Load bookmarks from storage
   const loadBookmarks = useCallback(async (): Promise<void> => {
     try {
       const json = await AsyncStorage.getItem(STORAGE_KEY);
@@ -68,7 +65,6 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  // Save bookmarks to storage
   const saveBookmarks = useCallback(
     async (newBookmarks: Bookmark[]): Promise<void> => {
       try {
@@ -76,13 +72,12 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
         await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newBookmarks));
       } catch (err) {
         console.error("Failed to save bookmarks:", err);
-        throw err; // Re-throw to handle in calling functions
+        throw err;
       }
     },
     []
   );
 
-  // Add a new bookmark
   const addBookmark = useCallback(
     (verse: Verse): void => {
       const exists = isBookmarked(verse);
@@ -93,7 +88,7 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
         id: getBookmarkId(verse),
         title: verse.text.slice(0, 50) + (verse.text.length > 50 ? "..." : ""),
         createdAt: new Date().toISOString(),
-        color: "#3B82F6", // Changed to a more pleasant blue
+        color: "#3B82F6",
       };
 
       saveBookmarks([...bookmarks, newBookmark]);
@@ -101,7 +96,6 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
     [bookmarks, getBookmarkId, isBookmarked, saveBookmarks]
   );
 
-  // Remove a bookmark
   const removeBookmark = useCallback(
     (id: string): void => {
       const updated = bookmarks.filter((b) => b.id !== id);
@@ -110,7 +104,6 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
     [bookmarks, saveBookmarks]
   );
 
-  // Update an existing bookmark
   const updateBookmark = useCallback(
     (id: string, updates: Partial<Bookmark>): void => {
       const updated = bookmarks.map((bookmark) =>
@@ -121,7 +114,6 @@ export const BookmarksProvider = ({ children }: { children: ReactNode }) => {
     [bookmarks, saveBookmarks]
   );
 
-  // Load bookmarks on mount
   useEffect(() => {
     loadBookmarks();
   }, [loadBookmarks]);

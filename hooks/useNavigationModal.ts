@@ -212,7 +212,7 @@ export const useNavigationModal = (
     selectedChapter,
     selectedVerse,
     hasTappedChapter,
-    setHasTappedChapter, // Added this line to fix the error
+    setHasTappedChapter,
     isLoadingNavigation,
     isLoadingChapters,
     modalScrollViewRef,

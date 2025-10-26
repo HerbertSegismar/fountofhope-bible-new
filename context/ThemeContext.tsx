@@ -92,7 +92,6 @@ export const colorSchemes = [
   },
 ];
 
-// Module-level variables that can be updated
 let dynamicPrimaryColors: Record<ColorScheme, ColorVariants> = {
   purple: primaryColorSchemes.purple,
   green: primaryColorSchemes.green,
@@ -151,7 +150,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [isReady, setIsReady] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
-  // Load saved values from AsyncStorage
   useEffect(() => {
     const loadSavedValues = async () => {
       try {
@@ -168,7 +166,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
         if (savedFont) setFontFamily(savedFont as FontFamily);
         if (savedCustomColor) {
           setCustomColorState(savedCustomColor);
-          // Always update dynamic colors for custom color, regardless of current scheme
           const customVariants = calculateCustomColorVariants(savedCustomColor);
           dynamicPrimaryColors.custom = customVariants.variants;
           dynamicGradientMap.custom = customVariants.gradients;
@@ -183,7 +180,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     loadSavedValues();
   }, []);
 
-  // Sync theme with AsyncStorage
   useEffect(() => {
     if (!isReady) return;
 
@@ -198,7 +194,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     saveTheme();
   }, [theme, isReady]);
 
-  // Sync colorScheme with AsyncStorage
   useEffect(() => {
     if (!isReady) return;
 
@@ -213,7 +208,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     saveColorScheme();
   }, [colorScheme, isReady]);
 
-  // Sync fontFamily with AsyncStorage
   useEffect(() => {
     if (!isReady) return;
 
@@ -228,7 +222,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     saveFontFamily();
   }, [fontFamily, isReady]);
 
-  // Sync customColor with AsyncStorage and update dynamic colors
   useEffect(() => {
     if (!isReady) return;
 
@@ -236,7 +229,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       try {
         await AsyncStorage.setItem("customColor", customColor);
 
-        // Always update dynamic colors when customColor changes
         const customVariants = calculateCustomColorVariants(customColor);
         dynamicPrimaryColors.custom = customVariants.variants;
         dynamicGradientMap.custom = customVariants.gradients;
@@ -303,8 +295,6 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
 
   const setColorSchemeInternal = (scheme: ColorScheme) => {
     setColorScheme(scheme);
-    // REMOVED: Don't reset custom color when switching away from custom
-    // This allows the custom color to persist and be available when cycling back
   };
 
   const setCustomColor = (color: string) => {

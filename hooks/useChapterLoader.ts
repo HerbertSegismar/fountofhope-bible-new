@@ -34,7 +34,7 @@ export const useChapterLoader = (
   const scrollAttemptsRef = useRef(0);
   const maxScrollAttempts = 5;
   const defaultVerseHeight = 80;
-  const blankLineHeight = 22; // Height of blank line between verses
+  const blankLineHeight = 23;
 
   const loadChapter = useCallback(async () => {
     if (!bibleDB || !isMounted.current) return;
@@ -111,7 +111,6 @@ export const useChapterLoader = (
 
   const handleChapterContainerLayout = useCallback(
     (event: LayoutChangeEvent) => {
-      // Empty but needed for the ref
     },
     []
   );
@@ -144,19 +143,14 @@ export const useChapterLoader = (
 
     scrollAttemptsRef.current += 1;
 
-    // Calculate cumulative height to the target verse INCLUDING blank lines
     let cumulative = 0;
     for (let i = 0; i < verseIndex; i++) {
-      // Add verse height + blank line after each verse (except the last one)
       cumulative += verseMeasurements[verses[i].verse] || defaultVerseHeight;
-
-      // Add blank line after each verse except the last one before the target
       if (i < verseIndex - 1) {
         cumulative += blankLineHeight;
       }
     }
 
-    // Place verse at half screen height (simple and direct)
     const scrollPosition = Math.max(0, cumulative - SCREEN_HEIGHT / 2);
 
     console.log("Scrolling to verse:", {
@@ -173,7 +167,6 @@ export const useChapterLoader = (
     return true;
   }, [verses, verseMeasurements, targetVerse]);
 
-  // Simple scroll trigger
   useEffect(() => {
     if (
       !targetVerse ||
@@ -187,7 +180,6 @@ export const useChapterLoader = (
     const verseIndex = verses.findIndex((v) => v.verse === targetVerse);
     if (verseIndex === -1) return;
 
-    // Try to scroll immediately
     const timeoutId = setTimeout(() => {
       if (isMounted.current && !hasScrolledToVerse) {
         scrollToTargetVerse();
@@ -203,7 +195,6 @@ export const useChapterLoader = (
     scrollToTargetVerse,
   ]);
 
-  // Retry if measurements come in later
   useEffect(() => {
     if (
       targetVerse &&

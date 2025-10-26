@@ -1,4 +1,3 @@
-// file: src/utils/fontUtils.ts
 import { Platform } from "react-native";
 import { FontFamily } from "../context/ThemeContext";
 

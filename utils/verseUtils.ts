@@ -1,4 +1,3 @@
-// file: src/utils/verseUtils.ts
 export const parseVerseList = (
   verseStr: string
 ): { start: number; end: number }[] => {

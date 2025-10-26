@@ -77,28 +77,18 @@ export default function ReaderScreen({
   } = useHighlights();
   const { bibleDB, currentVersion, availableBibleVersions, switchVersion } =
     useBibleDatabase();
-
-  // Additional states for selectors
   const [maxChapter, setMaxChapter] = useState(0);
   const [openSelector, setOpenSelector] = useState<SelectorType>(null);
   const [selectorLoading, setSelectorLoading] = useState(false);
-
-  // Multi-view layout state
   const [multiViewLayout, setMultiViewLayout] =
     useState<MultiViewLayout>("horizontal");
-
-  // Link state
   const [isLinked, setIsLinked] = useState(true);
-
-  // Independent target verses
   const [primaryTargetVerse, setPrimaryTargetVerse] = useState<
     number | undefined
   >(targetVerse);
   const [secondaryTargetVerse, setSecondaryTargetVerse] = useState<
     number | undefined
   >();
-
-  // Header position states
   const [primaryHeaderX, setPrimaryHeaderX] = useState(0);
   const [primaryHeaderY, setPrimaryHeaderY] = useState(0);
   const [primaryHeaderWidth, setPrimaryHeaderWidth] = useState(0);
@@ -109,13 +99,8 @@ export default function ReaderScreen({
   const [secondaryHeaderHeight, setSecondaryHeaderHeight] = useState(0);
   const primaryHeaderRef = useRef<View>(null);
   const secondaryHeaderRef = useRef<View>(null);
-
-  // Dynamic dimensions
   const [dimensions, setDimensions] = useState(initialDimensions);
   const screenWidth = dimensions.width;
-  const screenHeight = dimensions.height;
-
-  // Hooks
   const themeColors = useThemeColors();
   const {
     colors,
@@ -153,14 +138,10 @@ export default function ReaderScreen({
   const scrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Effective layout considering orientation
   const effectiveLayout = useMemo(
     () => (isLandscape ? "horizontal" : multiViewLayout),
     [isLandscape, multiViewLayout]
   );
-
-  // Long press ref
   const longPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -205,21 +186,6 @@ export default function ReaderScreen({
     [showMultiVersion, isLinked, primaryTargetVerse, secondaryTargetVerse]
   );
 
-  const getCurrentVerseNumber = useCallback(
-    (currentY: number, measurements: Record<number, number>) => {
-      const sortedVerses = Object.entries(measurements)
-        .map(([vStr, top]) => ({ verse: parseInt(vStr, 10), top }))
-        .sort((a, b) => a.verse - b.verse);
-      for (const { verse, top } of sortedVerses) {
-        if (currentY < top) {
-          return Math.max(verse - 1, 1);
-        }
-      }
-      return sortedVerses[sortedVerses.length - 1]?.verse || 1;
-    },
-    []
-  );
-
   const resetButtonOpacity = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -238,24 +204,17 @@ export default function ReaderScreen({
     }, 5000);
   }, [buttonOpacity]);
 
-  // Reset scroll position when chapter changes
   const resetScrollPosition = useCallback(() => {
-    // Reset scrollY animated value
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
-
-    // Reset primary scroll view
     if (primaryScrollViewRef.current) {
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
     }
-
-    // Reset secondary scroll view if multi-version is enabled
     if (showMultiVersion && secondaryScrollViewRef.current) {
       secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updateSecondaryOffset(0);
     }
-
     resetButtonOpacity();
   }, [
     scrollY,
@@ -279,7 +238,6 @@ export default function ReaderScreen({
     };
   }, [resetButtonOpacity]);
 
-  // Load max chapter
   useEffect(() => {
     const loadData = async () => {
       if (bibleDB) {
@@ -294,7 +252,6 @@ export default function ReaderScreen({
     loadData();
   }, [bibleDB, bookId]);
 
-  // Load multi-view layout preference
   useEffect(() => {
     const loadLayoutPreference = async () => {
       try {
@@ -309,21 +266,18 @@ export default function ReaderScreen({
     loadLayoutPreference();
   }, []);
 
-  // Save multi-view layout preference
   useEffect(() => {
     AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
       console.error("Failed to save layout preference", e)
     );
   }, [multiViewLayout]);
 
-  // Load and save link state
   useEffect(() => {
     AsyncStorage.setItem("isLinked", isLinked.toString()).catch((e) =>
       console.error("Failed to save isLinked", e)
     );
   }, [isLinked]);
 
-  const currentVerse = targetVerse || 1;
   const versionName = getVersionDisplayName(currentVersion);
   const bookInfo = useMemo(() => getBookInfo(Number(bookId)), [bookId]);
   const displayBookName = bookInfo?.long || bookName;
@@ -373,13 +327,11 @@ export default function ReaderScreen({
     [currentVersion, switchVersion, multiProps.setIsSwitchingVersion]
   );
 
-  // Original press handler - toggle multi-version view
   const handleTogglePress = useCallback(() => {
     multiProps.toggleMultiVersion();
     resetButtonOpacity();
   }, [multiProps.toggleMultiVersion, resetButtonOpacity]);
 
-  // Long press handler - change layout
   const handleToggleLongPress = useCallback(() => {
     setMultiViewLayout((prev) =>
       prev === "horizontal" ? "vertical" : "horizontal"
@@ -394,13 +346,11 @@ export default function ReaderScreen({
     return new Set(chapterBookmarks.map((b) => b.verse));
   }, [bookmarks, bookId, chapter]);
 
-  // REFACTOR: Memoize highlightedVerses to prevent re-compute on every render (uses getChapterHighlights which may query storage)
   const highlightedVerses = useMemo(
     () => getChapterHighlights(bookId, chapter),
     [bookId, chapter, getChapterHighlights]
   );
 
-  // Link menu item
   const linkItem: MenuItem = useMemo(
     () => ({
       key: "link",
@@ -415,7 +365,6 @@ export default function ReaderScreen({
     [isLinked, primaryTextColor]
   );
 
-  // Update menu items to include layout information
   const menuItems: MenuItem[] = useMemo(
     () => [
       {
@@ -661,7 +610,6 @@ export default function ReaderScreen({
     Math.max(chapterProps.contentHeight - chapterProps.scrollViewHeight, 1)
   );
 
-  // Primary scroll handler
   const primaryHandleScroll = useCallback(
     (event: any) => {
       lastScrollYRef.current = event.nativeEvent.contentOffset.y;
@@ -672,7 +620,6 @@ export default function ReaderScreen({
     [handleScroll, showMultiVersion, isLinked]
   );
 
-  // Secondary scroll handler
   const secondaryHandleScrollCb = useCallback(
     (event: any) => {
       if (showMultiVersion && isLinked) {
@@ -705,12 +652,10 @@ export default function ReaderScreen({
     return () => subscription?.remove();
   }, []);
 
-  // Update primary target verse
   useEffect(() => {
     setPrimaryTargetVerse(targetVerse);
   }, [targetVerse]);
 
-  // Sync secondary target when linking or toggling multi
   useEffect(() => {
     if (showMultiVersion && isLinked) {
       setSecondaryTargetVerse(primaryTargetVerse);
@@ -719,7 +664,6 @@ export default function ReaderScreen({
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse]);
 
-  // Primary scroll to verse or top
   useEffect(() => {
     if (!chapterLoading && primaryScrollViewRef.current) {
       const verseNum = getHighlightVerse(true);
@@ -733,7 +677,6 @@ export default function ReaderScreen({
           return;
         }
       }
-      // No verse, scroll to top
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
       lastScrollYRef.current = 0;
@@ -746,7 +689,6 @@ export default function ReaderScreen({
     chapterProps.verseMeasurements,
   ]);
 
-  // Secondary scroll to verse or top
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -763,7 +705,6 @@ export default function ReaderScreen({
           return;
         }
       }
-      // No verse, scroll to top
       secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updateSecondaryOffset(0);
     }
@@ -812,7 +753,7 @@ export default function ReaderScreen({
       }
     };
     loadSettings();
-  }, []); // Changed dependency to [] to run only once on mount
+  }, []);
 
   useEffect(() => {
     AsyncStorage.setItem(
@@ -929,8 +870,6 @@ export default function ReaderScreen({
     if (!showMultiVersion) {
       return renderPrimaryContent();
     }
-
-    // Render based on effective layout
     if (effectiveLayout === "horizontal") {
       return (
         <View style={{ flex: 1, flexDirection: "row" }}>
@@ -1137,7 +1076,6 @@ export default function ReaderScreen({
         </View>
       );
     } else {
-      // Vertical layout
       return (
         <View style={{ flex: 1, flexDirection: "column" }}>
           <View style={{ flex: 1 }}>
@@ -1373,8 +1311,6 @@ export default function ReaderScreen({
   const iconSize = 24;
   const toggleSize = 48;
   const selectorWidth = 200;
-
-  // Dynamic selector position
   let selectorTop = headerTotalHeight;
   let selectorLeft = (screenWidth - selectorWidth) / 2;
 
@@ -1401,7 +1337,6 @@ export default function ReaderScreen({
       style={{ flex: 1, backgroundColor: colors.background?.default }}
     >
       <StatusBar backgroundColor={colors.primary} />
-      {/* Header */}
       {!hideHeader && (
         <View
           style={{
@@ -1594,7 +1529,6 @@ export default function ReaderScreen({
           </View>
         </View>
       )}
-      {/* Dropdown for portrait */}
       {!isLandscape && showDropdown && (
         <TouchableOpacity
           style={{
@@ -1663,7 +1597,6 @@ export default function ReaderScreen({
           </View>
         </TouchableOpacity>
       )}
-      {/* Enhanced Selector Dropdown */}
       {openSelector && (
         <TouchableOpacity
           style={{
@@ -1765,7 +1698,6 @@ export default function ReaderScreen({
         </TouchableOpacity>
       )}
 
-      {/* Modals */}
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
@@ -1786,7 +1718,6 @@ export default function ReaderScreen({
         isSwitchingVersion={multiProps.isSwitchingVersion}
       />
 
-      {/* Chapter Content */}
       <View
         style={{
           flex: 1,
@@ -1796,7 +1727,6 @@ export default function ReaderScreen({
         {renderMultiVersionContent()}
       </View>
 
-      {/* Footer with buttons */}
       <Animated.View
         style={{
           position: "relative",
@@ -1804,7 +1734,6 @@ export default function ReaderScreen({
           opacity: buttonOpacity,
         }}
       >
-        {/* Chevron navigation bar */}
         <View
           style={{
             position: "absolute",
@@ -1850,7 +1779,6 @@ export default function ReaderScreen({
             <Ionicons name="chevron-forward" size={iconSize} color="white" />
           </TouchableOpacity>
         </View>
-        {/* Full screen toggle button */}
         <View
           style={{
             position: "absolute",

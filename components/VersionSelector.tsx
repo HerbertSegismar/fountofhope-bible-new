@@ -1,4 +1,3 @@
-// Updated components/VersionSelector.tsx (add loading prop and spinner)
 import React from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,7 +26,7 @@ interface VersionSelectorProps {
   showCurrentVersion?: boolean;
   showActiveIndicator?: boolean;
   disabled?: boolean;
-  loading?: boolean; // Added loading prop
+  loading?: boolean;
   colors?: Colors;
 }
 
@@ -41,20 +40,18 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
   showCurrentVersion = true,
   showActiveIndicator = false,
   disabled = false,
-  loading = false, // Default false
-  colors, // Optional colors prop
+  loading = false,
+  colors,
 }) => {
   const { theme, navTheme } = useTheme();
-  const colorClasses = getColorClasses(navTheme.colors.primary); // Approximate based on primary, but since getColorClasses takes scheme string, need adjustment if needed
+  const colorClasses = getColorClasses(navTheme.colors.primary);
   const primaryColor = navTheme.colors.primary;
   const textColor = theme === "dark" ? "#e5e7eb" : "#374151";
   const mutedColor = theme === "dark" ? "#9ca3af" : "#6b7280";
   const cardBg = theme === "dark" ? "#1e293b" : "#ffffff";
   const borderColor = theme === "dark" ? "#374151" : "#e5e7eb";
   const itemBorderColor = theme === "dark" ? "#4b5563" : "#f3f4f6";
-  const selectedBg = theme === "dark" ? "#374151" : "#f0f9ff"; // Adjust for primary, but simple
-
-  // Use provided colors if available, otherwise fallback to theme-derived
+  const selectedBg = theme === "dark" ? "#374151" : "#f0f9ff";
   const effectiveColors = colors || {
     primary: primaryColor,
     background: cardBg,
@@ -63,8 +60,6 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
     card: cardBg,
     border: borderColor,
   };
-
-  // Use selectedVersion if provided, otherwise use currentVersion
   const activeSelectedVersion = selectedVersion || currentVersion;
 
   return (
@@ -113,7 +108,7 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
                   ? effectiveColors.primary
                   : undefined,
               }}
-              onPress={() => !disabled && !loading && onVersionSelect(version)} // Disable press during loading
+              onPress={() => !disabled && !loading && onVersionSelect(version)} 
               disabled={disabled || loading}
             >
               <View className="flex-row justify-between items-center">

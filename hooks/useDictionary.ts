@@ -1,4 +1,3 @@
-// file: src/hooks/useDictionary.ts
 import { useCallback } from "react";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
@@ -14,25 +13,21 @@ export const useDictionary = (displayVersion: string | undefined) => {
         return `Strong's: "${tagContent}"`;
       }
 
-      // Check if this is NASB version
       const versionKey = getVersionKey(displayVersion);
       if (versionKey !== "NASB") {
         return `Strong's: "${tagContent}" (Dictionary only available for NASB)`;
       }
 
-      // Only handle numeric tags for Strong's numbers
       if (!/^\d+$/.test(tagContent)) {
         return `Strong's: "${tagContent}" (Not a valid Strong's number)`;
       }
 
       try {
-        // Load dictionary database
         const dictionaryDB = await getDatabase("secedictionary.sqlite3");
         if (!dictionaryDB) {
           return `Strong's: "${tagContent}" (Dictionary database not loaded)`;
         }
 
-        // Determine prefix based on testament using your testamentUtils
         const testament = getTestament(
           verse.book_number,
           verse.book_name || ""
@@ -49,10 +44,9 @@ export const useDictionary = (displayVersion: string | undefined) => {
           await dictionaryDB.getDictionaryDefinition(strongNumber);
 
         if (definition) {
-          // Clean up the definition text - remove HTML tags and extra whitespace but preserve line breaks
           let cleanedDefinition = stripTags(definition)
-            .replace(/\u200e/g, "") // remove LRM
-            .replace(/&#x200e;/gi, "") // remove entity if present
+            .replace(/\u200e/g, "") 
+            .replace(/&#x200e;/gi, "")
             .replace(/\.\s+/g, ".\n\n")
             .trim();
 

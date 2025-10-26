@@ -25,8 +25,6 @@ import { BookmarksContext } from "../context/BookmarksContext";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import {
   useTheme,
-  type ColorScheme,
-  type Theme,
   type FontFamily,
 } from "../context/ThemeContext";
 import { getThemeColors, getContrastColor } from "../utils/themeUtils";
@@ -57,14 +55,12 @@ interface ContextBookmark {
   createdAt: string;
 }
 
-// Constants
 const BOOK_COLORS: { [key: string]: string } = {
   genesis: "#8B4513",
   exodus: "#FF8C00",
   leviticus: "#DC143C",
   numbers: "#32CD32",
   deuteronomy: "#1E90FF",
-  // ... (keep your existing color mappings)
   revelation: "#DC143C",
 };
 
@@ -102,11 +98,9 @@ const getBookmarksKey = (bookmarks: ContextBookmark[]): string => {
 };
 
 export default function BookmarksScreen({ navigation }: Props) {
-  // Theme
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
 
-  // Map fontFamily to actual font family string
   const getFontFamily = (fontFamily: FontFamily): string | undefined => {
     switch (fontFamily) {
       case "serif":
@@ -121,7 +115,6 @@ export default function BookmarksScreen({ navigation }: Props) {
 
   const actualFontFamily = getFontFamily(fontFamily);
 
-  // Context and state
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { bookmarks, removeBookmark, loadBookmarks } =
     useContext(BookmarksContext);
@@ -131,12 +124,10 @@ export default function BookmarksScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Refs
   const previousBookmarksRef = useRef<string>("");
   const isMountedRef = useRef(true);
   const initialLoadRef = useRef(false);
 
-  // Memoized values
   const bookmarksKey = useMemo(
     () => getBookmarksKey(bookmarks as ContextBookmark[]),
     [bookmarks]
@@ -151,13 +142,11 @@ export default function BookmarksScreen({ navigation }: Props) {
     [bookmarks]
   );
 
-  // Event handlers
   const handleBookmarkPress = useCallback(
     (verse: Verse) => {
       const bookInfo = getBookInfo(verse.book_number);
       const longName = bookInfo?.long || verse.book_name || "Unknown Book";
 
-      // Use the same pattern as VerseListScreen
       navigation.navigate("Reader", {
         bookId: verse.book_number,
         chapter: verse.chapter,
@@ -207,7 +196,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     }
   }, [loadBookmarks]);
 
-  // Effects
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
@@ -246,7 +234,6 @@ export default function BookmarksScreen({ navigation }: Props) {
       return;
     }
 
-    // Skip if bookmarks haven't changed
     if (bookmarksKey === previousBookmarksRef.current) {
       return;
     }
@@ -290,7 +277,6 @@ export default function BookmarksScreen({ navigation }: Props) {
 
           await Promise.all(batchPromises);
 
-          // Update state incrementally for better UX
           if (isMountedRef.current) {
             setVerseDetails((prev) => ({ ...prev, ...newVerseDetails }));
             setBookLongNames((prev) => ({ ...prev, ...newBookLongNames }));
@@ -304,7 +290,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     loadVerseDetails();
   }, [bibleDB, bookmarksKey, sortedBookmarks, bookLongNames]);
 
-  // Helper functions
   const getBookColor = (bookName: string, verse?: Verse): string => {
     if (verse?.book_color) return verse.book_color;
 
@@ -323,7 +308,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     return FALLBACK_COLORS[Math.abs(hash) % FALLBACK_COLORS.length];
   };
 
-  // Component render functions
   const renderLoading = () => (
     <SafeAreaView
       style={{
@@ -737,7 +721,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     </View>
   );
 
-  // Main render
   if (loading) {
     return renderLoading();
   }

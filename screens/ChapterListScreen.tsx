@@ -33,9 +33,8 @@ const CHAPTERS_PER_ROW = 6;
 const CHAPTER_SIZE =
   (width - 32 - (CHAPTERS_PER_ROW - 1) * 12) / CHAPTERS_PER_ROW;
 
-// Interface for verse mapping
 interface VerseMapping {
-  [chapter: number]: number; // chapter -> verse count
+  [chapter: number]: number;
 }
 
 export default function ChapterListScreen({ navigation, route }: Props) {
@@ -46,7 +45,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
   const [verseMapping, setVerseMapping] = useState<VerseMapping>({});
   const [chapterCount, setChapterCount] = useState(0);
 
-  // Use the context
   const { bibleDB, currentVersion } = useBibleDatabase();
   const { theme, navTheme } = useTheme();
   const primaryColor = navTheme.colors.primary;
@@ -54,14 +52,10 @@ export default function ChapterListScreen({ navigation, route }: Props) {
   const neutralBorder = theme === "dark" ? "#4B5563" : "#D1D5DB";
 
   const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
-  const cardBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
-  const headerBgClass = theme === "dark" ? "bg-gray-800" : "bg-white";
-  const textPrimaryClass = theme === "dark" ? "text-gray-100" : "text-gray-800";
   const textSecondaryClass =
     theme === "dark" ? "text-gray-400" : "text-gray-500";
   const textTertiaryClass =
     theme === "dark" ? "text-gray-300" : "text-gray-600";
-  const borderClass = theme === "dark" ? "border-gray-700" : "border-gray-200";
   const lightGrayClass = theme === "dark" ? "bg-gray-700" : "bg-gray-100";
   const warningBgClass = theme === "dark" ? "bg-yellow-900/20" : "bg-yellow-50";
   const warningBorderClass =
@@ -84,11 +78,9 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     try {
       setLoading(true);
 
-      // Get the number of chapters for this book
       const count = await bibleDB.getChapterCount(Number(book.book_number));
       setChapterCount(count);
 
-      // Load verse mapping for all chapters
       await loadVerseMapping(count);
     } catch (error) {
       console.error("Failed to load chapter data:", error);
@@ -104,13 +96,11 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     try {
       const mapping: VerseMapping = {};
 
-      // Create an array of all chapters to load
       const chaptersToLoad = Array.from(
         { length: maxChapters },
         (_, i) => i + 1
       );
 
-      // Load verse counts for all chapters
       for (const chapter of chaptersToLoad) {
         try {
           const verseCount = await bibleDB.getVerseCount(
@@ -123,7 +113,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
             `Failed to load verse count for ${book.short_name} ${chapter}:`,
             error
           );
-          mapping[chapter] = 0; // Default to 0 if there's an error
+          mapping[chapter] = 0;
         }
       }
 
@@ -134,7 +124,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
   };
 
   const handleChapterPress = (chapter: number) => {
-    // Get the verse count for this chapter from our mapping
     const verseCount = verseMapping[chapter] || 0;
 
     if (verseCount > 0) {
@@ -279,7 +268,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
     <SafeAreaView className={`flex-1 ${bgClass}`}>
       <ScrollView className="flex-1 mb-20" showsVerticalScrollIndicator={false}>
         <View className="p-4">
-          {/* Header */}
           <View
             className="rounded-lg p-4 mb-4 shadow-sm h-30"
             style={{
@@ -300,7 +288,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
             </Text>
           </View>
 
-          {/* Chapters Grid */}
           {chapterCount > 0 ? (
             <View className="flex-row flex-wrap gap-3 justify-center">
               {chapters.map((chapter) => (
@@ -351,7 +338,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          {/* Book Information */}
           <View className={`mt-6 ${lightGrayClass} rounded-lg p-4`}>
             <View className="flex-row justify-between items-center">
               <Text className={`text-sm ${textTertiaryClass}`}>

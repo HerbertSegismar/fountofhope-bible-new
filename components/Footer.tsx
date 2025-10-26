@@ -2,17 +2,12 @@ import React from "react";
 import { Text, View, TouchableOpacity, Linking } from "react-native";
 import {
   useTheme,
-  type ColorScheme,
-  type Theme,
-  type FontFamily,
 } from "../context/ThemeContext";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 
 export const Footer = () => {
   const { theme, colorScheme, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
-
-  // Get the appropriate color based on theme and color scheme
   const getPrimaryColor = () => {
     if (colorScheme === "custom") {
       return customColor;
@@ -27,8 +22,6 @@ export const Footer = () => {
 
     return primaryColors[colorScheme][theme === "dark" ? "dark" : "light"];
   };
-
-  const primaryColor = getPrimaryColor();
 
   const myBibleUrl = "https://mybible.zone/us/";
   const contactEmail = "fountofhopedevotionals@gmail.com";

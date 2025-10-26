@@ -1,7 +1,5 @@
-// file: src/utils/themeUtils.ts
 import { ColorScheme, Theme } from "../context/ThemeContext";
 
-// Interfaces
 export interface ColorVariants {
   light: string;
   dark: string;
@@ -18,19 +16,16 @@ export type ThemeColors = BaseThemeColors & {
   tagColor: string;
 };
 
-// Color schemes with light/dark variants
 export const primaryColorSchemes: Record<string, ColorVariants> = {
   purple: { light: "#A855F7", dark: "#9333EA" },
   green: { light: "#10B981", dark: "#059669" },
   red: { light: "#EF4444", dark: "#DC2626" },
   yellow: { light: "#F59E0B", dark: "#D97706" },
-  custom: { light: "#A855F7", dark: "#9333EA" }, // Will be overridden dynamically
+  custom: { light: "#A855F7", dark: "#9333EA" },
 };
 
-// Legacy primaryColors for backward compatibility
 export const primaryColors = primaryColorSchemes;
 
-// Gradient schemes
 export const gradientSchemes: Record<string, GradientColors> = {
   purple: {
     light: ["#c084fc", "#93c5fd"],
@@ -50,7 +45,6 @@ export const gradientSchemes: Record<string, GradientColors> = {
   },
 };
 
-// Base theme colors
 export const BASE_LIGHT_THEME_COLORS = {
   card: "#FFFFFF",
   background: "#FFFFFF",
@@ -87,19 +81,13 @@ type BaseThemeColors =
   | typeof BASE_LIGHT_THEME_COLORS
   | typeof BASE_DARK_THEME_COLORS;
 
-// Color Conversion Functions
-/**
- * Convert hex color to RGB object
- */
 export function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  // Remove # if present and validate
   const cleanHex = hex.replace("#", "");
 
   if (cleanHex.length !== 6 && cleanHex.length !== 3) {
     throw new Error(`Invalid hex color: ${hex}`);
   }
 
-  // Expand 3-digit hex to 6-digit
   const fullHex =
     cleanHex.length === 3
       ? cleanHex
@@ -120,9 +108,6 @@ export function hexToRgb(hex: string): { r: number; g: number; b: number } {
   };
 }
 
-/**
- * Convert RGB to hex color
- */
 export function rgbToHex(r: number, g: number, b: number): string {
   return (
     "#" +
@@ -130,13 +115,9 @@ export function rgbToHex(r: number, g: number, b: number): string {
   );
 }
 
-/**
- * Adjust the lightness of a color by a percentage
- */
 export function adjustLightness(hex: string, percent: number): string {
   const rgb = hexToRgb(hex);
 
-  // Convert RGB to HSL
   const r = rgb.r / 255;
   const g = rgb.g / 255;
   const b = rgb.b / 255;
@@ -163,10 +144,8 @@ export function adjustLightness(hex: string, percent: number): string {
     h /= 6;
   }
 
-  // Adjust lightness
   l = Math.max(0, Math.min(1, l + percent / 100));
 
-  // Convert back to RGB
   const hue2rgb = (p: number, q: number, t: number): number => {
     if (t < 0) t += 1;
     if (t > 1) t -= 1;
@@ -194,27 +173,22 @@ export function adjustLightness(hex: string, percent: number): string {
   );
 }
 
-/**
- * Calculate light and dark variants for a custom color based on the pattern of existing schemes
- */
 export function calculateCustomColorVariants(baseColor: string): {
   variants: ColorVariants;
   gradients: GradientColors;
 } {
   try {
-    // Generate variants based on patterns
-    const lightVariant = adjustLightness(baseColor, 15); // Make 15% lighter
-    const darkVariant = adjustLightness(baseColor, -15); // Make 15% darker
+    const lightVariant = adjustLightness(baseColor, 15);
+    const darkVariant = adjustLightness(baseColor, -15);
 
-    // Generate gradients based on the custom color
     const gradients: GradientColors = {
       light: [
-        adjustLightness(baseColor, 10), // Slightly lighter
-        adjustLightness(baseColor, -5), // Slightly darker
+        adjustLightness(baseColor, 10),
+        adjustLightness(baseColor, -5),
       ],
       dark: [
-        adjustLightness(baseColor, -10), // Slightly darker
-        adjustLightness(baseColor, -25), // Even darker
+        adjustLightness(baseColor, -10),
+        adjustLightness(baseColor, -25),
       ],
     };
 
@@ -230,7 +204,6 @@ export function calculateCustomColorVariants(baseColor: string): {
       "Error calculating custom color variants, using fallback:",
       error
     );
-    // Fallback to purple scheme if calculation fails
     return {
       variants: primaryColorSchemes.purple,
       gradients: gradientSchemes.purple,
@@ -238,45 +211,32 @@ export function calculateCustomColorVariants(baseColor: string): {
   }
 }
 
-/**
- * Get complementary color for a given color
- */
 export function getComplementaryColor(hex: string): string {
   const rgb = hexToRgb(hex);
   return rgbToHex(255 - rgb.r, 255 - rgb.g, 255 - rgb.b);
 }
 
-/**
- * Check if a color is light (for determining text color)
- */
 export function isLightColor(hex: string): boolean {
   const rgb = hexToRgb(hex);
-  // Calculate relative luminance
   const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
   return luminance > 0.5;
 }
 
-/**
- * Generate accessible text color for a background
- */
 export function getAccessibleTextColor(backgroundColor: string): string {
   return isLightColor(backgroundColor) ? "#000000" : "#FFFFFF";
 }
 
-/**
- * Generate a palette of colors from a base color
- */
 export function generateColorPalette(baseColor: string): {
-  50: string; // lightest
+  50: string; 
   100: string;
   200: string;
   300: string;
   400: string;
-  500: string; // base
+  500: string; 
   600: string;
   700: string;
   800: string;
-  900: string; // darkest
+  900: string;
 } {
   return {
     50: adjustLightness(baseColor, 40),
@@ -292,31 +252,21 @@ export function generateColorPalette(baseColor: string): {
   };
 }
 
-// Legacy Functions (for backward compatibility)
-/**
- * @deprecated Use adjustLightness instead
- * Generate lighter/darker variants for verseNumber, tagColor, etc.
- */
 export const getLighterColor = (hex: string, amount: number = 50): string => {
-  // Add validation for hex parameter
   if (!hex || typeof hex !== "string" || !hex.startsWith("#")) {
     console.warn("Invalid hex color provided to getLighterColor:", hex);
-    return "#3B82F6"; // Fallback color
+    return "#3B82F6"; 
   }
 
   try {
-    // Convert to percentage for adjustLightness
-    const percent = amount > 0 ? amount * 0.5 : amount; // Scale down for better results
+    const percent = amount > 0 ? amount * 0.5 : amount;
     return adjustLightness(hex, percent);
   } catch (error) {
     console.warn("Error in getLighterColor:", error);
-    return "#3B82F6"; // Fallback color
+    return "#3B82F6";
   }
 };
 
-/**
- * Lighten color with transparency (for rgba)
- */
 export const lightenColor = (
   color: string,
   amount = 0.15
@@ -338,10 +288,6 @@ export const lightenColor = (
   return color;
 };
 
-// Theme Functions
-/**
- * Get primary color with custom color support
- */
 export const getPrimaryColor = (
   theme: Theme,
   colorScheme: ColorScheme,
@@ -353,9 +299,6 @@ export const getPrimaryColor = (
   return primaryColorSchemes[colorScheme][theme === "dark" ? "dark" : "light"];
 };
 
-/**
- * Main theme colors function with custom color support
- */
 export const getThemeColors = (
   theme: Theme,
   colorScheme: ColorScheme,
@@ -375,24 +318,15 @@ export const getThemeColors = (
   } as const;
 };
 
-/**
- * Helper function to determine text color based on background color
- * Updated to use hexToRgb instead of deprecated substr
- */
 export const getContrastColor = (
   backgroundColor: string,
   themeColors: ThemeColors
 ): string => {
-  // Default to theme text primary if no background color
   if (!backgroundColor) return themeColors.textPrimary;
 
   try {
     const rgb = hexToRgb(backgroundColor);
-
-    // Calculate luminance
     const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-
-    // Return dark text for light colors, light text for dark colors
     return luminance > 0.5
       ? themeColors.textSecondary
       : themeColors.textPrimary;
@@ -402,17 +336,11 @@ export const getContrastColor = (
   }
 };
 
-/**
- * Update primary colors for custom scheme
- */
 export const updateCustomPrimaryColors = (customColor: string) => {
   primaryColorSchemes.custom.light = customColor;
   primaryColorSchemes.custom.dark = customColor;
 };
 
-/**
- * Get color classes for Tailwind (for components that use className)
- */
 export const getColorClasses = (colorScheme: string) => {
   switch (colorScheme) {
     case "green":
@@ -438,7 +366,7 @@ export const getColorClasses = (colorScheme: string) => {
       };
     case "custom":
       return {
-        gradient: "from-purple-500 to-blue-400", // Fallback
+        gradient: "from-purple-500 to-blue-400",
         text: "text-purple-400",
         lightBg: "bg-purple-100",
         lightBorder: "border-purple-100",

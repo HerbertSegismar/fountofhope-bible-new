@@ -56,14 +56,14 @@ export const useMultiVersion = (
         return;
       }
       setSecondaryVersion(version);
-      setSecondaryFailureCount(0); // Reset failure count on version change
+      setSecondaryFailureCount(0);
     },
     [currentVersion]
   );
 
   const loadSecondaryVerses = useCallback(
     async (dbInstance: BibleDatabase, retryCount = 0) => {
-      const maxRetries = 5; // Increased from 3 for better resilience
+      const maxRetries = 5;
       if (retryCount >= maxRetries)
         throw new Error(`Failed after ${maxRetries} retries`);
       try {
@@ -74,7 +74,7 @@ export const useMultiVersion = (
           error
         );
         if (retryCount < maxRetries - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 1000)); // Increased delay
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           return loadSecondaryVerses(dbInstance, retryCount + 1);
         }
         throw error;
@@ -111,12 +111,10 @@ export const useMultiVersion = (
         const newFailureCount = secondaryFailureCount + 1;
         setSecondaryFailureCount(newFailureCount);
         if (newFailureCount >= 5) {
-          // Increased threshold
           Alert.alert(
             "Version Load Error",
             `Failed to load ${secondaryVersion}. Trying another version or disabling multi-version.`
           );
-          // Fallback: Try next available version
           const otherVersions = availableVersions.filter(
             (v) => v !== currentVersion && v !== secondaryVersion
           );
@@ -176,7 +174,6 @@ export const useMultiVersion = (
   );
 
   const handleSecondaryScroll = useCallback((event: any) => {
-    // Sync logic will be in useScrollSync
   }, []);
 
   return {
