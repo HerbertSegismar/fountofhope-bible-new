@@ -87,6 +87,17 @@ export default function ReaderScreen({
   const [multiViewLayout, setMultiViewLayout] =
     useState<MultiViewLayout>("horizontal");
 
+  // Link state
+  const [isLinked, setIsLinked] = useState(true);
+
+  // Independent target verses
+  const [primaryTargetVerse, setPrimaryTargetVerse] = useState<
+    number | undefined
+  >(targetVerse);
+  const [secondaryTargetVerse, setSecondaryTargetVerse] = useState<
+    number | undefined
+  >();
+
   // Header position states
   const [primaryHeaderX, setPrimaryHeaderX] = useState(0);
   const [primaryHeaderY, setPrimaryHeaderY] = useState(0);
@@ -157,7 +168,7 @@ export default function ReaderScreen({
   const isFullScreen = uiMode === 1;
   const hideHeader = uiMode === 1;
   const scrollSync = useScrollSync(
-    showMultiVersion,
+    showMultiVersion && isLinked,
     chapterProps.scrollViewHeight,
     chapterProps.contentHeight,
     multiProps.secondaryContentHeight,
@@ -183,6 +194,31 @@ export default function ReaderScreen({
   } = scrollSync;
 
   const { setShowColorPicker } = useTheme();
+
+  const getHighlightVerse = useCallback(
+    (isPrimary: boolean): number | undefined => {
+      if (isLinked || !showMultiVersion) {
+        return primaryTargetVerse;
+      }
+      return isPrimary ? primaryTargetVerse : secondaryTargetVerse;
+    },
+    [showMultiVersion, isLinked, primaryTargetVerse, secondaryTargetVerse]
+  );
+
+  const getCurrentVerseNumber = useCallback(
+    (currentY: number, measurements: Record<number, number>) => {
+      const sortedVerses = Object.entries(measurements)
+        .map(([vStr, top]) => ({ verse: parseInt(vStr, 10), top }))
+        .sort((a, b) => a.verse - b.verse);
+      for (const { verse, top } of sortedVerses) {
+        if (currentY < top) {
+          return Math.max(verse - 1, 1);
+        }
+      }
+      return sortedVerses[sortedVerses.length - 1]?.verse || 1;
+    },
+    []
+  );
 
   const resetButtonOpacity = useCallback(() => {
     if (timeoutRef.current) {
@@ -280,6 +316,13 @@ export default function ReaderScreen({
     );
   }, [multiViewLayout]);
 
+  // Load and save link state
+  useEffect(() => {
+    AsyncStorage.setItem("isLinked", isLinked.toString()).catch((e) =>
+      console.error("Failed to save isLinked", e)
+    );
+  }, [isLinked]);
+
   const currentVerse = targetVerse || 1;
   const versionName = getVersionDisplayName(currentVersion);
   const bookInfo = useMemo(() => getBookInfo(Number(bookId)), [bookId]);
@@ -357,6 +400,21 @@ export default function ReaderScreen({
     [bookId, chapter, getChapterHighlights]
   );
 
+  // Link menu item
+  const linkItem: MenuItem = useMemo(
+    () => ({
+      key: "link",
+      name: isLinked ? "Unsync Views" : "Sync Views",
+      icon: (isLinked ? "unlink-outline" : "link-outline") as IconName,
+      onPress: () => {
+        const newLinked = !isLinked;
+        setIsLinked(newLinked);
+      },
+      color: primaryTextColor,
+    }),
+    [isLinked, primaryTextColor]
+  );
+
   // Update menu items to include layout information
   const menuItems: MenuItem[] = useMemo(
     () => [
@@ -409,6 +467,7 @@ export default function ReaderScreen({
         onPress: multiProps.toggleMultiVersion,
         color: showMultiVersion ? "#f6f0f0ff" : primaryTextColor,
       },
+      ...(showMultiVersion ? [linkItem] : []),
       {
         key: "settings",
         name: "Settings",
@@ -434,6 +493,7 @@ export default function ReaderScreen({
       multiProps.toggleMultiVersion,
       navigation,
       setShowSettings,
+      linkItem,
     ]
   );
 
@@ -507,6 +567,76 @@ export default function ReaderScreen({
     ]
   );
 
+  const handlePrimaryVersePress = useCallback(
+    (verse: Verse) => {
+      const isHighlighted = highlightedVerses.includes(verse.verse);
+      Alert.alert(
+        `${verse.book_name} ${verse.chapter}:${verse.verse}`,
+        "Options:",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: isHighlighted ? "Remove Highlight" : "Highlight",
+            onPress: () => toggleVerseHighlight(verse),
+          },
+          {
+            text: "Bookmark",
+            onPress: () => {
+              addBookmark(verse);
+              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+            },
+          },
+          {
+            text: "Center Verse",
+            onPress: () => {
+              setPrimaryTargetVerse(verse.verse);
+            },
+          },
+          {
+            text: "Share",
+            onPress: () => Alert.alert("Share", "Coming soon!"),
+          },
+        ]
+      );
+    },
+    [highlightedVerses, toggleVerseHighlight, addBookmark]
+  );
+
+  const handleSecondaryVersePress = useCallback(
+    (verse: Verse) => {
+      const isHighlighted = highlightedVerses.includes(verse.verse);
+      Alert.alert(
+        `${verse.book_name} ${verse.chapter}:${verse.verse}`,
+        "Options:",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: isHighlighted ? "Remove Highlight" : "Highlight",
+            onPress: () => toggleVerseHighlight(verse),
+          },
+          {
+            text: "Bookmark",
+            onPress: () => {
+              addBookmark(verse);
+              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+            },
+          },
+          {
+            text: "Center Verse",
+            onPress: () => {
+              setSecondaryTargetVerse(verse.verse);
+            },
+          },
+          {
+            text: "Share",
+            onPress: () => Alert.alert("Share", "Coming soon!"),
+          },
+        ]
+      );
+    },
+    [highlightedVerses, toggleVerseHighlight, addBookmark]
+  );
+
   const goToPreviousChapter = useCallback(() => {
     if (chapter > 1) {
       resetScrollPosition();
@@ -536,6 +666,27 @@ export default function ReaderScreen({
     Math.max(chapterProps.contentHeight - chapterProps.scrollViewHeight, 1)
   );
 
+  // Primary scroll handler
+  const primaryHandleScroll = useCallback(
+    (event: any) => {
+      lastScrollYRef.current = event.nativeEvent.contentOffset.y;
+      if (showMultiVersion && isLinked) {
+        handleScroll(event);
+      }
+    },
+    [handleScroll, showMultiVersion, isLinked]
+  );
+
+  // Secondary scroll handler
+  const secondaryHandleScrollCb = useCallback(
+    (event: any) => {
+      if (showMultiVersion && isLinked) {
+        handleSecondaryScroll(event);
+      }
+    },
+    [handleSecondaryScroll, showMultiVersion, isLinked]
+  );
+
   useFocusEffect(
     useCallback(() => {
       const currentDimensions = Dimensions.get("window");
@@ -559,32 +710,75 @@ export default function ReaderScreen({
     return () => subscription?.remove();
   }, []);
 
-  // Scroll to top for primary when loading completes and no target verse
+  // Update primary target verse
   useEffect(() => {
-    if (!targetVerse && !chapterLoading && primaryScrollViewRef.current) {
+    setPrimaryTargetVerse(targetVerse);
+  }, [targetVerse]);
+
+  // Sync secondary target when linking or toggling multi
+  useEffect(() => {
+    if (showMultiVersion && isLinked) {
+      setSecondaryTargetVerse(primaryTargetVerse);
+    } else if (!showMultiVersion) {
+      setSecondaryTargetVerse(undefined);
+    }
+  }, [showMultiVersion, isLinked, primaryTargetVerse]);
+
+  // Primary scroll to verse or top
+  useEffect(() => {
+    if (!chapterLoading && primaryScrollViewRef.current) {
+      const verseNum = getHighlightVerse(true);
+      if (verseNum) {
+        const meas = chapterProps.verseMeasurements[verseNum];
+        if (meas !== undefined) {
+          const y = Math.max(0, meas - 100);
+          primaryScrollViewRef.current.scrollTo({ y, animated: false });
+          updatePrimaryOffset(y);
+          lastScrollYRef.current = y;
+          return;
+        }
+      }
+      // No verse, scroll to top
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
       lastScrollYRef.current = 0;
     }
-  }, [chapterLoading, targetVerse, primaryScrollViewRef, updatePrimaryOffset]);
+  }, [
+    chapterLoading,
+    getHighlightVerse,
+    primaryScrollViewRef,
+    updatePrimaryOffset,
+    chapterProps.verseMeasurements,
+  ]);
 
-  // Scroll to top for secondary when loading completes and no target verse
+  // Secondary scroll to verse or top
   useEffect(() => {
     if (
       showMultiVersion &&
-      !targetVerse &&
       !secondaryLoading &&
       secondaryScrollViewRef.current
     ) {
+      const verseNum = getHighlightVerse(false);
+      if (verseNum) {
+        const meas = multiProps.secondaryVerseMeasurements[verseNum];
+        if (meas !== undefined) {
+          const y = Math.max(0, meas - 100);
+          secondaryScrollViewRef.current.scrollTo({ y, animated: false });
+          updateSecondaryOffset(y);
+          return;
+        }
+      }
+      // No verse, scroll to top
       secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updateSecondaryOffset(0);
     }
   }, [
+    multiProps.secondaryVerseMeasurements,
+    getHighlightVerse,
     secondaryLoading,
-    showMultiVersion,
-    targetVerse,
     secondaryScrollViewRef,
     updateSecondaryOffset,
+    showMultiVersion,
   ]);
 
   const handlePrimaryContentSizeChange = useCallback(
@@ -604,9 +798,10 @@ export default function ReaderScreen({
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [showMultiStr, secVer] = await Promise.all([
+        const [showMultiStr, secVer, linkedStr] = await Promise.all([
           AsyncStorage.getItem("showMultiVersion"),
           AsyncStorage.getItem("secondaryVersion"),
+          AsyncStorage.getItem("isLinked"),
         ]);
         if (showMultiStr === "true" && !showMultiVersion) {
           multiProps.toggleMultiVersion();
@@ -614,12 +809,15 @@ export default function ReaderScreen({
         if (secVer && secVer !== multiProps.secondaryVersion) {
           multiProps.handleSecondaryVersionSelect(secVer);
         }
+        if (linkedStr !== null) {
+          setIsLinked(linkedStr === "true");
+        }
       } catch (e) {
         console.error("Failed to load reader settings", e);
       }
     };
     loadSettings();
-  }, []);
+  }, []); // Changed dependency to [] to run only once on mount
 
   useEffect(() => {
     AsyncStorage.setItem(
@@ -641,6 +839,15 @@ export default function ReaderScreen({
       multiProps.secondaryVersion || ""
     );
     const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
+
+    const primaryOnVersePress =
+      showMultiVersion && !isLinked
+        ? handlePrimaryVersePress
+        : handleVersePress;
+    const secondaryOnVersePress =
+      showMultiVersion && !isLinked
+        ? handleSecondaryVersePress
+        : handleVersePress;
 
     const renderPrimaryContent = () => {
       if (chapterLoading) {
@@ -693,7 +900,7 @@ export default function ReaderScreen({
             paddingBottom: 40,
             paddingTop: 0,
           }}
-          onScroll={handleScroll}
+          onScroll={primaryHandleScroll}
           scrollEventThrottle={16}
           onContentSizeChange={handlePrimaryContentSizeChange}
           onLayout={chapterProps.handleScrollViewLayout}
@@ -710,9 +917,9 @@ export default function ReaderScreen({
               bookId={bookId}
               showVerseNumbers
               fontSize={fontSize}
-              onVersePress={handleVersePress}
+              onVersePress={primaryOnVersePress}
               onVerseLayout={chapterProps.handleVerseLayout}
-              highlightVerse={targetVerse}
+              highlightVerse={getHighlightVerse(true)}
               highlightedVerses={new Set(highlightedVerses)}
               bookmarkedVerses={bookmarkedVerses}
               isFullScreen={isFullScreen}
@@ -908,7 +1115,7 @@ export default function ReaderScreen({
                   paddingBottom: 40,
                   paddingTop: 0,
                 }}
-                onScroll={handleSecondaryScroll}
+                onScroll={secondaryHandleScrollCb}
                 scrollEventThrottle={16}
                 onContentSizeChange={handleSecondaryContentSizeChange}
                 onLayout={multiProps.handleSecondaryScroll}
@@ -920,9 +1127,9 @@ export default function ReaderScreen({
                   bookId={bookId}
                   showVerseNumbers
                   fontSize={fontSize}
-                  onVersePress={handleVersePress}
+                  onVersePress={secondaryOnVersePress}
                   onVerseLayout={multiProps.handleSecondaryVerseLayout}
-                  highlightVerse={targetVerse}
+                  highlightVerse={getHighlightVerse(false)}
                   highlightedVerses={new Set(highlightedVerses)}
                   bookmarkedVerses={bookmarkedVerses}
                   isFullScreen={isFullScreen}
@@ -1116,7 +1323,7 @@ export default function ReaderScreen({
                   paddingBottom: 40,
                   paddingTop: 0,
                 }}
-                onScroll={handleSecondaryScroll}
+                onScroll={secondaryHandleScrollCb}
                 scrollEventThrottle={16}
                 onContentSizeChange={handleSecondaryContentSizeChange}
                 onLayout={multiProps.handleSecondaryScroll}
@@ -1128,9 +1335,9 @@ export default function ReaderScreen({
                   bookId={bookId}
                   showVerseNumbers
                   fontSize={fontSize}
-                  onVersePress={handleVersePress}
+                  onVersePress={secondaryOnVersePress}
                   onVerseLayout={multiProps.handleSecondaryVerseLayout}
-                  highlightVerse={targetVerse}
+                  highlightVerse={getHighlightVerse(false)}
                   highlightedVerses={new Set(highlightedVerses)}
                   bookmarkedVerses={bookmarkedVerses}
                   isFullScreen={isFullScreen}
