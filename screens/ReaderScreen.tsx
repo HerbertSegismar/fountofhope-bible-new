@@ -545,11 +545,7 @@ export default function ReaderScreen({
           },
           {
             text: "Center Verse",
-            onPress: () =>
-              navigation.navigate("Reader", {
-                ...route.params,
-                verse: verse.verse,
-              }),
+            onPress: () => setPrimaryTargetVerse(verse.verse),
           },
           {
             text: "Share",
@@ -562,8 +558,7 @@ export default function ReaderScreen({
       highlightedVerses,
       toggleVerseHighlight,
       addBookmark,
-      navigation,
-      route.params,
+      setPrimaryTargetVerse,
     ]
   );
 
@@ -1235,7 +1230,7 @@ export default function ReaderScreen({
                 borderBottomWidth: 1,
                 borderBottomColor: colors.border?.default,
                 flexDirection: "row",
-                gap: 5,
+                gap: 10,
               }}
             >
               <TouchableOpacity
@@ -1443,7 +1438,7 @@ export default function ReaderScreen({
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 5,
+                  gap: 10,
                 }}
               >
                 <TouchableOpacity
@@ -1463,7 +1458,7 @@ export default function ReaderScreen({
                     }}
                     numberOfLines={1}
                   >
-                    {`${displayBookName} ${chapter}:${currentVerse}`}
+                    {`${displayBookName} ${chapter}`}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
