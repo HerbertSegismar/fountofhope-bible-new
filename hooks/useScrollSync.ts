@@ -73,13 +73,6 @@ export const useScrollSync = (
       targetY = Math.max(0, Math.min(targetY, maxSecondary));
 
       if (secondaryScrollViewRef.current && targetY >= 0) {
-        console.log("Syncing secondary:", {
-          primaryOffset,
-          targetY,
-          progress: (progress * 100).toFixed(1) + "%",
-          maxPrimary,
-          maxSecondary,
-        });
 
         secondaryScrollViewRef.current.scrollTo({
           y: targetY,
@@ -135,11 +128,6 @@ export const useScrollSync = (
       targetY = Math.max(0, Math.min(targetY, maxPrimary));
 
       if (primaryScrollViewRef.current && targetY >= 0) {
-        console.log("Syncing primary:", {
-          secondaryOffset,
-          targetY,
-          progress: (progress * 100).toFixed(1) + "%",
-        });
 
         primaryScrollViewRef.current.scrollTo({
           y: targetY,

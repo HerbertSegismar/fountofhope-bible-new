@@ -57,7 +57,9 @@ export const verifyBookDistribution = (books: any[]) => {
 };
 
 export const BIBLE_BOOKS_MAP: {
-  [key: number]: { short: string; long: string; standardNumber: number };
+  [key: number]: {
+    color: string; short: string; long: string; standardNumber: number 
+};
 } = {
   10: { short: "Gen", long: "Genesis", standardNumber: 1 },
   20: { short: "Exo", long: "Exodus", standardNumber: 2 },

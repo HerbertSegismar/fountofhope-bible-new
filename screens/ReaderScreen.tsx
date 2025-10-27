@@ -15,6 +15,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  LayoutChangeEvent,
 } from "react-native";
 import {
   SafeAreaView,
@@ -26,15 +27,16 @@ import { useFocusEffect } from "@react-navigation/native";
 import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+import { BibleDatabase } from "../services/BibleDatabase";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import { SettingsModal } from "../components/SettingsModal";
+import { NavigationModal } from "../components/NavigationModal";
 import { useChapterLoader } from "../hooks/useChapterLoader";
-import { useMultiVersion } from "../hooks/useMultiVersion";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
-import { Verse } from "../types";
-import { getBookInfo } from "../utils/testamentUtils";
+import { Verse, Book, ChapterInfo } from "../types";
+import { getBookInfo, getTestament } from "../utils/testamentUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 
@@ -53,6 +55,14 @@ interface MenuItem {
 }
 
 type MultiViewLayout = "horizontal" | "vertical";
+
+interface Location {
+  bookId: number;
+  bookName: string;
+  bookColor: string;
+  chapter: number;
+  verse?: number;
+}
 
 export default function ReaderScreen({
   navigation,
@@ -77,7 +87,8 @@ export default function ReaderScreen({
   } = useHighlights();
   const { bibleDB, currentVersion, availableBibleVersions, switchVersion } =
     useBibleDatabase();
-  const [maxChapter, setMaxChapter] = useState(0);
+  const [primaryMaxChapter, setPrimaryMaxChapter] = useState(0);
+  const [secondaryMaxChapter, setSecondaryMaxChapter] = useState(0);
   const [openSelector, setOpenSelector] = useState<SelectorType>(null);
   const [selectorLoading, setSelectorLoading] = useState(false);
   const [multiViewLayout, setMultiViewLayout] =
@@ -102,6 +113,7 @@ export default function ReaderScreen({
   const [dimensions, setDimensions] = useState(initialDimensions);
   const screenWidth = dimensions.width;
   const themeColors = useThemeColors();
+  const theme = themeColors.theme;
   const {
     colors,
     versionSelectorColors,
@@ -109,22 +121,39 @@ export default function ReaderScreen({
     handleColorSchemePress,
     toggleTheme,
   } = themeColors;
-  const chapterLoader = useChapterLoader(bookId, chapter, targetVerse);
+  const [primaryLocation, setPrimaryLocation] = useState<Location>({
+    bookId,
+    bookName,
+    bookColor,
+    chapter,
+    verse: targetVerse,
+  });
+  const [secondaryLocation, setSecondaryLocation] =
+    useState<Location>(primaryLocation);
+  const primaryLoader = useChapterLoader(
+    primaryLocation.bookId,
+    primaryLocation.chapter,
+    primaryTargetVerse
+  );
   const {
-    verses,
-    book,
-    loading: chapterLoading,
+    verses: primaryVerses,
+    book: primaryBook,
+    loading: primaryLoading,
     scrollViewRef: primaryScrollViewRef,
-    ...chapterProps
-  } = chapterLoader;
-  const multiVersion = useMultiVersion(bookId, chapter, verses);
-  const {
-    showMultiVersion,
-    secondaryVerses,
-    secondaryLoading,
-    secondaryScrollViewRef,
-    ...multiProps
-  } = multiVersion;
+    ...primaryProps
+  } = primaryLoader;
+  const [showMultiVersion, setShowMultiVersion] = useState(false);
+  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
+  const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
+  const [secondaryLoading, setSecondaryLoading] = useState(false);
+  const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
+  const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<{
+    [key: number]: number;
+  }>({});
+  const [secondaryScrollViewHeight, setSecondaryScrollViewHeight] = useState(0);
+  const secondaryScrollViewRef = useRef<ScrollView>(null);
+  const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
+  const secondaryDB = useRef<BibleDatabase | null>(null);
   const [fontSize, setFontSize] = useState(16);
   const [uiMode, setUiMode] = useState(0);
   const [isLandscape, setIsLandscape] = useState(
@@ -133,6 +162,28 @@ export default function ReaderScreen({
   const [_showEnd, setShowEnd] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showNavigationModal, setShowNavigationModal] = useState(false);
+  const [navigationTarget, setNavigationTarget] = useState<
+    "primary" | "secondary"
+  >("primary");
+  const [books, setBooks] = useState<Book[]>([]);
+  const [oldTestament, setOldTestament] = useState<
+    (Book & { testament: string })[]
+  >([]);
+  const [newTestament, setNewTestament] = useState<
+    (Book & { testament: string })[]
+  >([]);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState(1);
+  const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
+  const [hasTappedChapter, setHasTappedChapter] = useState(false);
+  const [chapters, setChapters] = useState<ChapterInfo[]>([]);
+  const [versesList, setVersesList] = useState<number[]>([]);
+  const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
+  const [isLoadingChapters, setIsLoadingChapters] = useState(false);
+  const modalScrollViewRef = useRef(null);
+  const chaptersSectionRef = useRef(null);
+  const versesSectionRef = useRef(null);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -146,17 +197,26 @@ export default function ReaderScreen({
     null
   );
 
+  const resetModalSelection = useCallback(() => {
+    setSelectedBook(null);
+    setSelectedChapter(1);
+    setSelectedVerse(null);
+    setHasTappedChapter(false);
+    setChapters([]);
+    setVersesList([]);
+  }, []);
+
   const isFullScreen = uiMode === 1;
   const hideHeader = uiMode === 1;
   const scrollSync = useScrollSync(
     showMultiVersion && isLinked,
-    chapterProps.scrollViewHeight,
-    chapterProps.contentHeight,
-    multiProps.secondaryContentHeight,
-    verses,
-    chapterProps.verseMeasurements,
+    primaryProps.scrollViewHeight,
+    primaryProps.contentHeight,
+    secondaryContentHeight,
+    primaryVerses,
+    primaryProps.verseMeasurements,
     secondaryVerses,
-    multiProps.secondaryVerseMeasurements,
+    secondaryVerseMeasurements,
     isLandscape,
     isFullScreen,
     () => {},
@@ -239,18 +299,69 @@ export default function ReaderScreen({
   }, [resetButtonOpacity]);
 
   useEffect(() => {
-    const loadData = async () => {
+    const load = async () => {
       if (bibleDB) {
         try {
-          const chCount = await bibleDB.getChapterCount(Number(bookId));
-          setMaxChapter(chCount);
+          const chCount = await bibleDB.getChapterCount(primaryLocation.bookId);
+          setPrimaryMaxChapter(chCount);
         } catch (error) {
           console.error("Failed to load navigation data:", error);
         }
       }
     };
-    loadData();
-  }, [bibleDB, bookId]);
+    load();
+  }, [bibleDB, primaryLocation.bookId]);
+
+  useEffect(() => {
+    const load = async () => {
+      if (showMultiVersion && secondaryVersion) {
+        let db =
+          secondaryVersion === currentVersion ? bibleDB : secondaryDB.current;
+        if (db) {
+          try {
+            const chCount = await db.getChapterCount(secondaryLocation.bookId);
+            setSecondaryMaxChapter(chCount);
+          } catch (error) {
+            console.error("Failed to load secondary max chapter:", error);
+          }
+        }
+      }
+    };
+    load();
+  }, [
+    showMultiVersion,
+    secondaryVersion,
+    currentVersion,
+    secondaryLocation.bookId,
+    bibleDB,
+    secondaryDB,
+  ]);
+
+  useEffect(() => {
+    const loadBooksData = async () => {
+      if (bibleDB) {
+        setIsLoadingNavigation(true);
+        try {
+          const allBooks = await bibleDB.getAllBooks();
+          setBooks(allBooks);
+          const ot: (Book & { testament: string })[] = [];
+          const nt: (Book & { testament: string })[] = [];
+          allBooks.forEach((b) => {
+            if (getTestament(b.book_number, b.long_name) === "OT")
+              ot.push({ ...b, testament: "OT" });
+            else nt.push({ ...b, testament: "NT" });
+          });
+          setOldTestament(ot);
+          setNewTestament(nt);
+        } catch (error) {
+          console.error("Failed to load books:", error);
+        } finally {
+          setIsLoadingNavigation(false);
+        }
+      }
+    };
+    loadBooksData();
+  }, [bibleDB]);
 
   useEffect(() => {
     const loadLayoutPreference = async () => {
@@ -278,18 +389,31 @@ export default function ReaderScreen({
     );
   }, [isLinked]);
 
-  const versionName = getVersionDisplayName(currentVersion);
-  const bookInfo = useMemo(() => getBookInfo(Number(bookId)), [bookId]);
-  const displayBookName = bookInfo?.long || bookName;
-
   const closeSelector = useCallback(() => setOpenSelector(null), []);
 
-  const openNavigationSelector = useCallback(() => {
-    navigation.navigate("BookList", {
-      showMultiVersion,
-      secondaryVersion: multiProps.secondaryVersion,
-    });
-  }, [navigation, showMultiVersion, multiProps.secondaryVersion]);
+  const openPrimaryNavigation = useCallback(() => {
+    if (showMultiVersion && !isLinked) {
+      setNavigationTarget("primary");
+      setShowNavigationModal(true);
+    } else {
+      navigation.navigate("BookList", {
+        showMultiVersion,
+        secondaryVersion,
+      });
+    }
+  }, [showMultiVersion, isLinked, navigation, secondaryVersion]);
+
+  const openSecondaryNavigation = useCallback(() => {
+    if (showMultiVersion && !isLinked) {
+      setNavigationTarget("secondary");
+      setShowNavigationModal(true);
+    } else {
+      navigation.navigate("BookList", {
+        showMultiVersion,
+        secondaryVersion,
+      });
+    }
+  }, [showMultiVersion, isLinked, navigation, secondaryVersion]);
 
   const openPrimaryVersionSelector = useCallback(
     () => setOpenSelector("primary"),
@@ -316,21 +440,21 @@ export default function ReaderScreen({
     async (version: string) => {
       if (version === currentVersion) return;
       try {
-        multiProps.setIsSwitchingVersion(true);
+        setIsSwitchingVersion(true);
         await switchVersion(version);
       } catch (error) {
         Alert.alert("Error", "Failed to switch Bible version.");
       } finally {
-        multiProps.setIsSwitchingVersion(false);
+        setIsSwitchingVersion(false);
       }
     },
-    [currentVersion, switchVersion, multiProps.setIsSwitchingVersion]
+    [currentVersion, switchVersion]
   );
 
-  const handleTogglePress = useCallback(() => {
-    multiProps.toggleMultiVersion();
+  const toggleMultiVersion = useCallback(() => {
+    setShowMultiVersion((prev) => !prev);
     resetButtonOpacity();
-  }, [multiProps.toggleMultiVersion, resetButtonOpacity]);
+  }, [resetButtonOpacity]);
 
   const handleToggleLongPress = useCallback(() => {
     setMultiViewLayout((prev) =>
@@ -339,16 +463,33 @@ export default function ReaderScreen({
     resetButtonOpacity();
   }, [resetButtonOpacity]);
 
-  const bookmarkedVerses = useMemo(() => {
+  const primaryBookmarkedVerses = useMemo(() => {
     const chapterBookmarks = bookmarks.filter(
-      (b) => b.book_number === bookId && b.chapter === chapter
+      (b) =>
+        b.book_number === primaryLocation.bookId &&
+        b.chapter === primaryLocation.chapter
     );
     return new Set(chapterBookmarks.map((b) => b.verse));
-  }, [bookmarks, bookId, chapter]);
+  }, [bookmarks, primaryLocation.bookId, primaryLocation.chapter]);
 
-  const highlightedVerses = useMemo(
-    () => getChapterHighlights(bookId, chapter),
-    [bookId, chapter, getChapterHighlights]
+  const secondaryBookmarkedVerses = useMemo(() => {
+    const chapterBookmarks = bookmarks.filter(
+      (b) =>
+        b.book_number === secondaryLocation.bookId &&
+        b.chapter === secondaryLocation.chapter
+    );
+    return new Set(chapterBookmarks.map((b) => b.verse));
+  }, [bookmarks, secondaryLocation.bookId, secondaryLocation.chapter]);
+
+  const primaryHighlightedVerses = useMemo(
+    () => getChapterHighlights(primaryLocation.bookId, primaryLocation.chapter),
+    [primaryLocation.bookId, primaryLocation.chapter, getChapterHighlights]
+  );
+
+  const secondaryHighlightedVerses = useMemo(
+    () =>
+      getChapterHighlights(secondaryLocation.bookId, secondaryLocation.chapter),
+    [secondaryLocation.bookId, secondaryLocation.chapter, getChapterHighlights]
   );
 
   const linkItem: MenuItem = useMemo(
@@ -413,7 +554,7 @@ export default function ReaderScreen({
         key: "multi",
         name: "Toggle Multi-Version",
         icon: effectiveLayout === "horizontal" ? "copy-outline" : "copy",
-        onPress: multiProps.toggleMultiVersion,
+        onPress: toggleMultiVersion,
         color: showMultiVersion ? "#f6f0f0ff" : primaryTextColor,
       },
       ...(showMultiVersion ? [linkItem] : []),
@@ -439,7 +580,7 @@ export default function ReaderScreen({
       effectiveLayout,
       toggleTheme,
       handleColorSchemePress,
-      multiProps.toggleMultiVersion,
+      toggleMultiVersion,
       navigation,
       setShowSettings,
       linkItem,
@@ -475,7 +616,7 @@ export default function ReaderScreen({
 
   const handleVersePress = useCallback(
     (verse: Verse) => {
-      const isHighlighted = highlightedVerses.includes(verse.verse);
+      const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
       Alert.alert(
         `${verse.book_name} ${verse.chapter}:${verse.verse}`,
         "Options:",
@@ -504,7 +645,7 @@ export default function ReaderScreen({
       );
     },
     [
-      highlightedVerses,
+      primaryHighlightedVerses,
       toggleVerseHighlight,
       addBookmark,
       setPrimaryTargetVerse,
@@ -513,7 +654,7 @@ export default function ReaderScreen({
 
   const handlePrimaryVersePress = useCallback(
     (verse: Verse) => {
-      const isHighlighted = highlightedVerses.includes(verse.verse);
+      const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
       Alert.alert(
         `${verse.book_name} ${verse.chapter}:${verse.verse}`,
         "Options:",
@@ -543,12 +684,12 @@ export default function ReaderScreen({
         ]
       );
     },
-    [highlightedVerses, toggleVerseHighlight, addBookmark]
+    [primaryHighlightedVerses, toggleVerseHighlight, addBookmark]
   );
 
   const handleSecondaryVersePress = useCallback(
     (verse: Verse) => {
-      const isHighlighted = highlightedVerses.includes(verse.verse);
+      const isHighlighted = secondaryHighlightedVerses.includes(verse.verse);
       Alert.alert(
         `${verse.book_name} ${verse.chapter}:${verse.verse}`,
         "Options:",
@@ -578,36 +719,62 @@ export default function ReaderScreen({
         ]
       );
     },
-    [highlightedVerses, toggleVerseHighlight, addBookmark]
+    [secondaryHighlightedVerses, toggleVerseHighlight, addBookmark]
   );
 
   const goToPreviousChapter = useCallback(() => {
-    if (chapter > 1) {
+    if (primaryLocation.chapter > 1) {
       resetScrollPosition();
-      navigation.navigate("Reader", {
-        ...route.params,
-        chapter: chapter - 1,
+      const newChapter = primaryLocation.chapter - 1;
+      setPrimaryLocation((prev) => ({
+        ...prev,
+        chapter: newChapter,
         verse: undefined,
-      });
+      }));
+      setPrimaryTargetVerse(undefined);
+      if (showMultiVersion && isLinked) {
+        setSecondaryLocation((prev) => ({
+          ...prev,
+          chapter: newChapter,
+          verse: undefined,
+        }));
+        setSecondaryTargetVerse(undefined);
+      }
     }
-  }, [chapter, navigation, route.params, resetScrollPosition]);
+  }, [primaryLocation, resetScrollPosition, showMultiVersion, isLinked]);
 
   const goToNextChapter = useCallback(() => {
-    if (chapter < maxChapter) {
+    if (primaryLocation.chapter < primaryMaxChapter) {
       resetScrollPosition();
-      navigation.navigate("Reader", {
-        ...route.params,
-        chapter: chapter + 1,
+      const newChapter = primaryLocation.chapter + 1;
+      setPrimaryLocation((prev) => ({
+        ...prev,
+        chapter: newChapter,
         verse: undefined,
-      });
+      }));
+      setPrimaryTargetVerse(undefined);
+      if (showMultiVersion && isLinked) {
+        setSecondaryLocation((prev) => ({
+          ...prev,
+          chapter: newChapter,
+          verse: undefined,
+        }));
+        setSecondaryTargetVerse(undefined);
+      }
     } else {
       Alert.alert("End of Book", "This is the last chapter.");
     }
-  }, [maxChapter, chapter, navigation, route.params, resetScrollPosition]);
+  }, [
+    primaryMaxChapter,
+    primaryLocation,
+    resetScrollPosition,
+    showMultiVersion,
+    isLinked,
+  ]);
 
   const progress = Animated.divide(
     scrollY,
-    Math.max(chapterProps.contentHeight - chapterProps.scrollViewHeight, 1)
+    Math.max(primaryProps.contentHeight - primaryProps.scrollViewHeight, 1)
   );
 
   const primaryHandleScroll = useCallback(
@@ -658,17 +825,18 @@ export default function ReaderScreen({
 
   useEffect(() => {
     if (showMultiVersion && isLinked) {
+      setSecondaryLocation(primaryLocation);
       setSecondaryTargetVerse(primaryTargetVerse);
     } else if (!showMultiVersion) {
       setSecondaryTargetVerse(undefined);
     }
-  }, [showMultiVersion, isLinked, primaryTargetVerse]);
+  }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
 
   useEffect(() => {
-    if (!chapterLoading && primaryScrollViewRef.current) {
+    if (!primaryLoading && primaryScrollViewRef.current) {
       const verseNum = getHighlightVerse(true);
       if (verseNum) {
-        const meas = chapterProps.verseMeasurements[verseNum];
+        const meas = primaryProps.verseMeasurements[verseNum];
         if (meas !== undefined) {
           const y = Math.max(0, meas - 100);
           primaryScrollViewRef.current.scrollTo({ y, animated: false });
@@ -682,11 +850,11 @@ export default function ReaderScreen({
       lastScrollYRef.current = 0;
     }
   }, [
-    chapterLoading,
+    primaryLoading,
     getHighlightVerse,
     primaryScrollViewRef,
     updatePrimaryOffset,
-    chapterProps.verseMeasurements,
+    primaryProps.verseMeasurements,
   ]);
 
   useEffect(() => {
@@ -695,21 +863,23 @@ export default function ReaderScreen({
       !secondaryLoading &&
       secondaryScrollViewRef.current
     ) {
-      const verseNum = getHighlightVerse(false);
-      if (verseNum) {
-        const meas = multiProps.secondaryVerseMeasurements[verseNum];
-        if (meas !== undefined) {
-          const y = Math.max(0, meas - 100);
-          secondaryScrollViewRef.current.scrollTo({ y, animated: false });
-          updateSecondaryOffset(y);
-          return;
+      setTimeout(() => {
+        const verseNum = getHighlightVerse(false);
+        if (verseNum) {
+          const meas = secondaryVerseMeasurements[verseNum];
+          if (meas !== undefined) {
+            const y = Math.max(0, meas - 100);
+            secondaryScrollViewRef.current?.scrollTo({ y, animated: false });
+            updateSecondaryOffset(y);
+          }
+        } else {
+          secondaryScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+          updateSecondaryOffset(0);
         }
-      }
-      secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
-      updateSecondaryOffset(0);
+      }, 0);
     }
   }, [
-    multiProps.secondaryVerseMeasurements,
+    secondaryVerseMeasurements,
     getHighlightVerse,
     secondaryLoading,
     secondaryScrollViewRef,
@@ -719,20 +889,37 @@ export default function ReaderScreen({
 
   const handlePrimaryContentSizeChange = useCallback(
     (width: number, height: number) => {
-      chapterProps.handleContentSizeChange(width, height);
+      primaryProps.handleContentSizeChange(width, height);
     },
-    [chapterProps.handleContentSizeChange]
+    [primaryProps.handleContentSizeChange]
   );
 
   const handleSecondaryContentSizeChange = useCallback(
     (width: number, height: number) => {
-      multiProps.handleSecondaryContentSizeChange(width, height);
+      setSecondaryContentHeight(height);
     },
-    [multiProps.handleSecondaryContentSizeChange]
+    []
+  );
+
+  const handleSecondaryScrollViewLayout = useCallback((event: any) => {
+    setSecondaryScrollViewHeight(event.nativeEvent.layout.height);
+  }, []);
+
+  const handleSecondaryVerseLayout = useCallback(
+    (verseNumber: number, event: LayoutChangeEvent) => {
+      const { y } = event.nativeEvent.layout;
+      if (y >= 0) {
+        setSecondaryVerseMeasurements((prev) => ({
+          ...prev,
+          [verseNumber]: y,
+        }));
+      }
+    },
+    []
   );
 
   useEffect(() => {
-    const loadSettings = async () => {
+    const load = async () => {
       try {
         const [showMultiStr, secVer, linkedStr] = await Promise.all([
           AsyncStorage.getItem("showMultiVersion"),
@@ -740,10 +927,10 @@ export default function ReaderScreen({
           AsyncStorage.getItem("isLinked"),
         ]);
         if (showMultiStr === "true" && !showMultiVersion) {
-          multiProps.toggleMultiVersion();
+          setShowMultiVersion(true);
         }
-        if (secVer && secVer !== multiProps.secondaryVersion) {
-          multiProps.handleSecondaryVersionSelect(secVer);
+        if (secVer && secVer !== secondaryVersion) {
+          setSecondaryVersion(secVer);
         }
         if (linkedStr !== null) {
           setIsLinked(linkedStr === "true");
@@ -752,7 +939,7 @@ export default function ReaderScreen({
         console.error("Failed to load reader settings", e);
       }
     };
-    loadSettings();
+    load();
   }, []);
 
   useEffect(() => {
@@ -763,17 +950,281 @@ export default function ReaderScreen({
   }, [showMultiVersion]);
 
   useEffect(() => {
-    AsyncStorage.setItem(
-      "secondaryVersion",
-      multiProps.secondaryVersion || ""
-    ).catch((e) => console.error("Failed to save secondaryVersion", e));
-  }, [multiProps.secondaryVersion]);
+    if (secondaryVersion) {
+      AsyncStorage.setItem("secondaryVersion", secondaryVersion).catch((e) =>
+        console.error("Failed to save secondaryVersion", e)
+      );
+    }
+  }, [secondaryVersion]);
+
+  useEffect(() => {
+    if (
+      showMultiVersion &&
+      secondaryVersion &&
+      secondaryVersion !== currentVersion
+    ) {
+      const initSecondaryDB = async () => {
+        secondaryDB.current = new BibleDatabase(secondaryVersion);
+        await secondaryDB.current.init();
+      };
+      initSecondaryDB();
+    }
+    return () => {
+      if (secondaryDB.current) {
+        secondaryDB.current.close().catch(console.error);
+        secondaryDB.current = null;
+      }
+    };
+  }, [showMultiVersion, secondaryVersion, currentVersion]);
+
+  const loadSecondaryVerses = useCallback(async () => {
+    if (!showMultiVersion || !secondaryVersion) {
+      setSecondaryVerses([]);
+      return;
+    }
+    setSecondaryLoading(true);
+    setSecondaryVerseMeasurements({});
+    try {
+      let db =
+        secondaryVersion === currentVersion ? bibleDB : secondaryDB.current;
+      if (!db) {
+        setSecondaryVerses([]);
+        return;
+      }
+      const verses = await db.getVerses(
+        secondaryLocation.bookId,
+        secondaryLocation.chapter
+      );
+      setSecondaryVerses(verses);
+    } catch (error) {
+      console.error("Failed to load secondary verses:", error);
+      setSecondaryVerses([]);
+    } finally {
+      setSecondaryLoading(false);
+    }
+  }, [
+    showMultiVersion,
+    secondaryVersion,
+    currentVersion,
+    secondaryLocation.bookId,
+    secondaryLocation.chapter,
+    bibleDB,
+    secondaryDB,
+  ]);
+
+  useEffect(() => {
+    loadSecondaryVerses();
+  }, [loadSecondaryVerses]);
+
+  const handleBookSelect = useCallback(
+    (book: Book, resetChapter = true) => {
+      setSelectedBook(book);
+      if (resetChapter) {
+        setSelectedChapter(1);
+        setSelectedVerse(null);
+        setHasTappedChapter(false);
+      }
+      setIsLoadingChapters(true);
+
+      // Use the current navigationTarget directly from state
+      const currentTarget = navigationTarget;
+      const load = async () => {
+        let db: BibleDatabase | null = null;
+        if (currentTarget === "primary") {
+          db = bibleDB;
+        } else if (secondaryDB.current) {
+          db = secondaryDB.current;
+        }
+        if (db) {
+          try {
+            const chapterCount = await db.getChapterCount(book.book_number);
+            const chapterInfos: ChapterInfo[] = [];
+            for (let ch = 1; ch <= chapterCount; ch++) {
+              const verseCount = await db.getVerseCount(book.book_number, ch);
+              chapterInfos.push({ chapter: ch, verseCount });
+            }
+            setChapters(chapterInfos);
+          } finally {
+            setIsLoadingChapters(false);
+          }
+        } else {
+          setIsLoadingChapters(false);
+        }
+      };
+      load();
+    },
+    [bibleDB, secondaryDB, navigationTarget] // Keep navigationTarget in dependencies
+  );
+
+  const handleChapterSelect = useCallback(
+    (chapter: number) => {
+      setSelectedChapter(chapter);
+      setHasTappedChapter(true);
+      setSelectedVerse(null);
+
+      // Use the current navigationTarget directly from state
+      const currentTarget = navigationTarget;
+      const load = async () => {
+        if (!selectedBook) return;
+        let db: BibleDatabase | null = null;
+        if (currentTarget === "primary") {
+          db = bibleDB;
+        } else if (secondaryDB.current) {
+          db = secondaryDB.current;
+        }
+        if (db) {
+          try {
+            const verseCount = await db.getVerseCount(
+              selectedBook.book_number,
+              chapter
+            );
+            setVersesList(Array.from({ length: verseCount }, (_, i) => i + 1));
+          } catch (error) {
+            console.error("Failed to load verses list:", error);
+          }
+        }
+      };
+      load();
+    },
+    [selectedBook, bibleDB, secondaryDB, navigationTarget] // Keep navigationTarget in dependencies
+  );
+
+  const handleVerseSelect = useCallback((verse: number) => {
+    setSelectedVerse(verse);
+  }, []);
+
+  const handleNavigateToLocation = useCallback(() => {
+    if (!selectedBook) return;
+    const bookInfo = getBookInfo(selectedBook.book_number);
+    const newLocation: Location = {
+      bookId: selectedBook.book_number,
+      bookName: bookInfo?.long || selectedBook.long_name || "Unknown Book",
+      bookColor: bookInfo?.color || selectedBook.book_color || "#DC2626",
+      chapter: selectedChapter,
+      verse: selectedVerse || undefined,
+    };
+    if (navigationTarget === "primary") {
+      setPrimaryLocation(newLocation);
+      setPrimaryTargetVerse(newLocation.verse);
+    } else {
+      setSecondaryLocation(newLocation);
+      setSecondaryTargetVerse(newLocation.verse);
+    }
+    setShowNavigationModal(false);
+  }, [selectedBook, selectedChapter, selectedVerse, navigationTarget]);
+
+  useEffect(() => {
+    if (showNavigationModal) {
+      const loc =
+        navigationTarget === "primary" ? primaryLocation : secondaryLocation;
+      const book = books.find((b) => b.book_number === loc.bookId) || null;
+
+      // Set all state first
+      setSelectedBook(book);
+      setSelectedChapter(loc.chapter);
+      setSelectedVerse(loc.verse || null);
+      setHasTappedChapter(true);
+
+      // Then use the values directly in the callbacks
+      if (book) {
+        // Create a new handleBookSelect call with the current values
+        const loadForBook = async () => {
+          let db: BibleDatabase | null = null;
+          if (navigationTarget === "primary") {
+            db = bibleDB;
+          } else if (secondaryDB.current) {
+            db = secondaryDB.current;
+          }
+          if (db) {
+            try {
+              const chapterCount = await db.getChapterCount(book.book_number);
+              const chapterInfos: ChapterInfo[] = [];
+              for (let ch = 1; ch <= chapterCount; ch++) {
+                const verseCount = await db.getVerseCount(book.book_number, ch);
+                chapterInfos.push({ chapter: ch, verseCount });
+              }
+              setChapters(chapterInfos);
+            } finally {
+              setIsLoadingChapters(false);
+            }
+          } else {
+            setIsLoadingChapters(false);
+          }
+        };
+
+        const loadForChapter = async () => {
+          if (!book) return;
+          let db: BibleDatabase | null = null;
+          if (navigationTarget === "primary") {
+            db = bibleDB;
+          } else if (secondaryDB.current) {
+            db = secondaryDB.current;
+          }
+          if (db) {
+            try {
+              const verseCount = await db.getVerseCount(
+                book.book_number,
+                loc.chapter
+              );
+              setVersesList(
+                Array.from({ length: verseCount }, (_, i) => i + 1)
+              );
+            } catch (error) {
+              console.error("Failed to load verses list:", error);
+            }
+          }
+        };
+
+        setIsLoadingChapters(true);
+        loadForBook();
+        loadForChapter();
+      }
+    }
+  }, [
+    showNavigationModal,
+    navigationTarget,
+    books,
+    primaryLocation,
+    secondaryLocation,
+    bibleDB,
+    secondaryDB,
+  ]);
+
+  // Reset modal states when closing to prevent stale data
+  useEffect(() => {
+    if (!showNavigationModal) {
+      setSelectedBook(null);
+      setSelectedChapter(1);
+      setSelectedVerse(null);
+      setHasTappedChapter(false);
+      setChapters([]);
+      setVersesList([]);
+      setIsLoadingChapters(false);
+    }
+  }, [showNavigationModal]);
+
+  const primaryBookInfo = useMemo(
+    () => getBookInfo(primaryLocation.bookId),
+    [primaryLocation.bookId]
+  );
+  const primaryDisplayBookName =
+    primaryBookInfo?.long || primaryLocation.bookName;
+  const secondaryBookInfo = useMemo(
+    () => getBookInfo(secondaryLocation.bookId),
+    [secondaryLocation.bookId]
+  );
+  const secondaryDisplayBookName =
+    secondaryBookInfo?.long || secondaryLocation.bookName;
+
+  const versionName = getVersionDisplayName(currentVersion);
+
+  const handleSecondaryVersionSelect = useCallback((version: string) => {
+    setSecondaryVersion(version);
+  }, []);
 
   const renderMultiVersionContent = () => {
     const primaryDisplay = getVersionDisplayName(currentVersion);
-    const secondaryDisplay = getVersionDisplayName(
-      multiProps.secondaryVersion || ""
-    );
+    const secondaryDisplay = getVersionDisplayName(secondaryVersion || "");
     const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
 
     const primaryOnVersePress =
@@ -786,7 +1237,7 @@ export default function ReaderScreen({
         : handleVersePress;
 
     const renderPrimaryContent = () => {
-      if (chapterLoading) {
+      if (primaryLoading) {
         return (
           <View
             style={{
@@ -801,7 +1252,7 @@ export default function ReaderScreen({
         );
       }
 
-      if (verses.length === 0) {
+      if (primaryVerses.length === 0) {
         return (
           <View
             style={{
@@ -839,25 +1290,25 @@ export default function ReaderScreen({
           onScroll={primaryHandleScroll}
           scrollEventThrottle={16}
           onContentSizeChange={handlePrimaryContentSizeChange}
-          onLayout={chapterProps.handleScrollViewLayout}
+          onLayout={primaryProps.handleScrollViewLayout}
         >
           <View
-            ref={chapterProps.chapterContainerRef}
-            onLayout={chapterProps.handleChapterContainerLayout}
+            ref={primaryProps.chapterContainerRef}
+            onLayout={primaryProps.handleChapterContainerLayout}
             style={{}}
           >
             <ChapterViewEnhanced
-              verses={verses}
-              bookName={bookName}
-              chapterNumber={chapter}
-              bookId={bookId}
+              verses={primaryVerses}
+              bookName={primaryLocation.bookName}
+              chapterNumber={primaryLocation.chapter}
+              bookId={primaryLocation.bookId}
               showVerseNumbers
               fontSize={fontSize}
               onVersePress={primaryOnVersePress}
-              onVerseLayout={chapterProps.handleVerseLayout}
+              onVerseLayout={primaryProps.handleVerseLayout}
               highlightVerse={getHighlightVerse(true)}
-              highlightedVerses={new Set(highlightedVerses)}
-              bookmarkedVerses={bookmarkedVerses}
+              highlightedVerses={new Set(primaryHighlightedVerses)}
+              bookmarkedVerses={primaryBookmarkedVerses}
               isFullScreen={isFullScreen}
               displayVersion={primaryDisplay}
               colors={colors}
@@ -901,7 +1352,7 @@ export default function ReaderScreen({
               }}
             >
               <TouchableOpacity
-                onPress={openNavigationSelector}
+                onPress={openPrimaryNavigation}
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
@@ -917,7 +1368,7 @@ export default function ReaderScreen({
                   }}
                   numberOfLines={1}
                 >
-                  {`${displayBookName} ${chapter}`}
+                  {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -965,7 +1416,7 @@ export default function ReaderScreen({
               }}
             >
               <TouchableOpacity
-                onPress={openNavigationSelector}
+                onPress={openSecondaryNavigation}
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
@@ -981,7 +1432,7 @@ export default function ReaderScreen({
                   }}
                   numberOfLines={1}
                 >
-                  {`${displayBookName} ${chapter}`}
+                  {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1052,20 +1503,20 @@ export default function ReaderScreen({
                 onScroll={secondaryHandleScrollCb}
                 scrollEventThrottle={16}
                 onContentSizeChange={handleSecondaryContentSizeChange}
-                onLayout={multiProps.handleSecondaryScroll}
+                onLayout={handleSecondaryScrollViewLayout}
               >
                 <ChapterViewEnhanced
                   verses={secondaryVerses}
-                  bookName={bookName}
-                  chapterNumber={chapter}
-                  bookId={bookId}
+                  bookName={secondaryLocation.bookName}
+                  chapterNumber={secondaryLocation.chapter}
+                  bookId={secondaryLocation.bookId}
                   showVerseNumbers
                   fontSize={fontSize}
                   onVersePress={secondaryOnVersePress}
-                  onVerseLayout={multiProps.handleSecondaryVerseLayout}
+                  onVerseLayout={handleSecondaryVerseLayout}
                   highlightVerse={getHighlightVerse(false)}
-                  highlightedVerses={new Set(highlightedVerses)}
-                  bookmarkedVerses={bookmarkedVerses}
+                  highlightedVerses={new Set(secondaryHighlightedVerses)}
+                  bookmarkedVerses={secondaryBookmarkedVerses}
                   isFullScreen={isFullScreen}
                   displayVersion={secondaryDisplay}
                   colors={colors}
@@ -1101,7 +1552,7 @@ export default function ReaderScreen({
                 }}
               >
                 <TouchableOpacity
-                  onPress={openNavigationSelector}
+                  onPress={openPrimaryNavigation}
                   style={{
                     paddingHorizontal: 5,
                     paddingVertical: 4,
@@ -1117,7 +1568,7 @@ export default function ReaderScreen({
                     }}
                     numberOfLines={1}
                   >
-                    {`${displayBookName} ${chapter}`}
+                    {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1172,7 +1623,7 @@ export default function ReaderScreen({
               }}
             >
               <TouchableOpacity
-                onPress={openNavigationSelector}
+                onPress={openSecondaryNavigation}
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
@@ -1188,7 +1639,7 @@ export default function ReaderScreen({
                   }}
                   numberOfLines={1}
                 >
-                  {`${displayBookName} ${chapter}`}
+                  {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -1259,20 +1710,20 @@ export default function ReaderScreen({
                 onScroll={secondaryHandleScrollCb}
                 scrollEventThrottle={16}
                 onContentSizeChange={handleSecondaryContentSizeChange}
-                onLayout={multiProps.handleSecondaryScroll}
+                onLayout={handleSecondaryScrollViewLayout}
               >
                 <ChapterViewEnhanced
                   verses={secondaryVerses}
-                  bookName={bookName}
-                  chapterNumber={chapter}
-                  bookId={bookId}
+                  bookName={secondaryLocation.bookName}
+                  chapterNumber={secondaryLocation.chapter}
+                  bookId={secondaryLocation.bookId}
                   showVerseNumbers
                   fontSize={fontSize}
                   onVersePress={secondaryOnVersePress}
-                  onVerseLayout={multiProps.handleSecondaryVerseLayout}
+                  onVerseLayout={handleSecondaryVerseLayout}
                   highlightVerse={getHighlightVerse(false)}
-                  highlightedVerses={new Set(highlightedVerses)}
-                  bookmarkedVerses={bookmarkedVerses}
+                  highlightedVerses={new Set(secondaryHighlightedVerses)}
+                  bookmarkedVerses={secondaryBookmarkedVerses}
                   isFullScreen={isFullScreen}
                   displayVersion={secondaryDisplay}
                   colors={colors}
@@ -1377,7 +1828,7 @@ export default function ReaderScreen({
                 }}
               >
                 <TouchableOpacity
-                  onPress={openNavigationSelector}
+                  onPress={openPrimaryNavigation}
                   style={{
                     paddingHorizontal: 5,
                     paddingVertical: 4,
@@ -1393,7 +1844,7 @@ export default function ReaderScreen({
                     }}
                     numberOfLines={1}
                   >
-                    {`${displayBookName} ${chapter}`}
+                    {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1451,7 +1902,7 @@ export default function ReaderScreen({
                   style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
                   <TouchableOpacity
-                    onPress={handleTogglePress}
+                    onPress={toggleMultiVersion}
                     onLongPress={handleToggleLongPress}
                     style={{ padding: 2 }}
                   >
@@ -1668,7 +2119,7 @@ export default function ReaderScreen({
                       if (openSelector === "primary") {
                         await handleVersionSelect(v);
                       } else {
-                        await multiProps.handleSecondaryVersionSelect(v);
+                        handleSecondaryVersionSelect(v);
                       }
                       closeSelector();
                     }}
@@ -1709,13 +2160,41 @@ export default function ReaderScreen({
         primaryTextColor={primaryTextColor}
         isLandscape={isLandscape}
         showMultiVersion={showMultiVersion}
-        toggleMultiVersion={multiProps.toggleMultiVersion}
+        toggleMultiVersion={toggleMultiVersion}
         currentVersion={currentVersion}
         availableBibleVersions={availableBibleVersions}
         handleVersionSelect={handleVersionSelect}
-        handleSecondaryVersionSelect={multiProps.handleSecondaryVersionSelect}
-        secondaryVersion={multiProps.secondaryVersion}
-        isSwitchingVersion={multiProps.isSwitchingVersion}
+        handleSecondaryVersionSelect={handleSecondaryVersionSelect}
+        secondaryVersion={secondaryVersion}
+        isSwitchingVersion={isSwitchingVersion}
+      />
+
+      <NavigationModal
+        visible={showNavigationModal}
+        onClose={() => setShowNavigationModal(false)}
+        colors={colors}
+        primaryTextColor={primaryTextColor}
+        navigationTarget={navigationTarget}
+        currentVersion={currentVersion}
+        onLocationSelect={(location) => {
+          const bookInfo = getBookInfo(location.book.book_number);
+          const newLocation: Location = {
+            bookId: location.book.book_number,
+            bookName:
+              bookInfo?.long || location.book.long_name || "Unknown Book",
+            bookColor: bookInfo?.color || location.book.book_color || "#DC2626",
+            chapter: location.chapter,
+            verse: location.verse,
+          };
+
+          if (navigationTarget === "primary") {
+            setPrimaryLocation(newLocation);
+            setPrimaryTargetVerse(newLocation.verse);
+          } else {
+            setSecondaryLocation(newLocation);
+            setSecondaryTargetVerse(newLocation.verse);
+          }
+        }}
       />
 
       <View
@@ -1749,7 +2228,7 @@ export default function ReaderScreen({
         >
           <TouchableOpacity
             onPress={goToPreviousChapter}
-            disabled={chapter <= 1}
+            disabled={primaryLocation.chapter <= 1}
             style={{
               width: buttonSize,
               height: buttonSize,
@@ -1758,7 +2237,7 @@ export default function ReaderScreen({
               justifyContent: "center",
               alignItems: "center",
               marginLeft: 28,
-              opacity: chapter <= 1 ? 0.3 : 1,
+              opacity: primaryLocation.chapter <= 1 ? 0.3 : 1,
             }}
           >
             <Ionicons name="chevron-back" size={iconSize} color="white" />

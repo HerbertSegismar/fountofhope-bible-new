@@ -34,7 +34,7 @@ export const useChapterLoader = (
   const scrollAttemptsRef = useRef(0);
   const maxScrollAttempts = 5;
   const defaultVerseHeight = 80;
-  const blankLineHeight = 23;
+  const blankLineHeight = 22;
 
   const loadChapter = useCallback(async () => {
     if (!bibleDB || !isMounted.current) return;
@@ -152,15 +152,6 @@ export const useChapterLoader = (
     }
 
     const scrollPosition = Math.max(0, cumulative - SCREEN_HEIGHT / 2);
-
-    console.log("Scrolling to verse:", {
-      targetVerse,
-      verseIndex,
-      cumulative,
-      scrollPosition,
-      screenHeight: SCREEN_HEIGHT,
-      blankLinesIncluded: verseIndex > 0 ? verseIndex - 1 : 0,
-    });
 
     scrollViewRef.current.scrollTo({ y: scrollPosition, animated: true });
     setHasScrolledToVerse(true);
