@@ -367,7 +367,7 @@ const renderCommentaryWithVerseLinks = (
   const bookPattern = escapedKeys.join("|");
   const DASH_PATTERN = "[-–—]";
 
-  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\s*)\s*\\d+)?`;
+  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\s*\\d+)?`;
   const VERSE_LIST = `(${VERSE_RANGE}(?:\\s*,\\s*${VERSE_RANGE})*)`;
 
   const fullRefRegex = new RegExp(
@@ -375,9 +375,9 @@ const renderCommentaryWithVerseLinks = (
     "gi"
   );
 
-  const continuationRegex = new RegExp(/[,;]\s*(${VERSE_LIST})\b/gi);
+  const continuationRegex = new RegExp(/[,;]\\s*(${VERSE_LIST})\\b/gi);
 
-  const chapterOnlyRegex = /(?:ch\.|chapter)\.\s+(\d+)\b/gi;
+  const chapterOnlyRegex = /(?:ch\\.|chapter)\\.\\s+(\\d+)\\b/gi;
 
   const verseOnlyRegex = new RegExp(
     `(?:v\\.|vv?\\.?|verse)s?\\s+${VERSE_LIST}\\b`,
@@ -490,7 +490,7 @@ const renderCommentaryWithVerseLinks = (
       if (currentBook !== undefined && currentChapter !== undefined) {
         const verseListStr = selectedMatch[1] as string;
         const ranges = parseVerseList(verseListStr);
-        const prefixMatch = fullMatchStr.match(/^[,;]\s*/);
+        const prefixMatch = fullMatchStr.match(/^[,;]\\s*/);
         const prefix = prefixMatch ? prefixMatch[0] : "";
         const rangeText = fullMatchStr.slice(prefix.length);
 
@@ -1395,7 +1395,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 <Text style={bookmarkStyle}>🔖</Text>
               )}
               {isHighlighted && <Text style={starStyle}>★</Text>}
-              {showVerseNumbers || bookmarkedVerses.has(verse.verse) || isHighlighted ? " " : ""}
+              {showVerseNumbers ||
+              bookmarkedVerses.has(verse.verse) ||
+              isHighlighted
+                ? " "
+                : ""}
               {renderedText}
             </Text>
           </View>
@@ -1627,8 +1631,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             }}
                           >
                             {verse.verse}
-                          </Text>
-                          {" "}
+                          </Text>{" "}
                           {renderVerseTextWithXmlHighlight(
                             verse.text,
                             16,

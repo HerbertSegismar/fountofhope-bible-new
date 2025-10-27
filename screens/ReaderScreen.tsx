@@ -859,11 +859,19 @@ export default function ReaderScreen({
     primaryProps.verseMeasurements,
   ]);
 
+  const [secondaryMeasuredVerses, setSecondaryMeasuredVerses] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    secondaryVerseMeasurementsRef.current = {};
+    setSecondaryMeasuredVerses(new Set());
+  }, [secondaryVerses]);
+
   useEffect(() => {
     if (
       showMultiVersion &&
       !secondaryLoading &&
-      secondaryScrollViewRef.current
+      secondaryScrollViewRef.current &&
+      secondaryMeasuredVerses.size >= secondaryVerses.length
     ) {
       const verseNum = getHighlightVerse(false);
       if (verseNum) {
@@ -879,11 +887,13 @@ export default function ReaderScreen({
       }
     }
   }, [
-    getHighlightVerse,
+    showMultiVersion,
     secondaryLoading,
     secondaryScrollViewRef,
     updateSecondaryOffset,
-    showMultiVersion,
+    secondaryMeasuredVerses.size,
+    secondaryVerses.length,
+    getHighlightVerse,
   ]);
 
   const handlePrimaryContentSizeChange = useCallback(
@@ -909,6 +919,11 @@ export default function ReaderScreen({
       const { y } = event.nativeEvent.layout;
       if (y >= 0) {
         secondaryVerseMeasurementsRef.current[verseNumber] = y;
+        setSecondaryMeasuredVerses((prev) => {
+          const newSet = new Set(prev);
+          newSet.add(verseNumber);
+          return newSet;
+        });
       }
     },
     []
