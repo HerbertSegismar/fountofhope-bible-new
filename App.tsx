@@ -35,7 +35,7 @@ import { BookmarksProvider } from "./context/BookmarksContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
-import Oswald_Variable from "./assets/Oswald_VariableFont_wght.ttf";
+import Oswald_VariableFont from "./assets/Oswald_VariableFont.ttf";
 import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 import { getBookInfo } from "./utils/testamentUtils";
@@ -52,7 +52,6 @@ export type RootStackParamList = {
   Settings: undefined;
 };
 
-// Improved font loading hook with proper TypeScript error handling
 function useFonts() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [fontError, setFontError] = useState<string | null>(null);
@@ -64,18 +63,14 @@ function useFonts() {
       try {
         console.log("Starting font loading...");
 
-        // Method 1: Try loading with Expo Font
         await Font.loadAsync({
-          "Oswald-Variable": Oswald_Variable,
+          "Oswald-Variable": Oswald_VariableFont,
           "RubikGlitch-Regular": RubikGlitch_Regular,
         });
 
-        // Method 2: Wait a bit and check if fonts are really loaded
         await new Promise((resolve) => setTimeout(resolve, 100));
 
-        // Method 3: Verify fonts are available
         if (mounted) {
-          // Check if fonts are actually available
           const fontFamilies = await Font.getLoadedFonts();
           console.log("Loaded fonts:", fontFamilies);
 
@@ -85,26 +80,24 @@ function useFonts() {
       } catch (error) {
         console.warn("Error loading fonts:", error);
         if (mounted) {
-          // Proper TypeScript error handling
           const errorMessage =
             error instanceof Error
               ? error.message
               : "Unknown font loading error";
           setFontError(errorMessage);
-          setFontsLoaded(true); // Continue app anyway
+          setFontsLoaded(true);
         }
       }
     }
 
     loadFonts();
 
-    // Fallback: If fonts don't load in 3 seconds, continue anyway
     const timeoutId = setTimeout(() => {
       if (mounted && !fontsLoaded) {
         console.warn("Font loading timeout - continuing without custom fonts");
         setFontsLoaded(true);
       }
-    }, 3000);
+    }, 5000);
 
     return () => {
       mounted = false;
@@ -115,7 +108,6 @@ function useFonts() {
   return fontsLoaded;
 }
 
-// Simple loading component
 function LoadingScreen() {
   return (
     <View className="flex-1 justify-center items-center bg-gray-50">
@@ -125,13 +117,11 @@ function LoadingScreen() {
   );
 }
 
-// Hook to determine if device is in Portrait mode
 function usePortraitMode() {
   const { width, height } = useWindowDimensions();
   return height > width;
 }
 
-// Define proper type for Ionicons names
 type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
 
 interface MenuItem {
@@ -235,7 +225,6 @@ function HeaderActions({ navigation }: { navigation: any }) {
   const borderColor = "rgba(255,255,255,0.3)";
   const iconColor = "#fff";
 
-  // In landscape mode, show all icons except close
   if (!isPortrait) {
     return (
       <View>
@@ -257,13 +246,11 @@ function HeaderActions({ navigation }: { navigation: any }) {
             </TouchableOpacity>
           ))}
         </View>
-        {/* Color Wheel Picker */}
         <ColorWheelPicker />
       </View>
     );
   }
 
-  // In portrait mode, show dropdown menu
   return (
     <View>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
@@ -357,13 +344,11 @@ function HeaderActions({ navigation }: { navigation: any }) {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Color Wheel Picker */}
       <ColorWheelPicker />
     </View>
   );
 }
 
-// Root Stack Navigator
 const RootStack = createStackNavigator<RootStackParamList>();
 
 function AppStack() {
@@ -435,7 +420,6 @@ function AppStack() {
   );
 }
 
-// Custom Status Bar component
 function AutoHideStatusBar() {
   const theme = useNavigationTheme();
 
@@ -449,7 +433,6 @@ function AutoHideStatusBar() {
   );
 }
 
-// App with Theme
 function AppWithTheme() {
   const { navTheme } = useTheme();
 
@@ -463,7 +446,6 @@ function AppWithTheme() {
   );
 }
 
-// Main App Component
 export default function App() {
   const fontsLoaded = useFonts();
 

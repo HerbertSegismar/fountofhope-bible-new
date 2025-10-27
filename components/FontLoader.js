@@ -12,7 +12,7 @@ export default function FontLoader({ children }) {
     async function prepare() {
       try {
         await Font.loadAsync({
-          "Oswald-Variable": Oswald_Variable,
+          "Oswald-Variable": Oswald_VariableFont,
           "RubikGlitch-Regular": RubikGlitch_Regular,
         });
 

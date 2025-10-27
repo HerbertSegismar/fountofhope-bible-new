@@ -34,7 +34,7 @@ export const useChapterLoader = (
   const scrollAttemptsRef = useRef(0);
   const maxScrollAttempts = 5;
   const defaultVerseHeight = 80;
-  const blankLineHeight = 22;
+  const blankLineHeight = 24;
 
   const loadChapter = useCallback(async () => {
     if (!bibleDB || !isMounted.current) return;

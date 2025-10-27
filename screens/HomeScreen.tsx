@@ -343,6 +343,18 @@ export default function HomeScreen({ navigation }: Props) {
       showsVerticalScrollIndicator={false}
     >
       <SafeAreaView style={{ alignItems: "center", marginBottom: 24 }}>
+        <Text
+          style={{
+            fontSize: 25,
+            color: themeColors.primary,
+            textAlign: "center",
+            padding: 8,
+            width: "100%",
+            fontFamily: Fonts.RubikGlitchRegular || actualFontFamily,
+          }}
+        >
+          Fount of Hope
+        </Text>
         <Image
           source={require("../assets/fohs-512x512.png")}
           style={{ width: 160, height: 160, marginBottom: 16, borderRadius: 8 }}
@@ -441,10 +453,10 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </SafeAreaView>
 
-      <SafeAreaView
+      <View
         style={{
-          padding: 16,
-          marginBottom: 24,
+          padding: 10,
+          margin: 20,
         }}
       >
         <Text
@@ -458,7 +470,7 @@ export default function HomeScreen({ navigation }: Props) {
         >
           📖 Start your day with God's Word
         </Text>
-      </SafeAreaView>
+      </View>
 
       <SafeAreaView
         style={{
@@ -492,7 +504,7 @@ export default function HomeScreen({ navigation }: Props) {
               style={{
                 color: themeColors.textMuted,
                 textAlign: "center",
-                fontSize: 14,
+                fontSize: 16,
                 fontFamily: actualFontFamily,
               }}
             >

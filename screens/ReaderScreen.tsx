@@ -113,7 +113,6 @@ export default function ReaderScreen({
   const [dimensions, setDimensions] = useState(initialDimensions);
   const screenWidth = dimensions.width;
   const themeColors = useThemeColors();
-  const theme = themeColors.theme;
   const {
     colors,
     versionSelectorColors,
@@ -143,13 +142,28 @@ export default function ReaderScreen({
     ...primaryProps
   } = primaryLoader;
   const [showMultiVersion, setShowMultiVersion] = useState(false);
-  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
+  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(
+    () => {
+      const defaultPrimary = "KJ2";
+      const availableVersions = [
+        "KJ2",
+        "NIV11",
+        "ESV",
+        "NASB",
+        "NLT",
+        "ESVGSB",
+        "Logos",
+      ];
+      return (
+        availableVersions.find((version) => version !== defaultPrimary) ||
+        availableVersions[0]
+      );
+    }
+  );
   const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(false);
   const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
-  const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<{
-    [key: number]: number;
-  }>({});
+  const secondaryVerseMeasurementsRef = useRef<{ [key: number]: number }>({});
   const [secondaryScrollViewHeight, setSecondaryScrollViewHeight] = useState(0);
   const secondaryScrollViewRef = useRef<ScrollView>(null);
   const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
@@ -181,9 +195,6 @@ export default function ReaderScreen({
   const [versesList, setVersesList] = useState<number[]>([]);
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
   const [isLoadingChapters, setIsLoadingChapters] = useState(false);
-  const modalScrollViewRef = useRef(null);
-  const chaptersSectionRef = useRef(null);
-  const versesSectionRef = useRef(null);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -197,15 +208,6 @@ export default function ReaderScreen({
     null
   );
 
-  const resetModalSelection = useCallback(() => {
-    setSelectedBook(null);
-    setSelectedChapter(1);
-    setSelectedVerse(null);
-    setHasTappedChapter(false);
-    setChapters([]);
-    setVersesList([]);
-  }, []);
-
   const isFullScreen = uiMode === 1;
   const hideHeader = uiMode === 1;
   const scrollSync = useScrollSync(
@@ -216,7 +218,7 @@ export default function ReaderScreen({
     primaryVerses,
     primaryProps.verseMeasurements,
     secondaryVerses,
-    secondaryVerseMeasurements,
+    secondaryVerseMeasurementsRef.current, // Pass .current here
     isLandscape,
     isFullScreen,
     () => {},
@@ -863,23 +865,20 @@ export default function ReaderScreen({
       !secondaryLoading &&
       secondaryScrollViewRef.current
     ) {
-      setTimeout(() => {
-        const verseNum = getHighlightVerse(false);
-        if (verseNum) {
-          const meas = secondaryVerseMeasurements[verseNum];
-          if (meas !== undefined) {
-            const y = Math.max(0, meas - 100);
-            secondaryScrollViewRef.current?.scrollTo({ y, animated: false });
-            updateSecondaryOffset(y);
-          }
-        } else {
-          secondaryScrollViewRef.current?.scrollTo({ y: 0, animated: false });
-          updateSecondaryOffset(0);
+      const verseNum = getHighlightVerse(false);
+      if (verseNum) {
+        const meas = secondaryVerseMeasurementsRef.current[verseNum];
+        if (meas !== undefined) {
+          const y = Math.max(0, meas - 100);
+          secondaryScrollViewRef.current?.scrollTo({ y, animated: false });
+          updateSecondaryOffset(y);
         }
-      }, 0);
+      } else {
+        secondaryScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        updateSecondaryOffset(0);
+      }
     }
   }, [
-    secondaryVerseMeasurements,
     getHighlightVerse,
     secondaryLoading,
     secondaryScrollViewRef,
@@ -909,10 +908,7 @@ export default function ReaderScreen({
     (verseNumber: number, event: LayoutChangeEvent) => {
       const { y } = event.nativeEvent.layout;
       if (y >= 0) {
-        setSecondaryVerseMeasurements((prev) => ({
-          ...prev,
-          [verseNumber]: y,
-        }));
+        secondaryVerseMeasurementsRef.current[verseNumber] = y;
       }
     },
     []
@@ -983,7 +979,7 @@ export default function ReaderScreen({
       return;
     }
     setSecondaryLoading(true);
-    setSecondaryVerseMeasurements({});
+    secondaryVerseMeasurementsRef.current = {}; // Reset measurements
     try {
       let db =
         secondaryVersion === currentVersion ? bibleDB : secondaryDB.current;
@@ -1026,7 +1022,6 @@ export default function ReaderScreen({
       }
       setIsLoadingChapters(true);
 
-      // Use the current navigationTarget directly from state
       const currentTarget = navigationTarget;
       const load = async () => {
         let db: BibleDatabase | null = null;
@@ -1053,7 +1048,7 @@ export default function ReaderScreen({
       };
       load();
     },
-    [bibleDB, secondaryDB, navigationTarget] // Keep navigationTarget in dependencies
+    [bibleDB, secondaryDB, navigationTarget]
   );
 
   const handleChapterSelect = useCallback(
@@ -1062,7 +1057,6 @@ export default function ReaderScreen({
       setHasTappedChapter(true);
       setSelectedVerse(null);
 
-      // Use the current navigationTarget directly from state
       const currentTarget = navigationTarget;
       const load = async () => {
         if (!selectedBook) return;
@@ -1086,7 +1080,7 @@ export default function ReaderScreen({
       };
       load();
     },
-    [selectedBook, bibleDB, secondaryDB, navigationTarget] // Keep navigationTarget in dependencies
+    [selectedBook, bibleDB, secondaryDB, navigationTarget]
   );
 
   const handleVerseSelect = useCallback((verse: number) => {
@@ -1119,15 +1113,12 @@ export default function ReaderScreen({
         navigationTarget === "primary" ? primaryLocation : secondaryLocation;
       const book = books.find((b) => b.book_number === loc.bookId) || null;
 
-      // Set all state first
       setSelectedBook(book);
       setSelectedChapter(loc.chapter);
       setSelectedVerse(loc.verse || null);
       setHasTappedChapter(true);
 
-      // Then use the values directly in the callbacks
       if (book) {
-        // Create a new handleBookSelect call with the current values
         const loadForBook = async () => {
           let db: BibleDatabase | null = null;
           if (navigationTarget === "primary") {
@@ -1190,7 +1181,6 @@ export default function ReaderScreen({
     secondaryDB,
   ]);
 
-  // Reset modal states when closing to prevent stale data
   useEffect(() => {
     if (!showNavigationModal) {
       setSelectedBook(null);
