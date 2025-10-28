@@ -503,7 +503,7 @@ const ColorWheelPicker = () => {
                         style={[dynamicStyles.button, dynamicStyles.saveButton]}
                         onPress={handleSave}
                       >
-                        <Text style={dynamicStyles.saveButtonText}>Save</Text>
+                        <Text style={{color: "white"}}>Save</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

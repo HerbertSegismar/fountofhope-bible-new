@@ -497,7 +497,7 @@ export default function ReaderScreen({
   const linkItem: MenuItem = useMemo(
     () => ({
       key: "link",
-      name: isLinked ? "Unsync Views" : "Sync Views",
+      name: isLinked ? "Stop Sync" : "Sync Scroll",
       icon: (isLinked ? "unlink-outline" : "link-outline") as IconName,
       onPress: () => {
         const newLinked = !isLinked;
@@ -1098,30 +1098,6 @@ export default function ReaderScreen({
     [selectedBook, bibleDB, secondaryDB, navigationTarget]
   );
 
-  const handleVerseSelect = useCallback((verse: number) => {
-    setSelectedVerse(verse);
-  }, []);
-
-  const handleNavigateToLocation = useCallback(() => {
-    if (!selectedBook) return;
-    const bookInfo = getBookInfo(selectedBook.book_number);
-    const newLocation: Location = {
-      bookId: selectedBook.book_number,
-      bookName: bookInfo?.long || selectedBook.long_name || "Unknown Book",
-      bookColor: bookInfo?.color || selectedBook.book_color || "#DC2626",
-      chapter: selectedChapter,
-      verse: selectedVerse || undefined,
-    };
-    if (navigationTarget === "primary") {
-      setPrimaryLocation(newLocation);
-      setPrimaryTargetVerse(newLocation.verse);
-    } else {
-      setSecondaryLocation(newLocation);
-      setSecondaryTargetVerse(newLocation.verse);
-    }
-    setShowNavigationModal(false);
-  }, [selectedBook, selectedChapter, selectedVerse, navigationTarget]);
-
   useEffect(() => {
     if (showNavigationModal) {
       const loc =
@@ -1347,7 +1323,7 @@ export default function ReaderScreen({
                 });
               }}
               style={{
-                backgroundColor: colors.muted + "20",
+                backgroundColor: colors.muted + "40",
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
@@ -1411,7 +1387,7 @@ export default function ReaderScreen({
                 });
               }}
               style={{
-                backgroundColor: colors.muted + "20",
+                backgroundColor: colors.muted + "40",
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,

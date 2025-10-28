@@ -611,12 +611,12 @@ const SettingsScreen = () => {
             <Ionicons
               name="refresh"
               size={20}
-              color={getContrastColor(themeColors.primary, themeColors)}
+              color="white"
             />
             <Text
               className="text-white font-medium mt-2 text-center"
               style={{
-                color: getContrastColor(themeColors.primary, themeColors),
+                color: "white",
                 fontFamily: Fonts.OswaldVariable,
               }}
             >
