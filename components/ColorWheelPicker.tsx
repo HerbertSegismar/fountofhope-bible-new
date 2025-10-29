@@ -361,7 +361,7 @@ const ColorWheelPicker = () => {
           fontWeight: "600",
         },
         saveButtonText: {
-          color: getAccessibleTextColor(themeColors.primary),
+          color: "white",
           fontSize: 16,
           fontWeight: "600",
         },
@@ -503,7 +503,7 @@ const ColorWheelPicker = () => {
                         style={[dynamicStyles.button, dynamicStyles.saveButton]}
                         onPress={handleSave}
                       >
-                        <Text style={{color: "white"}}>Save</Text>
+                        <Text style={dynamicStyles.saveButtonText}>Save</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

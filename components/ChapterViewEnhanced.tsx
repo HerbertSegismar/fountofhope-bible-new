@@ -1661,7 +1661,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 >
                   <Text
                     style={{
-                      color: closeButtonTextColor,
+                      color: "white",
                       fontWeight: "600",
                     }}
                   >
@@ -1956,7 +1956,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 >
                   <Text
                     style={{
-                      color: closeButtonTextColor,
+                      color: "white",
                       fontWeight: "600",
                     }}
                   >
