@@ -142,24 +142,32 @@ export default function ReaderScreen({
     ...primaryProps
   } = primaryLoader;
   const [showMultiVersion, setShowMultiVersion] = useState(false);
-  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(
-    () => {
-      const defaultPrimary = "KJ2";
-      const availableVersions = [
-        "KJ2",
-        "NIV11",
-        "ESV",
-        "NASB",
-        "NLT",
-        "ESVGSB",
-        "Logos",
-      ];
-      return (
-        availableVersions.find((version) => version !== defaultPrimary) ||
-        availableVersions[0]
-      );
+  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
+
+  // Add this useEffect to handle initial setting:
+  useEffect(() => {
+    if (secondaryVersion === null) {
+      const setInitialSecondary = async () => {
+        try {
+          const saved = await AsyncStorage.getItem("secondaryVersion");
+          if (saved) {
+            setSecondaryVersion(saved);
+          } else {
+            // Use full identifiers from context, filter out current
+            const avail = availableBibleVersions.filter(
+              (v) => v !== currentVersion
+            );
+            setSecondaryVersion(avail[0] || availableBibleVersions[0]);
+          }
+        } catch (error) {
+          console.error("Failed to load initial secondary version:", error);
+          // Fallback to first available if error
+          setSecondaryVersion(availableBibleVersions[0]);
+        }
+      };
+      setInitialSecondary();
     }
-  );
+  }, [secondaryVersion, availableBibleVersions, currentVersion]);
   const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(false);
   const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
