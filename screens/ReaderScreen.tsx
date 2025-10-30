@@ -208,7 +208,6 @@ export default function ReaderScreen({
     null
   );
   const isFullScreen = uiMode === 1;
-  const hideHeader = uiMode === 1;
   const scrollSync = useScrollSync(
     showMultiVersion && isLinked,
     primaryProps.scrollViewHeight,
@@ -261,6 +260,7 @@ export default function ReaderScreen({
       }).start();
     }, 5000);
   }, [buttonOpacity]);
+
   const resetPrimaryScroll = useCallback(() => {
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
@@ -350,6 +350,7 @@ export default function ReaderScreen({
     };
     loadBooksData();
   }, [bibleDB]);
+  
   useEffect(() => {
     const loadLayoutPreference = async () => {
       try {
@@ -809,6 +810,7 @@ export default function ReaderScreen({
     Math.max(primaryProps.contentHeight - primaryProps.scrollViewHeight, 1)
   );
 
+
   const primaryHandleScroll = useCallback(
     (event: any) => {
       const y = event.nativeEvent.contentOffset.y;
@@ -1041,43 +1043,6 @@ export default function ReaderScreen({
   useEffect(() => {
     loadSecondaryVerses();
   }, [loadSecondaryVerses]);
-  const handleBookSelect = useCallback(
-    (book: Book, resetChapter = true) => {
-      setSelectedBook(book);
-      if (resetChapter) {
-        setSelectedChapter(1);
-        setSelectedVerse(null);
-        setHasTappedChapter(false);
-      }
-      setIsLoadingChapters(true);
-      const currentTarget = navigationTarget;
-      const load = async () => {
-        let db: BibleDatabase | null = null;
-        if (currentTarget === "primary") {
-          db = bibleDB;
-        } else if (secondaryDB.current) {
-          db = secondaryDB.current;
-        }
-        if (db) {
-          try {
-            const chapterCount = await db.getChapterCount(book.book_number);
-            const chapterInfos: ChapterInfo[] = [];
-            for (let ch = 1; ch <= chapterCount; ch++) {
-              const verseCount = await db.getVerseCount(book.book_number, ch);
-              chapterInfos.push({ chapter: ch, verseCount });
-            }
-            setChapters(chapterInfos);
-          } finally {
-            setIsLoadingChapters(false);
-          }
-        } else {
-          setIsLoadingChapters(false);
-        }
-      };
-      load();
-    },
-    [bibleDB, secondaryDB, navigationTarget]
-  );
  
   useEffect(() => {
     if (showNavigationModal) {
@@ -1478,7 +1443,7 @@ export default function ReaderScreen({
       return (
         <View style={{ flex: 1, flexDirection: "column" }}>
           <View style={{ flex: 1 }}>
-            {hideHeader && (
+            {isFullScreen && (
               <View
                 ref={primaryHeaderRef}
                 onLayout={() => {
@@ -1858,12 +1823,13 @@ export default function ReaderScreen({
     buttonSize,
     iconSize,
   ]);
+  
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
     >
       <StatusBar backgroundColor={colors.primary} />
-      {!hideHeader && (
+      {!isFullScreen && (
         <View
           style={{
             position: "absolute",
@@ -2271,7 +2237,7 @@ export default function ReaderScreen({
       <View
         style={{
           flex: 1,
-          marginTop: hideHeader ? 0 : headerTotalHeight - insets.top + 2,
+          marginTop: isFullScreen ? 0 : headerTotalHeight - insets.top + 2,
         }}
       >
         {renderMultiVersionContent()}

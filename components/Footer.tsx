@@ -78,7 +78,7 @@ export const Footer = () => {
             marginTop: 10,
           }}
         >
-          <SvgXml xml={christIsRisenSvg} width={300} height={160} />
+          <SvgXml xml={christIsRisenSvg} width={300} height={45} />
         </View>
       </View>
 
