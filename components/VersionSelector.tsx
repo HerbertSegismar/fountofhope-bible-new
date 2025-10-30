@@ -37,14 +37,12 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
   onVersionSelect,
   title = "Bible Version",
   description = "Choose your preferred Bible translation",
-  showCurrentVersion = true,
   showActiveIndicator = false,
   disabled = false,
   loading = false,
   colors,
 }) => {
   const { theme, navTheme } = useTheme();
-  const colorClasses = getColorClasses(navTheme.colors.primary);
   const primaryColor = navTheme.colors.primary;
   const textColor = theme === "dark" ? "#e5e7eb" : "#374151";
   const mutedColor = theme === "dark" ? "#9ca3af" : "#6b7280";
