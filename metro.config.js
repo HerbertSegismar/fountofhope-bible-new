@@ -31,6 +31,11 @@ config.resolver.sourceExts = [
   "sass",
 ];
 
+config.transformer = {
+  ...config.transformer,
+  cssInterop: false,
+};
+
 // Only export once with NativeWind
 module.exports = withNativeWind(config, { 
   input: "./global.css",

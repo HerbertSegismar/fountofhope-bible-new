@@ -12,10 +12,10 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
-  ScrollView,
   ActivityIndicator,
   Alert,
   LayoutChangeEvent,
+  ScrollView,
 } from "react-native";
 import {
   SafeAreaView,
@@ -28,7 +28,6 @@ import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BibleDatabase } from "../services/BibleDatabase";
-import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import { SettingsModal } from "../components/SettingsModal";
 import { NavigationModal } from "../components/NavigationModal";
 import { useChapterLoader } from "../hooks/useChapterLoader";
@@ -39,10 +38,13 @@ import { Verse, Book, ChapterInfo } from "../types";
 import { getBookInfo, getTestament } from "../utils/testamentUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
+import { ReaderContent } from "../content/ReaderContent";
+
 const initialDimensions = Dimensions.get("window");
+
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
-
 interface MenuItem {
   key: string;
   name: string;
@@ -58,6 +60,7 @@ interface Location {
   chapter: number;
   verse?: number;
 }
+
 export default function ReaderScreen({
   navigation,
   route,
@@ -137,7 +140,7 @@ export default function ReaderScreen({
   } = primaryLoader;
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
-
+  const [secondaryReady, setSecondaryReady] = useState(false);
   useEffect(() => {
     if (secondaryVersion === null) {
       const setInitialSecondary = async () => {
@@ -146,7 +149,6 @@ export default function ReaderScreen({
           if (saved) {
             setSecondaryVersion(saved);
           } else {
-
             const avail = availableBibleVersions.filter(
               (v) => v !== currentVersion
             );
@@ -180,26 +182,16 @@ export default function ReaderScreen({
   const [navigationTarget, setNavigationTarget] = useState<
     "primary" | "secondary"
   >("primary");
-  const [books, setBooks] = useState<Book[]>([]);
-  const [oldTestament, setOldTestament] = useState<
-    (Book & { testament: string })[]
-  >([]);
-  const [newTestament, setNewTestament] = useState<
-    (Book & { testament: string })[]
-  >([]);
-  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
-  const [selectedChapter, setSelectedChapter] = useState(1);
-  const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
-  const [hasTappedChapter, setHasTappedChapter] = useState(false);
-  const [chapters, setChapters] = useState<ChapterInfo[]>([]);
-  const [versesList, setVersesList] = useState<number[]>([]);
-  const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
-  const [isLoadingChapters, setIsLoadingChapters] = useState(false);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const secondaryScrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const primaryProgressRef = useRef(0);
+  const secondaryProgressRef = useRef(0);
+  const isSecondaryOnTopRef = useRef(false);
+  const [isSecondaryOnTop, setIsSecondaryOnTop] = useState(false);
   const effectiveLayout = useMemo(
     () => (isLandscape ? "horizontal" : multiViewLayout),
     [isLandscape, multiViewLayout]
@@ -234,6 +226,80 @@ export default function ReaderScreen({
     updateSecondaryOffset,
   } = scrollSync;
   const { setShowColorPicker } = useTheme();
+  const { storeChapterMeasurement, getChapterMeasurement } =
+    useChapterMeasurements();
+  const primaryProgress = useMemo(
+    () =>
+      Animated.divide(
+        scrollY,
+        Math.max(primaryProps.contentHeight - primaryProps.scrollViewHeight, 1)
+      ),
+    [scrollY, primaryProps.contentHeight, primaryProps.scrollViewHeight]
+  );
+  const secondaryProgress = useMemo(
+    () =>
+      Animated.divide(
+        secondaryScrollY,
+        Math.max(secondaryContentHeight - secondaryScrollViewHeight, 1)
+      ),
+    [secondaryScrollY, secondaryContentHeight, secondaryScrollViewHeight]
+  );
+  useEffect(() => {
+    if (!showMultiVersion) return;
+
+    primaryProgressRef.current = 0;
+    secondaryProgressRef.current = 0;
+    isSecondaryOnTopRef.current = false;
+    setIsSecondaryOnTop(false);
+
+    const primaryListenerId = primaryProgress.addListener(({ value }) => {
+      primaryProgressRef.current = value;
+      const newOnTop = secondaryProgressRef.current < value;
+      if (newOnTop !== isSecondaryOnTopRef.current) {
+        isSecondaryOnTopRef.current = newOnTop;
+        setIsSecondaryOnTop(newOnTop);
+      }
+    });
+
+    const secondaryListenerId = secondaryProgress.addListener(({ value }) => {
+      secondaryProgressRef.current = value;
+      const newOnTop = value < primaryProgressRef.current;
+      if (newOnTop !== isSecondaryOnTopRef.current) {
+        isSecondaryOnTopRef.current = newOnTop;
+        setIsSecondaryOnTop(newOnTop);
+      }
+    });
+
+    return () => {
+      primaryProgress.removeListener(primaryListenerId);
+      secondaryProgress.removeListener(secondaryListenerId);
+    };
+  }, [primaryProgress, secondaryProgress, showMultiVersion]);
+  useEffect(() => {
+    if (showMultiVersion && secondaryVersion) {
+      if (secondaryVersion === currentVersion) {
+        setSecondaryReady(true);
+      } else {
+        setSecondaryReady(false);
+        const initSecondaryDB = async () => {
+          secondaryDB.current = new BibleDatabase(secondaryVersion);
+          await secondaryDB.current.init();
+          setSecondaryReady(true);
+        };
+        initSecondaryDB();
+      }
+    } else {
+      setSecondaryReady(false);
+    }
+
+    return () => {
+      if (secondaryDB.current) {
+        secondaryDB.current.close().catch(console.error);
+        secondaryDB.current = null;
+      }
+      setSecondaryReady(false);
+    };
+  }, [showMultiVersion, secondaryVersion, currentVersion]);
   const getHighlightVerse = useCallback(
     (isPrimary: boolean): number | undefined => {
       if (isLinked || !showMultiVersion) {
@@ -260,9 +326,9 @@ export default function ReaderScreen({
       }).start();
     }, 5000);
   }, [buttonOpacity]);
-
   const resetPrimaryScroll = useCallback(() => {
     scrollY.setValue(0);
+    primaryProgressRef.current = 0;
     lastScrollYRef.current = 0;
     if (primaryScrollViewRef.current) {
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
@@ -270,12 +336,13 @@ export default function ReaderScreen({
     }
   }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
   const resetSecondaryScroll = useCallback(() => {
+    secondaryScrollY.setValue(0);
+    secondaryProgressRef.current = 0;
     if (secondaryScrollViewRef.current) {
       secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updateSecondaryOffset(0);
     }
-  }, [secondaryScrollViewRef, updateSecondaryOffset]);
-  
+  }, [secondaryScrollViewRef, updateSecondaryOffset, secondaryScrollY]);
   useEffect(() => {
     resetButtonOpacity();
     return () => {
@@ -287,7 +354,6 @@ export default function ReaderScreen({
       }
     };
   }, [resetButtonOpacity]);
-  
   useEffect(() => {
     const load = async () => {
       if (bibleDB) {
@@ -303,7 +369,7 @@ export default function ReaderScreen({
   }, [bibleDB, primaryLocation.bookId]);
   useEffect(() => {
     const load = async () => {
-      if (showMultiVersion && secondaryVersion) {
+      if (showMultiVersion && secondaryVersion && secondaryReady) {
         let db =
           secondaryVersion === currentVersion ? bibleDB : secondaryDB.current;
         if (db) {
@@ -322,35 +388,10 @@ export default function ReaderScreen({
     secondaryVersion,
     currentVersion,
     secondaryLocation.bookId,
+    secondaryReady,
     bibleDB,
     secondaryDB,
   ]);
-  useEffect(() => {
-    const loadBooksData = async () => {
-      if (bibleDB) {
-        setIsLoadingNavigation(true);
-        try {
-          const allBooks = await bibleDB.getAllBooks();
-          setBooks(allBooks);
-          const ot: (Book & { testament: string })[] = [];
-          const nt: (Book & { testament: string })[] = [];
-          allBooks.forEach((b) => {
-            if (getTestament(b.book_number, b.long_name) === "OT")
-              ot.push({ ...b, testament: "OT" });
-            else nt.push({ ...b, testament: "NT" });
-          });
-          setOldTestament(ot);
-          setNewTestament(nt);
-        } catch (error) {
-          console.error("Failed to load books:", error);
-        } finally {
-          setIsLoadingNavigation(false);
-        }
-      }
-    };
-    loadBooksData();
-  }, [bibleDB]);
-  
   useEffect(() => {
     const loadLayoutPreference = async () => {
       try {
@@ -804,13 +845,6 @@ export default function ReaderScreen({
     isLinked,
     resetButtonOpacity,
   ]);
-
-  const progress = Animated.divide(
-    scrollY,
-    Math.max(primaryProps.contentHeight - primaryProps.scrollViewHeight, 1)
-  );
-
-
   const primaryHandleScroll = useCallback(
     (event: any) => {
       const y = event.nativeEvent.contentOffset.y;
@@ -826,9 +860,12 @@ export default function ReaderScreen({
     (event: any) => {
       if (showMultiVersion && isLinked) {
         handleSecondaryScroll(event);
+      } else if (showMultiVersion) {
+        const y = event.nativeEvent.contentOffset.y;
+        secondaryScrollY.setValue(y);
       }
     },
-    [handleSecondaryScroll, showMultiVersion, isLinked]
+    [handleSecondaryScroll, showMultiVersion, isLinked, secondaryScrollY]
   );
   useFocusEffect(
     useCallback(() => {
@@ -864,7 +901,7 @@ export default function ReaderScreen({
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
   useEffect(() => {
     if (!primaryLoading && primaryScrollViewRef.current) {
-      const verseNum = getHighlightVerse(true);
+      const verseNum = primaryTargetVerse;
       if (verseNum) {
         const meas = primaryProps.verseMeasurements[verseNum];
         if (meas !== undefined) {
@@ -874,14 +911,17 @@ export default function ReaderScreen({
           lastScrollYRef.current = y;
           return;
         }
+        // If measurements not ready yet, do nothing and wait for next update
+        return;
       }
+      // Only scroll to top if no target verse
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
       lastScrollYRef.current = 0;
     }
   }, [
     primaryLoading,
-    getHighlightVerse,
+    primaryTargetVerse,
     primaryScrollViewRef,
     updatePrimaryOffset,
     primaryProps.verseMeasurements,
@@ -904,7 +944,7 @@ export default function ReaderScreen({
       if (verseNum) {
         const meas = secondaryVerseMeasurementsRef.current[verseNum];
         if (meas !== undefined) {
-          const y = Math.max(0, meas - 100);
+          const y = Math.max(0, meas - secondaryScrollViewHeight / 2);
           secondaryScrollViewRef.current?.scrollTo({ y, animated: false });
           updateSecondaryOffset(y);
         }
@@ -921,6 +961,73 @@ export default function ReaderScreen({
     secondaryMeasuredVerses.size,
     secondaryVerses.length,
     getHighlightVerse,
+    secondaryScrollViewHeight,
+  ]);
+  useEffect(() => {
+    if (
+      showMultiVersion &&
+      !isLinked &&
+      secondaryTargetVerse &&
+      secondaryVerses.length > 0 &&
+      !secondaryLoading &&
+      secondaryScrollViewRef.current &&
+      secondaryMeasuredVerses.size === 0
+    ) {
+      const version = secondaryVersion || currentVersion;
+      const cached = getChapterMeasurement(
+        version,
+        secondaryLocation.bookId,
+        secondaryLocation.chapter,
+        fontSize
+      );
+      if (cached) {
+        const approxY =
+          ((secondaryTargetVerse - 0.5) / secondaryVerses.length) *
+          cached.height;
+        const centerOffset = approxY - secondaryScrollViewHeight / 2;
+        const scrollPos = Math.max(0, centerOffset);
+        secondaryScrollViewRef.current.scrollTo({
+          y: scrollPos,
+          animated: false,
+        });
+        updateSecondaryOffset(scrollPos);
+      }
+    }
+  }, [
+    showMultiVersion,
+    isLinked,
+    secondaryTargetVerse,
+    secondaryVerses.length,
+    secondaryLoading,
+    secondaryScrollViewRef,
+    secondaryMeasuredVerses.size,
+    secondaryScrollViewHeight,
+    getChapterMeasurement,
+    secondaryLocation.bookId,
+    secondaryLocation.chapter,
+    fontSize,
+    secondaryVersion,
+    currentVersion,
+    updateSecondaryOffset,
+  ]);
+  useEffect(() => {
+    if (secondaryContentHeight > 0 && showMultiVersion && secondaryVersion) {
+      const version = secondaryVersion;
+      storeChapterMeasurement(
+        version,
+        secondaryLocation.bookId,
+        secondaryLocation.chapter,
+        { y: 0, height: secondaryContentHeight, fontSize }
+      );
+    }
+  }, [
+    secondaryContentHeight,
+    showMultiVersion,
+    secondaryVersion,
+    secondaryLocation.bookId,
+    secondaryLocation.chapter,
+    fontSize,
+    storeChapterMeasurement,
   ]);
   const handlePrimaryContentSizeChange = useCallback(
     (width: number, height: number) => {
@@ -987,27 +1094,8 @@ export default function ReaderScreen({
       );
     }
   }, [secondaryVersion]);
-  useEffect(() => {
-    if (
-      showMultiVersion &&
-      secondaryVersion &&
-      secondaryVersion !== currentVersion
-    ) {
-      const initSecondaryDB = async () => {
-        secondaryDB.current = new BibleDatabase(secondaryVersion);
-        await secondaryDB.current.init();
-      };
-      initSecondaryDB();
-    }
-    return () => {
-      if (secondaryDB.current) {
-        secondaryDB.current.close().catch(console.error);
-        secondaryDB.current = null;
-      }
-    };
-  }, [showMultiVersion, secondaryVersion, currentVersion]);
   const loadSecondaryVerses = useCallback(async () => {
-    if (!showMultiVersion || !secondaryVersion) {
+    if (!showMultiVersion || !secondaryVersion || !secondaryReady) {
       setSecondaryVerses([]);
       return;
     }
@@ -1037,93 +1125,13 @@ export default function ReaderScreen({
     currentVersion,
     secondaryLocation.bookId,
     secondaryLocation.chapter,
+    secondaryReady,
     bibleDB,
     secondaryDB,
   ]);
   useEffect(() => {
     loadSecondaryVerses();
   }, [loadSecondaryVerses]);
- 
-  useEffect(() => {
-    if (showNavigationModal) {
-      const loc =
-        navigationTarget === "primary" ? primaryLocation : secondaryLocation;
-      const book = books.find((b) => b.book_number === loc.bookId) || null;
-      setSelectedBook(book);
-      setSelectedChapter(loc.chapter);
-      setSelectedVerse(loc.verse || null);
-      setHasTappedChapter(true);
-      if (book) {
-        const loadForBook = async () => {
-          let db: BibleDatabase | null = null;
-          if (navigationTarget === "primary") {
-            db = bibleDB;
-          } else if (secondaryDB.current) {
-            db = secondaryDB.current;
-          }
-          if (db) {
-            try {
-              const chapterCount = await db.getChapterCount(book.book_number);
-              const chapterInfos: ChapterInfo[] = [];
-              for (let ch = 1; ch <= chapterCount; ch++) {
-                const verseCount = await db.getVerseCount(book.book_number, ch);
-                chapterInfos.push({ chapter: ch, verseCount });
-              }
-              setChapters(chapterInfos);
-            } finally {
-              setIsLoadingChapters(false);
-            }
-          } else {
-            setIsLoadingChapters(false);
-          }
-        };
-        const loadForChapter = async () => {
-          if (!book) return;
-          let db: BibleDatabase | null = null;
-          if (navigationTarget === "primary") {
-            db = bibleDB;
-          } else if (secondaryDB.current) {
-            db = secondaryDB.current;
-          }
-          if (db) {
-            try {
-              const verseCount = await db.getVerseCount(
-                book.book_number,
-                loc.chapter
-              );
-              setVersesList(
-                Array.from({ length: verseCount }, (_, i) => i + 1)
-              );
-            } catch (error) {
-              console.error("Failed to load verses list:", error);
-            }
-          }
-        };
-        setIsLoadingChapters(true);
-        loadForBook();
-        loadForChapter();
-      }
-    }
-  }, [
-    showNavigationModal,
-    navigationTarget,
-    books,
-    primaryLocation,
-    secondaryLocation,
-    bibleDB,
-    secondaryDB,
-  ]);
-  useEffect(() => {
-    if (!showNavigationModal) {
-      setSelectedBook(null);
-      setSelectedChapter(1);
-      setSelectedVerse(null);
-      setHasTappedChapter(false);
-      setChapters([]);
-      setVersesList([]);
-      setIsLoadingChapters(false);
-    }
-  }, [showNavigationModal]);
   const primaryBookInfo = useMemo(
     () => getBookInfo(primaryLocation.bookId),
     [primaryLocation.bookId]
@@ -1140,514 +1148,7 @@ export default function ReaderScreen({
   const handleSecondaryVersionSelect = useCallback((version: string) => {
     setSecondaryVersion(version);
   }, []);
-  const renderMultiVersionContent = () => {
-    const primaryDisplay = getVersionDisplayName(currentVersion);
-    const secondaryDisplay = getVersionDisplayName(secondaryVersion || "");
-    const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
-    const primaryOnVersePress =
-      showMultiVersion && !isLinked
-        ? handlePrimaryVersePress
-        : handleVersePress;
-    const secondaryOnVersePress =
-      showMultiVersion && !isLinked
-        ? handleSecondaryVersePress
-        : handleVersePress;
-    const renderPrimaryContent = () => {
-      if (primaryLoading) {
-        return (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={{ color: colors.muted, marginTop: 8 }}>Loading</Text>
-          </View>
-        );
-      }
-      if (primaryVerses.length === 0) {
-        return (
-          <View
-            style={{
-              flex: 1,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: colors.muted, textAlign: "center" }}>
-              Unable to load {primaryDisplay} version
-            </Text>
-            <Text
-              style={{
-                color: colors.muted + "80",
-                fontSize: 12,
-                textAlign: "center",
-                marginTop: 4,
-              }}
-            >
-              This version may not be available
-            </Text>
-          </View>
-        );
-      }
-      return (
-        <ScrollView
-          style={{ flex: 1 }}
-          ref={primaryScrollViewRef}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingBottom: 40,
-            paddingTop: 0,
-          }}
-          onScroll={primaryHandleScroll}
-          scrollEventThrottle={16}
-          onContentSizeChange={handlePrimaryContentSizeChange}
-          onLayout={primaryProps.handleScrollViewLayout}
-        >
-          <View
-            ref={primaryProps.chapterContainerRef}
-            onLayout={primaryProps.handleChapterContainerLayout}
-            style={{}}
-          >
-            <ChapterViewEnhanced
-              verses={primaryVerses}
-              bookName={primaryLocation.bookName}
-              chapterNumber={primaryLocation.chapter}
-              bookId={primaryLocation.bookId}
-              showVerseNumbers
-              fontSize={fontSize}
-              onVersePress={primaryOnVersePress}
-              onVerseLayout={primaryProps.handleVerseLayout}
-              highlightVerse={getHighlightVerse(true)}
-              highlightedVerses={new Set(primaryHighlightedVerses)}
-              bookmarkedVerses={primaryBookmarkedVerses}
-              isFullScreen={isFullScreen}
-              displayVersion={primaryDisplay}
-              colors={colors}
-            />
-          </View>
-        </ScrollView>
-      );
-    };
-    if (!showMultiVersion) {
-      return renderPrimaryContent();
-    }
-    if (effectiveLayout === "horizontal") {
-      return (
-        <View style={{ flex: 1, flexDirection: "row" }}>
-          <View
-            style={{
-              flex: 1,
-              borderRightWidth: 1,
-              borderRightColor: colors.border?.default,
-            }}
-          >
-            <View
-              ref={primaryHeaderRef}
-              onLayout={() => {
-                primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                  setPrimaryHeaderX(x);
-                  setPrimaryHeaderY(y);
-                  setPrimaryHeaderWidth(w);
-                  setPrimaryHeaderHeight(h);
-                });
-              }}
-              style={{
-                backgroundColor: colors.muted + "40",
-                paddingVertical: versionHeaderPaddingVertical,
-                paddingHorizontal: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border?.default,
-                flexDirection: "row",
-                gap: 5,
-              }}
-            >
-              <TouchableOpacity
-                onPress={openPrimaryNavigation}
-                style={{
-                  paddingHorizontal: 5,
-                  paddingVertical: 4,
-                  backgroundColor: colors.card + "70",
-                  borderRadius: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontWeight: "500",
-                    fontSize: 14,
-                  }}
-                  numberOfLines={1}
-                >
-                  {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={openPrimaryVersionSelector}
-                style={{
-                  paddingHorizontal: 5,
-                  paddingVertical: 4,
-                  backgroundColor: colors.card + "70",
-                  borderRadius: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontWeight: "500",
-                    fontSize: 14,
-                  }}
-                  numberOfLines={1}
-                >
-                  {primaryDisplay}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {renderPrimaryContent()}
-          </View>
-          <View style={{ flex: 1 }}>
-            <View
-              ref={secondaryHeaderRef}
-              onLayout={() => {
-                secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                  setSecondaryHeaderX(x);
-                  setSecondaryHeaderY(y);
-                  setSecondaryHeaderWidth(w);
-                  setSecondaryHeaderHeight(h);
-                });
-              }}
-              style={{
-                backgroundColor: colors.muted + "40",
-                paddingVertical: versionHeaderPaddingVertical,
-                paddingHorizontal: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border?.default,
-                flexDirection: "row",
-                gap: 5,
-              }}
-            >
-              <TouchableOpacity
-                onPress={openSecondaryNavigation}
-                style={{
-                  paddingHorizontal: 5,
-                  paddingVertical: 4,
-                  backgroundColor: colors.card + "70",
-                  borderRadius: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontWeight: "500",
-                    fontSize: 14,
-                  }}
-                  numberOfLines={1}
-                >
-                  {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={openSecondaryVersionSelector}
-                style={{
-                  paddingHorizontal: 5,
-                  paddingVertical: 4,
-                  backgroundColor: colors.card + "70",
-                  borderRadius: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    color: colors.primary,
-                    fontWeight: "500",
-                    fontSize: 14,
-                  }}
-                  numberOfLines={1}
-                >
-                  {secondaryDisplay}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {secondaryLoading ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={{ color: colors.muted, marginTop: 8 }}>
-                  Loading
-                </Text>
-              </View>
-            ) : secondaryVerses.length === 0 ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: colors.muted, textAlign: "center" }}>
-                  Unable to load {secondaryDisplay} version
-                </Text>
-                <Text
-                  style={{
-                    color: colors.muted + "80",
-                    fontSize: 12,
-                    textAlign: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  This version may not be available
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={{ flex: 1 }}
-                ref={secondaryScrollViewRef}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: 40,
-                  paddingTop: 0,
-                }}
-                onScroll={secondaryHandleScrollCb}
-                scrollEventThrottle={16}
-                onContentSizeChange={handleSecondaryContentSizeChange}
-                onLayout={handleSecondaryScrollViewLayout}
-              >
-                <ChapterViewEnhanced
-                  verses={secondaryVerses}
-                  bookName={secondaryLocation.bookName}
-                  chapterNumber={secondaryLocation.chapter}
-                  bookId={secondaryLocation.bookId}
-                  showVerseNumbers
-                  fontSize={fontSize}
-                  onVersePress={secondaryOnVersePress}
-                  onVerseLayout={handleSecondaryVerseLayout}
-                  highlightVerse={getHighlightVerse(false)}
-                  highlightedVerses={new Set(secondaryHighlightedVerses)}
-                  bookmarkedVerses={secondaryBookmarkedVerses}
-                  isFullScreen={isFullScreen}
-                  displayVersion={secondaryDisplay}
-                  colors={colors}
-                />
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      );
-    } else {
-      return (
-        <View style={{ flex: 1, flexDirection: "column" }}>
-          <View style={{ flex: 1 }}>
-            {isFullScreen && (
-              <View
-                ref={primaryHeaderRef}
-                onLayout={() => {
-                  primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                    setPrimaryHeaderX(x);
-                    setPrimaryHeaderY(y);
-                    setPrimaryHeaderWidth(w);
-                    setPrimaryHeaderHeight(h);
-                  });
-                }}
-                style={{
-                  backgroundColor: colors.primary,
-                  paddingVertical: versionHeaderPaddingVertical,
-                  paddingHorizontal: 16,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.border?.default,
-                  flexDirection: "row",
-                  gap: 10,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={openPrimaryNavigation}
-                  style={{
-                    paddingHorizontal: 5,
-                    paddingVertical: 4,
-                    backgroundColor: "rgba(255,255,255,0.15)",
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "white",
-                      fontWeight: "500",
-                      fontSize: 16,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={openPrimaryVersionSelector}
-                  style={{
-                    paddingHorizontal: 5,
-                    paddingVertical: 4,
-                    backgroundColor: "rgba(255,255,255,0.15)",
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: "white",
-                      fontWeight: "500",
-                      fontSize: 16,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {primaryDisplay}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            {renderPrimaryContent()}
-          </View>
-          <View
-            style={{
-              flex: 1,
-              borderTopWidth: 1,
-              borderTopColor: colors.border?.default,
-            }}
-          >
-            <View
-              ref={secondaryHeaderRef}
-              onLayout={() => {
-                secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                  setSecondaryHeaderX(x);
-                  setSecondaryHeaderY(y);
-                  setSecondaryHeaderWidth(w);
-                  setSecondaryHeaderHeight(h);
-                });
-              }}
-              style={{
-                backgroundColor: colors.primary,
-                paddingVertical: versionHeaderPaddingVertical,
-                paddingHorizontal: 16,
-                borderBottomWidth: 1,
-                borderBottomColor: colors.border?.default,
-                flexDirection: "row",
-                gap: 10,
-              }}
-            >
-              <TouchableOpacity
-                onPress={openSecondaryNavigation}
-                style={{
-                  paddingHorizontal: 5,
-                  paddingVertical: 4,
-                  backgroundColor: "rgba(255,255,255,0.15)",
-                  borderRadius: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "white",
-                    fontWeight: "500",
-                    fontSize: 16,
-                  }}
-                  numberOfLines={1}
-                >
-                  {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={openSecondaryVersionSelector}
-                style={{
-                  paddingHorizontal: 5,
-                  paddingVertical: 4,
-                  backgroundColor: "rgba(255,255,255,0.15)",
-                  borderRadius: 4,
-                }}
-              >
-                <Text
-                  style={{
-                    color: "white",
-                    fontWeight: "500",
-                    fontSize: 16,
-                  }}
-                  numberOfLines={1}
-                >
-                  {secondaryDisplay}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {secondaryLoading ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={{ color: colors.muted, marginTop: 8 }}>
-                  Loading
-                </Text>
-              </View>
-            ) : secondaryVerses.length === 0 ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: colors.muted, textAlign: "center" }}>
-                  Unable to load {secondaryDisplay} version
-                </Text>
-                <Text
-                  style={{
-                    color: colors.muted + "80",
-                    fontSize: 12,
-                    textAlign: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  This version may not be available
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={{ flex: 1 }}
-                ref={secondaryScrollViewRef}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: 40,
-                  paddingTop: 0,
-                }}
-                onScroll={secondaryHandleScrollCb}
-                scrollEventThrottle={16}
-                onContentSizeChange={handleSecondaryContentSizeChange}
-                onLayout={handleSecondaryScrollViewLayout}
-              >
-                <ChapterViewEnhanced
-                  verses={secondaryVerses}
-                  bookName={secondaryLocation.bookName}
-                  chapterNumber={secondaryLocation.chapter}
-                  bookId={secondaryLocation.bookId}
-                  showVerseNumbers
-                  fontSize={fontSize}
-                  onVersePress={secondaryOnVersePress}
-                  onVerseLayout={handleSecondaryVerseLayout}
-                  highlightVerse={getHighlightVerse(false)}
-                  highlightedVerses={new Set(secondaryHighlightedVerses)}
-                  bookmarkedVerses={secondaryBookmarkedVerses}
-                  isFullScreen={isFullScreen}
-                  displayVersion={secondaryDisplay}
-                  colors={colors}
-                />
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      );
-    }
-  };
+  const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1823,7 +1324,104 @@ export default function ReaderScreen({
     buttonSize,
     iconSize,
   ]);
-  
+  const primaryOnVersePress =
+    showMultiVersion && !isLinked ? handlePrimaryVersePress : handleVersePress;
+  const secondaryOnVersePress =
+    showMultiVersion && !isLinked
+      ? handleSecondaryVersePress
+      : handleVersePress;
+  const renderProgressBar = useCallback(() => {
+    if (!showMultiVersion || isLinked) {
+      return (
+        <View
+          style={{
+            marginTop: 8,
+            marginHorizontal: 16,
+            width: screenWidth - 32,
+            height: 6,
+            backgroundColor: colors.primary + "40",
+            borderRadius: 2,
+          }}
+        >
+          <Animated.View
+            style={{
+              height: 6,
+              backgroundColor: colors.secondary,
+              borderRadius: 3,
+              width: primaryProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0%", "100%"],
+                extrapolate: "clamp",
+              }),
+            }}
+          />
+        </View>
+      );
+    } else {
+      const secondaryOnTop = isSecondaryOnTop;
+      const PrimaryBar = (
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: 6,
+            backgroundColor: colors.secondary,
+            borderRadius: 3,
+            width: primaryProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0%", "100%"],
+              extrapolate: "clamp",
+            }),
+            zIndex: secondaryOnTop ? 1 : 2,
+          }}
+        />
+      );
+      const SecondaryBar = (
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: 6,
+            backgroundColor: "#F5F5DC",
+            borderRadius: 3,
+            width: secondaryProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0%", "100%"],
+              extrapolate: "clamp",
+            }),
+            zIndex: secondaryOnTop ? 2 : 1,
+          }}
+        />
+      );
+      return (
+        <View
+          style={{
+            marginTop: 8,
+            marginHorizontal: 16,
+            width: screenWidth - 32,
+            height: 6,
+            backgroundColor: colors.primary + "40",
+            borderRadius: 2,
+            position: "relative",
+          }}
+        >
+          {secondaryOnTop ? PrimaryBar : SecondaryBar}
+          {secondaryOnTop ? SecondaryBar : PrimaryBar}
+        </View>
+      );
+    }
+  }, [
+    showMultiVersion,
+    isLinked,
+    screenWidth,
+    colors.primary,
+    colors.secondary,
+    primaryProgress,
+    secondaryProgress,
+    isSecondaryOnTop,
+  ]);
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -1853,7 +1451,11 @@ export default function ReaderScreen({
           >
             <TouchableOpacity
               onPress={() => navigation.goBack()}
-              style={{ opacity: 0.8, marginLeft: isLandscape ? 40 : 0 }}
+              style={{
+                opacity: 0.8,
+                marginLeft: isLandscape ? 40 : 8,
+                padding: isLandscape ? 8 : 2,
+              }}
             >
               <Ionicons name="arrow-back" size={24} color={primaryTextColor} />
             </TouchableOpacity>
@@ -1996,29 +1598,7 @@ export default function ReaderScreen({
               )}
             </View>
           </View>
-          <View
-            style={{
-              marginTop: 8,
-              marginHorizontal: 16,
-              width: screenWidth - 32,
-              height: 6,
-              backgroundColor: colors.primary + "40",
-              borderRadius: 2,
-            }}
-          >
-            <Animated.View
-              style={{
-                height: 6,
-                backgroundColor: colors.secondary,
-                borderRadius: 3,
-                width: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ["0%", "100%"],
-                  extrapolate: "clamp",
-                }),
-              }}
-            />
-          </View>
+          {renderProgressBar()}
         </View>
       )}
       {!isLandscape && showDropdown && (
@@ -2233,14 +1813,66 @@ export default function ReaderScreen({
             setSecondaryTargetVerse(newLocation.verse);
           }
         }}
+        bibleDB={bibleDB}
+        secondaryDB={secondaryDB}
       />
       <View
         style={{
           flex: 1,
-          marginTop: isFullScreen ? 0 : headerTotalHeight - insets.top + 2,
+          marginTop: isFullScreen ? 0 : headerTotalHeight - insets.top,
         }}
       >
-        {renderMultiVersionContent()}
+        <ReaderContent
+          primaryVerses={primaryVerses}
+          secondaryVerses={secondaryVerses}
+          primaryLoading={primaryLoading}
+          secondaryLoading={secondaryLoading}
+          primaryLocation={primaryLocation}
+          secondaryLocation={secondaryLocation}
+          primaryDisplayBookName={primaryDisplayBookName}
+          secondaryDisplayBookName={secondaryDisplayBookName}
+          currentVersion={currentVersion}
+          secondaryVersion={secondaryVersion}
+          getVersionDisplayName={getVersionDisplayName}
+          primaryOnVersePress={primaryOnVersePress}
+          secondaryOnVersePress={secondaryOnVersePress}
+          getHighlightVerse={getHighlightVerse}
+          primaryHighlightedVerses={primaryHighlightedVerses}
+          secondaryHighlightedVerses={secondaryHighlightedVerses}
+          primaryBookmarkedVerses={primaryBookmarkedVerses}
+          secondaryBookmarkedVerses={secondaryBookmarkedVerses}
+          isFullScreen={isFullScreen}
+          colors={colors}
+          fontSize={fontSize}
+          primaryProps={primaryProps}
+          primaryHandleScroll={primaryHandleScroll}
+          handlePrimaryContentSizeChange={handlePrimaryContentSizeChange}
+          secondaryHandleScrollCb={secondaryHandleScrollCb}
+          handleSecondaryContentSizeChange={handleSecondaryContentSizeChange}
+          handleSecondaryScrollViewLayout={handleSecondaryScrollViewLayout}
+          handleSecondaryVerseLayout={handleSecondaryVerseLayout}
+          primaryHeaderRef={primaryHeaderRef}
+          secondaryHeaderRef={secondaryHeaderRef}
+          setPrimaryHeaderX={setPrimaryHeaderX}
+          setPrimaryHeaderY={setPrimaryHeaderY}
+          setPrimaryHeaderWidth={setPrimaryHeaderWidth}
+          setPrimaryHeaderHeight={setPrimaryHeaderHeight}
+          setSecondaryHeaderX={setSecondaryHeaderX}
+          setSecondaryHeaderY={setSecondaryHeaderY}
+          setSecondaryHeaderWidth={setSecondaryHeaderWidth}
+          setSecondaryHeaderHeight={setSecondaryHeaderHeight}
+          versionHeaderPaddingVertical={versionHeaderPaddingVertical}
+          openPrimaryNavigation={openPrimaryNavigation}
+          openSecondaryNavigation={openSecondaryNavigation}
+          openPrimaryVersionSelector={openPrimaryVersionSelector}
+          openSecondaryVersionSelector={openSecondaryVersionSelector}
+          primaryTextColor={primaryTextColor}
+          effectiveLayout={effectiveLayout}
+          showMultiVersion={showMultiVersion}
+          isLandscape={isLandscape}
+          primaryScrollViewRef={primaryScrollViewRef}
+          secondaryScrollViewRef={secondaryScrollViewRef}
+        />
       </View>
       <Animated.View
         style={{

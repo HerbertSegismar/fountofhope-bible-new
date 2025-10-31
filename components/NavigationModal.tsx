@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   Modal,
   View,
@@ -12,9 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Book, ChapterInfo } from "../types";
+import { BibleDatabase } from "../services/BibleDatabase";
 import { lightenColor } from "../utils/themeUtils";
 import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
-import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
@@ -32,6 +32,8 @@ interface NavigationModalProps {
     chapter: number;
     verse?: number;
   }) => void;
+  bibleDB: BibleDatabase;
+  secondaryDB?: React.RefObject<BibleDatabase | null>;
 }
 
 export const NavigationModal: React.FC<NavigationModalProps> = ({
@@ -42,6 +44,8 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   navigationTarget,
   currentVersion,
   onLocationSelect,
+  bibleDB,
+  secondaryDB,
 }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [oldTestament, setOldTestament] = useState<Book[]>([]);
@@ -60,10 +64,18 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   const [chaptersY, setChaptersY] = useState<number | null>(null);
   const [versesY, setVersesY] = useState<number | null>(null);
 
-  const { bibleDB } = useBibleDatabase();
+  const effectiveDB =
+    navigationTarget === "secondary" && secondaryDB?.current
+      ? secondaryDB.current
+      : bibleDB;
+  const effectiveVersion =
+    navigationTarget === "secondary" && secondaryDB?.current
+      ? secondaryDB.current.getDatabaseName()
+      : currentVersion;
+
   const { theme, navTheme } = useTheme();
   const primaryColor = navTheme.colors.primary;
-  const modalScrollViewRef = React.useRef<ScrollView | null>(null);
+  const modalScrollViewRef = useRef<ScrollView | null>(null);
 
   const bgClass = theme === "dark" ? "bg-gray-900" : "bg-gray-50";
   const textSecondaryClass =
@@ -81,7 +93,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
         modalScrollViewRef.current?.scrollTo({ y: 0, animated: false });
       }, 100);
     }
-  }, [visible, bibleDB, currentVersion]);
+  }, [visible, effectiveDB, effectiveVersion]);
 
   const resetInternalState = useCallback(() => {
     setSelectedBook(null);
@@ -132,7 +144,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   }, [selectedVerse, selectedBook, selectedChapter]);
 
   const loadBooks = useCallback(async () => {
-    if (!bibleDB) {
+    if (!effectiveDB) {
       setIsLoadingNavigation(false);
       return;
     }
@@ -141,7 +153,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
       setIsLoadingNavigation(true);
       setIsDataLoaded(false);
 
-      const bookList = await bibleDB.getBooks();
+      const bookList = await effectiveDB.getBooks();
 
       const booksWithTestament = bookList.map((book) => ({
         ...book,
@@ -164,7 +176,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     } finally {
       setIsLoadingNavigation(false);
     }
-  }, [bibleDB]);
+  }, [effectiveDB]);
 
   const handleBookSelect = useCallback(
     async (book: Book) => {
@@ -176,14 +188,19 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
       setChaptersY(null);
       setVersesY(null);
 
-      if (!bibleDB) return;
+      if (!effectiveDB) return;
 
       setIsLoadingChapters(true);
       try {
-        const chapterCount = await bibleDB.getChapterCount(book.book_number);
+        const chapterCount = await effectiveDB.getChapterCount(
+          book.book_number
+        );
         const chapterInfos: ChapterInfo[] = [];
         for (let ch = 1; ch <= chapterCount; ch++) {
-          const verseCount = await bibleDB.getVerseCount(book.book_number, ch);
+          const verseCount = await effectiveDB.getVerseCount(
+            book.book_number,
+            ch
+          );
           chapterInfos.push({ chapter: ch, verseCount });
         }
         setChapters(chapterInfos);
@@ -194,7 +211,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
         setIsLoadingChapters(false);
       }
     },
-    [bibleDB]
+    [effectiveDB]
   );
 
   const handleChapterSelect = useCallback(
@@ -204,10 +221,10 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
       setSelectedVerse(null);
       setVersesY(null);
 
-      if (!selectedBook || !bibleDB) return;
+      if (!selectedBook || !effectiveDB) return;
 
       try {
-        const verseCount = await bibleDB.getVerseCount(
+        const verseCount = await effectiveDB.getVerseCount(
           selectedBook.book_number,
           chapter
         );
@@ -216,7 +233,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
         console.error("Failed to load verses list:", error);
       }
     },
-    [selectedBook, bibleDB]
+    [selectedBook, effectiveDB]
   );
 
   const handleVerseSelect = useCallback((verse: number) => {
@@ -241,7 +258,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   }, [resetInternalState, onClose]);
 
   // BookCard component
-  const BookCard = React.useCallback(
+  const BookCard = useCallback(
     ({ book, color }: { book: Book; color: string }) => {
       const getButtonStyles = (bookColor: string, currentTheme: string) => {
         let bgColor: string;
@@ -257,10 +274,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
         return { bgColor, textColor };
       };
 
-      const { bgColor, textColor } = getButtonStyles(
-        book.book_color || color,
-        theme
-      );
+      const { bgColor } = getButtonStyles(book.book_color || color, theme);
 
       return (
         <TouchableOpacity
@@ -304,7 +318,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
               Loading books...
             </Text>
             <Text className={`text-sm ${textSecondaryClass} mt-2`}>
-              Version: {currentVersion.replace(".sqlite3", "").toUpperCase()}
+              Version: {effectiveVersion.replace(".sqlite3", "").toUpperCase()}
             </Text>
           </View>
         </SafeAreaView>
@@ -313,7 +327,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   }
 
   // Show error state if database not available
-  if (!bibleDB) {
+  if (!effectiveDB) {
     return (
       <Modal
         visible={visible}
