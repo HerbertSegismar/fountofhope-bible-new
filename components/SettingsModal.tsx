@@ -42,6 +42,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   secondaryVersion,
   isSwitchingVersion,
 }) => {
+  const primaryAvailable = secondaryVersion
+    ? availableBibleVersions.filter((v) => v !== secondaryVersion)
+    : availableBibleVersions;
+
   return (
     <Modal
       visible={visible}
@@ -191,7 +195,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <View className="flex-1">
                   <VersionSelector
                     currentVersion={currentVersion}
-                    availableVersions={availableBibleVersions}
+                    availableVersions={primaryAvailable}
                     onVersionSelect={handleVersionSelect}
                     title="Primary Bible Version"
                     description="Choose your preferred Bible translation"
@@ -220,7 +224,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <>
                 <VersionSelector
                   currentVersion={currentVersion}
-                  availableVersions={availableBibleVersions}
+                  availableVersions={primaryAvailable}
                   onVersionSelect={handleVersionSelect}
                   title="Primary Bible Version"
                   description="Choose your preferred Bible translation"
