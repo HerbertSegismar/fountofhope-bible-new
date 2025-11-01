@@ -14,6 +14,7 @@ import {
   ImageBackground,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Verse } from "../types";
 import { useTheme } from "../context/ThemeContext";
@@ -853,6 +854,7 @@ interface ChapterViewProps {
     chapter: number,
     verse: number
   ) => void;
+  bgImageIndex?: number;
 }
 
 type DictHistoryEntry = {
@@ -898,6 +900,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   style,
   isFullScreen,
   displayVersion,
+  bgImageIndex: propBgImageIndex,
 }) => {
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
@@ -908,14 +911,37 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [bgImageIndex, setBgImageIndex] = useState(0);
 
   useEffect(() => {
-    AsyncStorage.getItem("bgImageIndex")
-      .then((str) => {
-        if (str !== null) {
-          setBgImageIndex(parseInt(str, 10) || 0);
-        }
-      })
-      .catch(console.error);
-  }, []);
+    if (propBgImageIndex !== undefined) {
+      setBgImageIndex(propBgImageIndex);
+    }
+  }, [propBgImageIndex]);
+
+  useEffect(() => {
+    if (propBgImageIndex === undefined) {
+      AsyncStorage.getItem("bgImageIndex")
+        .then((str) => {
+          if (str !== null) {
+            setBgImageIndex(parseInt(str, 10) || 0);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [propBgImageIndex]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (propBgImageIndex === undefined) {
+        AsyncStorage.getItem("bgImageIndex")
+          .then((str) => {
+            if (str !== null) {
+              const newIndex = parseInt(str, 10) || 0;
+              setBgImageIndex(newIndex);
+            }
+          })
+          .catch(console.error);
+      }
+    }, [propBgImageIndex])
+  );
 
   const bookToNumber = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1502,7 +1528,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   );
 
   const overlayColor =
-    theme === "dark" ? "rgba(18, 18, 18, 0.5)" : "rgba(255, 255, 255, 0.5)";
+    theme === "dark" ? "rgba(24, 19, 56, 0.95)" : "rgba(222, 216, 182, 0.95)";
 
   const innerContent = (
     <>

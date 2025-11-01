@@ -28,7 +28,6 @@ import { BookmarksContext } from "../context/BookmarksContext";
 import { useHighlights } from "../context/HighlightsContext";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BibleDatabase } from "../services/BibleDatabase";
-import { SettingsModal } from "../components/SettingsModal";
 import { NavigationModal } from "../components/NavigationModal";
 import { useChapterLoader } from "../hooks/useChapterLoader";
 import { useScrollSync } from "../hooks/useScrollSync";
@@ -40,9 +39,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
 import { ReaderContent } from "../content/ReaderContent";
-
 const initialDimensions = Dimensions.get("window");
-
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
 interface MenuItem {
@@ -60,7 +57,6 @@ interface Location {
   chapter: number;
   verse?: number;
 }
-
 export default function ReaderScreen({
   navigation,
   route,
@@ -155,7 +151,6 @@ export default function ReaderScreen({
     initialDimensions.width > initialDimensions.height
   );
   const [_showEnd, setShowEnd] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNavigationModal, setShowNavigationModal] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<
@@ -263,12 +258,10 @@ export default function ReaderScreen({
   );
   useEffect(() => {
     if (!showMultiVersion) return;
-
     primaryProgressRef.current = 0;
     secondaryProgressRef.current = 0;
     isSecondaryOnTopRef.current = false;
     setIsSecondaryOnTop(false);
-
     const primaryListenerId = primaryProgress.addListener(({ value }) => {
       primaryProgressRef.current = value;
       const newOnTop = secondaryProgressRef.current < value;
@@ -277,7 +270,6 @@ export default function ReaderScreen({
         setIsSecondaryOnTop(newOnTop);
       }
     });
-
     const secondaryListenerId = secondaryProgress.addListener(({ value }) => {
       secondaryProgressRef.current = value;
       const newOnTop = value < primaryProgressRef.current;
@@ -286,7 +278,6 @@ export default function ReaderScreen({
         setIsSecondaryOnTop(newOnTop);
       }
     });
-
     return () => {
       primaryProgress.removeListener(primaryListenerId);
       secondaryProgress.removeListener(secondaryListenerId);
@@ -307,7 +298,6 @@ export default function ReaderScreen({
         setSecondaryReady(false);
       };
     }
-
     setSecondaryReady(false);
     const initSecondary = async () => {
       const success = await reloadSecondaryDB();
@@ -316,7 +306,6 @@ export default function ReaderScreen({
       }
     };
     initSecondary();
-
     return () => {
       if (secondaryDB.current) {
         secondaryDB.current.close().catch(console.error);
@@ -460,19 +449,60 @@ export default function ReaderScreen({
     secondaryDB,
     reloadSecondaryDB,
   ]);
-  useEffect(() => {
-    const loadLayoutPreference = async () => {
-      try {
-        const savedLayout = await AsyncStorage.getItem("multiViewLayout");
-        if (savedLayout === "vertical" || savedLayout === "horizontal") {
-          setMultiViewLayout(savedLayout);
-        }
-      } catch (error) {
-        console.error("Failed to load layout preference:", error);
+  const loadPreferences = useCallback(async () => {
+    try {
+      const [savedLayout, savedFontSize] = await Promise.all([
+        AsyncStorage.getItem("multiViewLayout"),
+        AsyncStorage.getItem("fontSize"),
+      ]);
+      if (savedLayout === "vertical" || savedLayout === "horizontal") {
+        setMultiViewLayout(savedLayout);
       }
-    };
-    loadLayoutPreference();
+      if (savedFontSize !== null) {
+        setFontSize(parseInt(savedFontSize, 10) || 16);
+      }
+    } catch (error) {
+      console.error("Failed to load preferences:", error);
+    }
   }, []);
+  const loadReaderSettings = useCallback(async () => {
+    try {
+      const [showMultiStr, secVer, linkedStr] = await Promise.all([
+        AsyncStorage.getItem("showMultiVersion"),
+        AsyncStorage.getItem("secondaryVersion"),
+        AsyncStorage.getItem("isLinked"),
+      ]);
+      if (showMultiStr === "true") {
+        setShowMultiVersion(true);
+      } else {
+        setShowMultiVersion(false);
+      }
+      let initialSec = secVer;
+      if (!initialSec) {
+        const avail = availableBibleVersions.filter(
+          (v) => v !== currentVersion
+        );
+        initialSec = avail[0] || availableBibleVersions[0];
+      }
+      setSecondaryVersion(initialSec);
+      if (linkedStr !== null) {
+        setIsLinked(linkedStr === "true");
+      }
+    } catch (e) {
+      console.error("Failed to load reader settings", e);
+    }
+  }, [availableBibleVersions, currentVersion]);
+  useFocusEffect(
+    useCallback(() => {
+      loadPreferences();
+      loadReaderSettings();
+      const currentDimensions = Dimensions.get("window");
+      const currentIsLandscape =
+        currentDimensions.width > currentDimensions.height;
+      setDimensions(currentDimensions);
+      setIsLandscape(currentIsLandscape);
+    }, [loadPreferences, loadReaderSettings])
+  );
   useEffect(() => {
     AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
       console.error("Failed to save layout preference", e)
@@ -483,6 +513,11 @@ export default function ReaderScreen({
       console.error("Failed to save isLinked", e)
     );
   }, [isLinked]);
+  useEffect(() => {
+    AsyncStorage.setItem("fontSize", fontSize.toString()).catch((e) =>
+      console.error("Failed to save fontSize", e)
+    );
+  }, [fontSize]);
   const closeSelector = useCallback(() => setOpenSelector(null), []);
   const openPrimaryNavigation = useCallback(() => {
     if (showMultiVersion && !isLinked) {
@@ -692,7 +727,7 @@ export default function ReaderScreen({
         key: "settings",
         name: "Settings",
         icon: "settings-outline",
-        onPress: () => setShowSettings(true),
+        onPress: () => navigation.navigate("Settings"),
         color: primaryTextColor,
       },
       {
@@ -712,7 +747,6 @@ export default function ReaderScreen({
       handleColorSchemePress,
       toggleMultiVersion,
       navigation,
-      setShowSettings,
       linkItem,
     ]
   );
@@ -985,15 +1019,6 @@ export default function ReaderScreen({
     },
     [handleSecondaryScroll, showMultiVersion, isLinked, secondaryScrollY]
   );
-  useFocusEffect(
-    useCallback(() => {
-      const currentDimensions = Dimensions.get("window");
-      const currentIsLandscape =
-        currentDimensions.width > currentDimensions.height;
-      setDimensions(currentDimensions);
-      setIsLandscape(currentIsLandscape);
-    }, [])
-  );
   useEffect(() => {
     const updateLayout = () => {
       const newDimensions = Dimensions.get("window");
@@ -1176,34 +1201,6 @@ export default function ReaderScreen({
     },
     []
   );
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [showMultiStr, secVer, linkedStr] = await Promise.all([
-          AsyncStorage.getItem("showMultiVersion"),
-          AsyncStorage.getItem("secondaryVersion"),
-          AsyncStorage.getItem("isLinked"),
-        ]);
-        if (showMultiStr === "true") {
-          setShowMultiVersion(true);
-        }
-        let initialSec = secVer;
-        if (!initialSec) {
-          const avail = availableBibleVersions.filter(
-            (v) => v !== currentVersion
-          );
-          initialSec = avail[0] || availableBibleVersions[0];
-        }
-        setSecondaryVersion(initialSec);
-        if (linkedStr !== null) {
-          setIsLinked(linkedStr === "true");
-        }
-      } catch (e) {
-        console.error("Failed to load reader settings", e);
-      }
-    };
-    load();
-  }, [availableBibleVersions, currentVersion]);
   useEffect(() => {
     AsyncStorage.setItem(
       "showMultiVersion",
@@ -1923,25 +1920,6 @@ export default function ReaderScreen({
           </View>
         </TouchableOpacity>
       )}
-      <SettingsModal
-        visible={showSettings}
-        onClose={() => setShowSettings(false)}
-        fontSize={fontSize}
-        increaseFontSize={increaseFontSize}
-        decreaseFontSize={decreaseFontSize}
-        colors={colors}
-        versionSelectorColors={versionSelectorColors}
-        primaryTextColor={primaryTextColor}
-        isLandscape={isLandscape}
-        showMultiVersion={showMultiVersion}
-        toggleMultiVersion={toggleMultiVersion}
-        currentVersion={currentVersion}
-        availableBibleVersions={availableBibleVersions}
-        handleVersionSelect={handleVersionSelect}
-        handleSecondaryVersionSelect={handleSecondaryVersionSelect}
-        secondaryVersion={secondaryVersion}
-        isSwitchingVersion={isSwitchingVersion}
-      />
       <NavigationModal
         visible={showNavigationModal}
         onClose={() => setShowNavigationModal(false)}
