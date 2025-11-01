@@ -11,8 +11,10 @@ import {
   ScrollView,
   ActivityIndicator,
   TextStyle,
+  ImageBackground,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Verse } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
@@ -790,6 +792,44 @@ const STYLES = {
   },
 } as const;
 
+// Pre-require all background images statically to avoid dynamic require issues
+// Memoized as a constant object for stable references
+const bgImages: { [key: number]: any } = {
+  1: require("../assets/textures/1.jpg"),
+  2: require("../assets/textures/2.jpg"),
+  3: require("../assets/textures/3.jpg"),
+  4: require("../assets/textures/4.jpg"),
+  5: require("../assets/textures/5.jpg"),
+  6: require("../assets/textures/6.jpg"),
+  7: require("../assets/textures/7.jpg"),
+  8: require("../assets/textures/8.jpg"),
+  9: require("../assets/textures/9.jpg"),
+  10: require("../assets/textures/10.jpg"),
+  11: require("../assets/textures/11.jpg"),
+  12: require("../assets/textures/12.jpg"),
+  13: require("../assets/textures/13.jpg"),
+  14: require("../assets/textures/14.jpg"),
+  15: require("../assets/textures/15.jpg"),
+  16: require("../assets/textures/16.jpg"),
+  17: require("../assets/textures/17.jpg"),
+  18: require("../assets/textures/18.jpg"),
+  19: require("../assets/textures/19.jpg"),
+  20: require("../assets/textures/20.jpg"),
+  21: require("../assets/textures/21.jpg"),
+  22: require("../assets/textures/22.jpg"),
+  23: require("../assets/textures/23.jpg"),
+  24: require("../assets/textures/24.jpg"),
+  25: require("../assets/textures/25.jpg"),
+  26: require("../assets/textures/26.jpg"),
+  27: require("../assets/textures/27.jpg"),
+  28: require("../assets/textures/28.jpg"),
+  29: require("../assets/textures/29.jpg"),
+  30: require("../assets/textures/30.jpg"),
+  31: require("../assets/textures/31.jpg"),
+  32: require("../assets/textures/32.jpg"),
+  33: require("../assets/textures/33.jpg"),
+};
+
 interface ChapterViewProps {
   verses: Verse[];
   bookName: string;
@@ -864,6 +904,18 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const actualFontFamily = getFontFamily(fontFamily);
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
   const { bibleDB, getDatabase } = useBibleDatabase();
+
+  const [bgImageIndex, setBgImageIndex] = useState(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem("bgImageIndex")
+      .then((str) => {
+        if (str !== null) {
+          setBgImageIndex(parseInt(str, 10) || 0);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   const bookToNumber = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1266,6 +1318,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const headerTextColor = getAccessibleTextColor(bookColor);
 
+  // Memoized background source to ensure stable reference and prevent re-renders
+  const memoizedBgSource = useMemo(
+    () => (bgImageIndex > 0 ? bgImages[bgImageIndex] : undefined),
+    [bgImageIndex]
+  );
+
   if (sortedVerses.length === 0) {
     return (
       <View
@@ -1416,97 +1474,92 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     );
   };
 
-  const containerStyle: ViewStyle = {
-    ...STYLES.container,
-    backgroundColor: themeColors.card,
-  };
+  const wrapperStyle = useMemo<ViewStyle>(
+    () => ({
+      ...STYLES.container,
+      flex: isFullScreen ? 1 : undefined,
+      backgroundColor: memoizedBgSource ? undefined : themeColors.card,
+    }),
+    [isFullScreen, memoizedBgSource, themeColors.card]
+  );
 
-  const adjustedStyle = isFullScreen
-    ? { ...containerStyle, paddingHorizontal: 8 }
-    : containerStyle;
+  const contentContainerStyle = useMemo(
+    () => ({
+      padding: isFullScreen ? 8 : 16,
+      paddingTop: isFullScreen ? 6 : 12,
+    }),
+    [isFullScreen]
+  );
+
+  const footerStyle = useMemo(
+    () => ({
+      marginTop: isFullScreen ? 8 : 16,
+      paddingTop: isFullScreen ? 6 : 12,
+      borderTopWidth: 1,
+      borderTopColor: themeColors.border,
+    }),
+    [isFullScreen, themeColors.border]
+  );
+
+  const overlayColor =
+    theme === "dark" ? "rgba(18, 18, 18, 0.5)" : "rgba(255, 255, 255, 0.5)";
+
+  const innerContent = (
+    <>
+      {renderVerses()}
+      <View style={footerStyle}>
+        <Text
+          style={{
+            textAlign: "center",
+            color: themeColors.textMuted,
+            fontSize: 10,
+            fontFamily: actualFontFamily,
+          }}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {sortedVerses.length} verse{sortedVerses.length !== 1 ? "s" : ""}
+          {highlightedVerses.size > 0 &&
+            ` • ${highlightedVerses.size} highlighted`}
+          {bookmarkedVerses.size > 0 &&
+            ` • ${bookmarkedVerses.size} bookmarked`}
+        </Text>
+      </View>
+    </>
+  );
 
   const chapterContent = (
-    <View style={[adjustedStyle, style]}>
-      {/*Hide Chapter Header */}
-      {/*<View
-        style={{
-          backgroundColor: bookColor,
-          padding: 8,
-          borderTopLeftRadius: 8,
-          borderTopRightRadius: 8,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
+    <View style={[wrapperStyle, style]}>
+      {memoizedBgSource ? (
+        <ImageBackground
+          source={memoizedBgSource}
+          resizeMode="repeat"
+          style={{ flex: 1 }}
         >
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                color: headerTextColor,
-                fontSize: 14,
-                fontWeight: "600",
-                fontFamily: actualFontFamily,
-              }}
-              numberOfLines={2}
-            >
-              {getHeaderTitle()}
-            </Text>
-          </View>
-
-          {versionText && (
-            <Text
-              style={{
-                color: headerTextColor + "80",
-                fontSize: isFullScreen ? 10 : 12,
-                opacity: 0.9,
-                marginLeft: 8,
-                fontFamily: actualFontFamily,
-              }}
-            >
-              {versionText.replace(" • ", "")}
-            </Text>
-          )}
-        </View>
-      </View> */}
-
-      <View
-        style={{
-          padding: isFullScreen ? 8 : 16,
-          paddingTop: isFullScreen ? 6 : 12,
-        }}
-      >
-        {renderVerses()}
-
-        <View
-          style={{
-            marginTop: isFullScreen ? 8 : 16,
-            paddingTop: isFullScreen ? 6 : 12,
-            borderTopWidth: 1,
-            borderTopColor: themeColors.border,
-          }}
-        >
-          <Text
+          <View
             style={{
-              textAlign: "center",
-              color: themeColors.textMuted,
-              fontSize: 10,
-              fontFamily: actualFontFamily,
+              flex: 1,
+              backgroundColor: overlayColor,
             }}
-            numberOfLines={1}
-            ellipsizeMode="tail"
           >
-            {sortedVerses.length} verse{sortedVerses.length !== 1 ? "s" : ""}
-            {highlightedVerses.size > 0 &&
-              ` • ${highlightedVerses.size} highlighted`}
-            {bookmarkedVerses.size > 0 &&
-              ` • ${bookmarkedVerses.size} bookmarked`}
-          </Text>
-        </View>
-      </View>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={contentContainerStyle}
+              showsVerticalScrollIndicator={false}
+            >
+              {innerContent}
+            </ScrollView>
+          </View>
+        </ImageBackground>
+      ) : (
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={contentContainerStyle}
+          showsVerticalScrollIndicator={false}
+        >
+          {innerContent}
+        </ScrollView>
+      )}
     </View>
   );
 

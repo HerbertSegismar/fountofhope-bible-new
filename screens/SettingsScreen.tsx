@@ -8,6 +8,9 @@ import {
   Dimensions,
   ActivityIndicator,
   Switch,
+  Modal,
+  FlatList,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -18,6 +21,7 @@ import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Fonts } from "../utils/fonts";
 import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import Footer from "../components/Footer";
+import { bgTextures } from "../assets/textures/bgTextures";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -45,6 +49,8 @@ const SettingsScreen = () => {
   const [fontSize, setFontSize] = useState(16);
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
+  const [bgImageIndex, setBgImageIndex] = useState(0);
+  const [showBgModal, setShowBgModal] = useState(false);
 
   const themeColors = getThemeColors(theme, colorScheme, customColor);
 
@@ -63,14 +69,16 @@ const SettingsScreen = () => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [fontStr, multiStr, secVer] = await Promise.all([
+        const [fontStr, multiStr, secVer, bgStr] = await Promise.all([
           AsyncStorage.getItem("fontSize"),
           AsyncStorage.getItem("showMultiVersion"),
           AsyncStorage.getItem("secondaryVersion"),
+          AsyncStorage.getItem("bgImageIndex"),
         ]);
         if (fontStr) setFontSize(parseInt(fontStr, 10));
         if (multiStr === "true") setShowMultiVersion(true);
         if (secVer) setSecondaryVersion(secVer);
+        if (bgStr) setBgImageIndex(parseInt(bgStr, 10) || 0);
       } catch (e) {
         console.error("Failed to load settings", e);
       }
@@ -95,6 +103,12 @@ const SettingsScreen = () => {
       );
     }
   }, [secondaryVersion]);
+
+  useEffect(() => {
+    AsyncStorage.setItem("bgImageIndex", bgImageIndex.toString()).catch(
+      console.error
+    );
+  }, [bgImageIndex]);
 
   useEffect(() => {
     setSelectedVersion(currentVersion);
@@ -198,6 +212,106 @@ const SettingsScreen = () => {
   const decreaseFontSize = useCallback(
     () => setFontSize((prev) => Math.max(prev - 1, 12)),
     []
+  );
+
+  const selectBgImage = useCallback((index: number) => {
+    setBgImageIndex(index);
+    setShowBgModal(false);
+  }, []);
+
+  // Memoized image sources to ensure stable references and prevent unnecessary re-renders
+  const memoizedBgTextures = useMemo(() => bgTextures, []);
+
+  // Memoized BgOption component to prevent re-renders of individual list items unless props change
+  const BgOption = useMemo(
+    () =>
+      React.memo(
+        ({
+          item,
+          isSelected,
+          onPress,
+          themeColors,
+          bgTextures,
+        }: {
+          item: number;
+          isSelected: boolean;
+          onPress: () => void;
+          themeColors: any;
+          bgTextures: any;
+        }) => {
+          const imageSource = item > 0 ? bgTextures[item] : null;
+          return (
+            <TouchableOpacity
+              className={`p-4 border-b ${isSelected ? "bg-gray-100" : ""}`}
+              onPress={onPress}
+              style={{
+                borderBottomColor: themeColors.border,
+                backgroundColor: isSelected
+                  ? themeColors.primary + "10"
+                  : undefined,
+              }}
+            >
+              <View className="flex-row items-center justify-between">
+                <View className="flex-row items-center">
+                  {item === 0 ? (
+                    <View
+                      className="w-12 h-12 rounded-lg items-center justify-center mr-3 bg-gray-200"
+                      style={{ backgroundColor: themeColors.card }}
+                    >
+                      <Ionicons
+                        name="image-outline"
+                        size={24}
+                        color={themeColors.textMuted}
+                      />
+                    </View>
+                  ) : (
+                    <Image
+                      source={imageSource}
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 8,
+                        marginRight: 12,
+                      }}
+                      resizeMode="cover"
+                    />
+                  )}
+                  <Text
+                    className="text-base"
+                    style={{
+                      color: themeColors.textPrimary,
+                      fontWeight: isSelected ? "bold" : "normal",
+                    }}
+                  >
+                    {item === 0 ? "None" : `Texture ${item}`}
+                  </Text>
+                </View>
+                {isSelected && (
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={24}
+                    color={themeColors.primary}
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        }
+      ),
+    []
+  );
+
+  const renderBgOption = useCallback(
+    ({ item }: { item: number }) => (
+      <BgOption
+        item={item}
+        isSelected={item === bgImageIndex}
+        onPress={() => selectBgImage(item)}
+        themeColors={themeColors}
+        bgTextures={memoizedBgTextures}
+      />
+    ),
+    [bgImageIndex, selectBgImage, themeColors, memoizedBgTextures, BgOption]
   );
 
   const isLoading = isInitializing || isSwitching;
@@ -470,355 +584,436 @@ const SettingsScreen = () => {
   );
 
   return (
-    <ScrollView
-      className="flex-1"
-      style={{ backgroundColor: themeColors.background }}
-      contentContainerStyle={{ paddingVertical: 16 }}
-      showsVerticalScrollIndicator={false}
-    >
-      <View className="px-4 mb-6">
-        <Text
-          className="text-2xl font-bold"
-          style={{
-            color: themeColors.textPrimary,
-            fontFamily: Fonts.RubikGlitchRegular,
-            fontSize: 28,
-          }}
-        >
-          Settings
-        </Text>
-        <Text className="text-sm mt-2" style={{ color: themeColors.textMuted }}>
-          Customize your Bible reading experience
-        </Text>
-      </View>
-
-      <SettingSection
-        title="Bible Version"
-        subtitle="Choose your preferred translation"
-        icon="book-outline"
+    <>
+      <ScrollView
+        className="flex-1"
+        style={{ backgroundColor: themeColors.background }}
+        contentContainerStyle={{ paddingVertical: 16 }}
+        showsVerticalScrollIndicator={false}
       >
-        {isLoading && (
-          <View
-            className="mb-4 p-3 rounded-lg"
-            style={{ backgroundColor: themeColors.primary + "20" }}
-          >
-            <View className="flex-row items-center">
-              <ActivityIndicator size="small" color={themeColors.primary} />
-              <Text
-                className="text-sm ml-3"
-                style={{ color: themeColors.primary }}
-              >
-                Switching version... Please wait
-              </Text>
-            </View>
-          </View>
-        )}
-
-        <VersionSelector
-          currentVersion={currentVersion}
-          selectedVersion={selectedVersion}
-          availableVersions={primaryAvailableVersions}
-          onVersionSelect={handleVersionSelect}
-          title=""
-          description=""
-          showCurrentVersion={false}
-          showActiveIndicator={true}
-          disabled={isLoading}
-        />
-
-        <View
-          className={`mt-4 p-3 rounded-lg ${showMultiVersion ? "mb-4" : ""}`}
-          style={{ backgroundColor: themeColors.border }}
-        >
+        <View className="px-4 mb-6">
           <Text
-            className="text-sm font-medium"
-            style={{ color: themeColors.textMuted }}
-          >
-            Current Version
-          </Text>
-          <Text
-            className="text-lg font-bold mt-1"
+            className="text-2xl font-bold"
             style={{
               color: themeColors.textPrimary,
-              fontFamily: Fonts.OswaldVariable,
+              fontFamily: Fonts.RubikGlitchRegular,
+              fontSize: 28,
             }}
           >
-            {getVersionDisplayName(currentVersion)}
+            Settings
+          </Text>
+          <Text
+            className="text-sm mt-2"
+            style={{ color: themeColors.textMuted }}
+          >
+            Customize your Bible reading experience
           </Text>
         </View>
 
-        {showMultiVersion && (
-          <VersionSelector
-            currentVersion={secondaryVersion || ""}
-            selectedVersion={secondaryVersion || ""}
-            availableVersions={secondaryAvailableVersions}
-            onVersionSelect={handleSecondaryVersionSelect}
-            title="Secondary Bible Version"
-            description="Choose a different translation for comparison"
-            showCurrentVersion={true}
-            colors={{
-              primary: themeColors.primary,
-              background: themeColors.background,
-              text: themeColors.textPrimary,
-              muted: themeColors.textMuted,
-              card: themeColors.card,
-              border: themeColors.border,
-            }}
-          />
-        )}
-      </SettingSection>
-
-      <SettingSection
-        title="Appearance"
-        subtitle="Customize look and feel"
-        icon="color-palette-outline"
-      >
-        <SettingItem
-          title="Dark Mode"
-          subtitle="Toggle between light and dark themes"
-          icon="moon-outline"
+        <SettingSection
+          title="Bible Version"
+          subtitle="Choose your preferred translation"
+          icon="book-outline"
         >
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            thumbColor={isDark ? themeColors.primary : "#f4f3f4"}
-            trackColor={{
-              false: themeColors.textMuted,
-              true: themeColors.primary + "80",
-            }}
-          />
-        </SettingItem>
-
-        <View
-          className="border-t my-3"
-          style={{ borderColor: themeColors.border }}
-        />
-
-        <View className="mb-4">
-          <Text
-            className="text-sm font-semibold mb-3"
-            style={{ color: themeColors.textPrimary }}
-          >
-            Color Scheme
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            className="flex-row"
-            contentContainerStyle={{ paddingRight: 16 }}
-          >
-            {colorSchemes.map((scheme) => (
-              <ColorButton
-                key={scheme.name}
-                scheme={scheme}
-                isSelected={colorScheme === scheme.name}
-                onPress={() => setColorScheme(scheme.name)}
-              />
-            ))}
-          </ScrollView>
-        </View>
-
-        <View
-          className="border-t my-3"
-          style={{ borderColor: themeColors.border }}
-        />
-
-        <View>
-          <Text
-            className="text-sm font-semibold mb-3"
-            style={{ color: themeColors.textPrimary }}
-          >
-            Font Family
-          </Text>
-          <View className="flex-row flex-wrap -mx-1">
-            {[
-              "system",
-              "serif",
-              "sans-serif",
-              "oswald",
-              "rubik-glitch",
-              "poppins",
-            ].map((familyStr) => {
-              const family = familyStr as FontFamily;
-              return (
-                <FontButton
-                  key={familyStr}
-                  font={family}
-                  isSelected={fontFamily === family}
-                  onPress={() => setFontFamily(family)}
-                />
-              );
-            })}
-          </View>
-        </View>
-      </SettingSection>
-
-      <SettingSection
-        title="Reader Settings"
-        subtitle="Customize reading experience"
-        icon="reader-outline"
-      >
-        <View
-          className="flex-row justify-between items-center py-3"
-          style={{
-            borderBottomWidth: 1,
-            borderBottomColor: themeColors.border,
-          }}
-        >
-          <Text
-            className="text-base font-medium"
-            style={{ color: themeColors.textPrimary }}
-          >
-            Font Size
-          </Text>
-          <View className="flex-row items-center">
-            <TouchableOpacity
-              onPress={decreaseFontSize}
-              className="size-8 rounded-full items-center justify-center mr-3"
-              style={{ backgroundColor: themeColors.card }}
+          {isLoading && (
+            <View
+              className="mb-4 p-3 rounded-lg"
+              style={{ backgroundColor: themeColors.primary + "20" }}
             >
-              <Text
-                className="font-bold text-lg"
-                style={{ color: themeColors.primary }}
-              >
-                A-
-              </Text>
-            </TouchableOpacity>
+              <View className="flex-row items-center">
+                <ActivityIndicator size="small" color={themeColors.primary} />
+                <Text
+                  className="text-sm ml-3"
+                  style={{ color: themeColors.primary }}
+                >
+                  Switching version... Please wait
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <VersionSelector
+            currentVersion={currentVersion}
+            selectedVersion={selectedVersion}
+            availableVersions={primaryAvailableVersions}
+            onVersionSelect={handleVersionSelect}
+            title=""
+            description=""
+            showCurrentVersion={false}
+            showActiveIndicator={true}
+            disabled={isLoading}
+          />
+
+          <View
+            className={`mt-4 p-3 rounded-lg ${showMultiVersion ? "mb-4" : ""}`}
+            style={{ backgroundColor: themeColors.border }}
+          >
             <Text
-              className="text-base font-medium mx-4"
+              className="text-sm font-medium"
+              style={{ color: themeColors.textMuted }}
+            >
+              Current Version
+            </Text>
+            <Text
+              className="text-lg font-bold mt-1"
+              style={{
+                color: themeColors.textPrimary,
+                fontFamily: Fonts.OswaldVariable,
+              }}
+            >
+              {getVersionDisplayName(currentVersion)}
+            </Text>
+          </View>
+
+          {showMultiVersion && (
+            <VersionSelector
+              currentVersion={secondaryVersion || ""}
+              selectedVersion={secondaryVersion || ""}
+              availableVersions={secondaryAvailableVersions}
+              onVersionSelect={handleSecondaryVersionSelect}
+              title="Secondary Bible Version"
+              description="Choose a different translation for comparison"
+              showCurrentVersion={true}
+              colors={{
+                primary: themeColors.primary,
+                background: themeColors.background,
+                text: themeColors.textPrimary,
+                muted: themeColors.textMuted,
+                card: themeColors.card,
+                border: themeColors.border,
+              }}
+            />
+          )}
+        </SettingSection>
+
+        <SettingSection
+          title="Appearance"
+          subtitle="Customize look and feel"
+          icon="color-palette-outline"
+        >
+          <SettingItem
+            title="Dark Mode"
+            subtitle="Toggle between light and dark themes"
+            icon="moon-outline"
+          >
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              thumbColor={isDark ? themeColors.primary : "#f4f3f4"}
+              trackColor={{
+                false: themeColors.textMuted,
+                true: themeColors.primary + "80",
+              }}
+            />
+          </SettingItem>
+
+          <View
+            className="border-t my-3"
+            style={{ borderColor: themeColors.border }}
+          />
+
+          <View className="mb-4">
+            <Text
+              className="text-sm font-semibold mb-3"
               style={{ color: themeColors.textPrimary }}
             >
-              {fontSize}px
+              Color Scheme
             </Text>
-            <TouchableOpacity
-              onPress={increaseFontSize}
-              className="size-8 rounded-full items-center justify-center ml-3"
-              style={{ backgroundColor: themeColors.card }}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="flex-row"
+              contentContainerStyle={{ paddingRight: 16 }}
             >
-              <Text
-                className="font-bold text-lg"
-                style={{ color: themeColors.primary }}
-              >
-                A+
-              </Text>
-            </TouchableOpacity>
+              {colorSchemes.map((scheme) => (
+                <ColorButton
+                  key={scheme.name}
+                  scheme={scheme}
+                  isSelected={colorScheme === scheme.name}
+                  onPress={() => setColorScheme(scheme.name)}
+                />
+              ))}
+            </ScrollView>
           </View>
-        </View>
 
-        <SettingItem
-          title="Multi-Version Display"
-          subtitle="Show two Bible versions side by side"
-          icon="copy-outline"
+          <View
+            className="border-t my-3"
+            style={{ borderColor: themeColors.border }}
+          />
+
+          <View>
+            <Text
+              className="text-sm font-semibold mb-3"
+              style={{ color: themeColors.textPrimary }}
+            >
+              Font Family
+            </Text>
+            <View className="flex-row flex-wrap -mx-1">
+              {[
+                "system",
+                "serif",
+                "sans-serif",
+                "oswald",
+                "rubik-glitch",
+                "poppins",
+              ].map((familyStr) => {
+                const family = familyStr as FontFamily;
+                return (
+                  <FontButton
+                    key={familyStr}
+                    font={family}
+                    isSelected={fontFamily === family}
+                    onPress={() => setFontFamily(family)}
+                  />
+                );
+              })}
+            </View>
+          </View>
+
+          <View
+            className="border-t my-3"
+            style={{ borderColor: themeColors.border }}
+          />
+
+          <SettingItem
+            title="Background Texture"
+            subtitle="Choose a subtle background for reading"
+            icon="image-outline"
+            onPress={() => setShowBgModal(true)}
+          >
+            <Text
+              className="text-sm"
+              style={{ color: themeColors.textPrimary }}
+            >
+              {bgImageIndex === 0 ? "None" : `Texture ${bgImageIndex}`}
+            </Text>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={themeColors.textMuted}
+            />
+          </SettingItem>
+        </SettingSection>
+
+        <SettingSection
+          title="Reader Settings"
+          subtitle="Customize reading experience"
+          icon="reader-outline"
         >
-          <Switch
-            value={showMultiVersion}
-            onValueChange={setShowMultiVersion}
-            thumbColor={showMultiVersion ? themeColors.primary : "#f4f3f4"}
-            trackColor={{
-              false: themeColors.textMuted,
-              true: themeColors.primary + "80",
+          <View
+            className="flex-row justify-between items-center py-3"
+            style={{
+              borderBottomWidth: 1,
+              borderBottomColor: themeColors.border,
             }}
-          />
-        </SettingItem>
-      </SettingSection>
+          >
+            <Text
+              className="text-base font-medium"
+              style={{ color: themeColors.textPrimary }}
+            >
+              Font Size
+            </Text>
+            <View className="flex-row items-center">
+              <TouchableOpacity
+                onPress={decreaseFontSize}
+                className="size-8 rounded-full items-center justify-center mr-3"
+                style={{ backgroundColor: themeColors.card }}
+              >
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: themeColors.primary }}
+                >
+                  A-
+                </Text>
+              </TouchableOpacity>
+              <Text
+                className="text-base font-medium mx-4"
+                style={{ color: themeColors.textPrimary }}
+              >
+                {fontSize}px
+              </Text>
+              <TouchableOpacity
+                onPress={increaseFontSize}
+                className="size-8 rounded-full items-center justify-center ml-3"
+                style={{ backgroundColor: themeColors.card }}
+              >
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: themeColors.primary }}
+                >
+                  A+
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
-      <SettingSection
-        title="More Options"
-        subtitle="Additional preferences"
-        icon="settings-outline"
-      >
-        <SettingItem
-          title="Data & Storage"
-          subtitle="Manage app data and cache"
-          icon="server-outline"
-          onPress={() =>
-            Alert.alert(
-              "Coming Soon",
-              "Data management features will be available in the next update."
-            )
-          }
+          <SettingItem
+            title="Multi-Version Display"
+            subtitle="Show two Bible versions side by side"
+            icon="copy-outline"
+          >
+            <Switch
+              value={showMultiVersion}
+              onValueChange={setShowMultiVersion}
+              thumbColor={showMultiVersion ? themeColors.primary : "#f4f3f4"}
+              trackColor={{
+                false: themeColors.textMuted,
+                true: themeColors.primary + "80",
+              }}
+            />
+          </SettingItem>
+        </SettingSection>
+
+        <SettingSection
+          title="More Options"
+          subtitle="Additional preferences"
+          icon="settings-outline"
         >
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={themeColors.textMuted}
-          />
-        </SettingItem>
-
-        <View
-          className="border-t my-3"
-          style={{ borderColor: themeColors.border }}
-        />
-
-        <SettingItem
-          title="About"
-          subtitle="App version and information"
-          icon="information-circle-outline"
-          onPress={() =>
-            Alert.alert("About", "Bible App v1.0.0\n\nFount of Hope Bible")
-          }
-        >
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={themeColors.textMuted}
-          />
-        </SettingItem>
-      </SettingSection>
-
-      <SettingSection
-        title="Quick Actions"
-        subtitle="Common tasks"
-        icon="flash-outline"
-      >
-        <View className="flex-row flex-wrap -mx-1">
-          <TouchableOpacity
-            className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center"
-            style={{ backgroundColor: themeColors.primary }}
+          <SettingItem
+            title="Data & Storage"
+            subtitle="Manage app data and cache"
+            icon="server-outline"
             onPress={() =>
               Alert.alert(
-                "Reset Settings",
-                "This will reset all settings to default."
+                "Coming Soon",
+                "Data management features will be available in the next update."
               )
             }
           >
-            <Ionicons name="refresh" size={20} color="white" />
-            <Text
-              className="text-white font-medium mt-2 text-center"
-              style={{
-                color: "white",
-                fontFamily: Fonts.OswaldVariable,
-              }}
-            >
-              Reset Settings
-            </Text>
-          </TouchableOpacity>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={themeColors.textMuted}
+            />
+          </SettingItem>
 
-          <TouchableOpacity
-            className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center border"
-            style={{
-              borderColor: themeColors.primary,
-              backgroundColor: themeColors.primary + "10",
-            }}
+          <View
+            className="border-t my-3"
+            style={{ borderColor: themeColors.border }}
+          />
+
+          <SettingItem
+            title="About"
+            subtitle="App version and information"
+            icon="information-circle-outline"
             onPress={() =>
-              Alert.alert("Feedback", "Share your feedback with us.")
+              Alert.alert("About", "Bible App v1.0.0\n\nFount of Hope Bible")
             }
           >
-            <Ionicons name="chatbubble" size={20} color={themeColors.primary} />
-            <Text
-              className="font-medium mt-2 text-center"
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={themeColors.textMuted}
+            />
+          </SettingItem>
+        </SettingSection>
+
+        <SettingSection
+          title="Quick Actions"
+          subtitle="Common tasks"
+          icon="flash-outline"
+        >
+          <View className="flex-row flex-wrap -mx-1">
+            <TouchableOpacity
+              className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center"
+              style={{ backgroundColor: themeColors.primary }}
+              onPress={() =>
+                Alert.alert(
+                  "Reset Settings",
+                  "This will reset all settings to default."
+                )
+              }
+            >
+              <Ionicons name="refresh" size={20} color="white" />
+              <Text
+                className="text-white font-medium mt-2 text-center"
+                style={{
+                  color: "white",
+                  fontFamily: Fonts.OswaldVariable,
+                }}
+              >
+                Reset Settings
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center border"
               style={{
-                color: themeColors.primary,
+                borderColor: themeColors.primary,
+                backgroundColor: themeColors.primary + "10",
+              }}
+              onPress={() =>
+                Alert.alert("Feedback", "Share your feedback with us.")
+              }
+            >
+              <Ionicons
+                name="chatbubble"
+                size={20}
+                color={themeColors.primary}
+              />
+              <Text
+                className="font-medium mt-2 text-center"
+                style={{
+                  color: themeColors.primary,
+                  fontFamily: Fonts.OswaldVariable,
+                }}
+              >
+                Send Feedback
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SettingSection>
+        <Footer />
+      </ScrollView>
+
+      <Modal visible={showBgModal} transparent animationType="slide">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: themeColors.background,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              padding: 16,
+              backgroundColor: themeColors.card,
+              borderBottomWidth: 1,
+              borderBottomColor: themeColors.border,
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setShowBgModal(false)}
+              style={{ padding: 4 }}
+            >
+              <Ionicons name="close" size={24} color={themeColors.primary} />
+            </TouchableOpacity>
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "bold",
+                color: themeColors.textPrimary,
                 fontFamily: Fonts.OswaldVariable,
               }}
             >
-              Send Feedback
+              Select Background Texture
             </Text>
-          </TouchableOpacity>
+            <View style={{ width: 24 }} />
+          </View>
+          <FlatList
+            data={[0, ...Array.from({ length: 33 }, (_, i) => i + 1)]}
+            keyExtractor={(item) => item.toString()}
+            renderItem={renderBgOption}
+            style={{ flex: 1 }}
+            removeClippedSubviews={true}
+            initialNumToRender={10}
+            maxToRenderPerBatch={5}
+            windowSize={10}
+          />
         </View>
-      </SettingSection>
-      <Footer />
-    </ScrollView>
+      </Modal>
+    </>
   );
 };
 
