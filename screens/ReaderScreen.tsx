@@ -141,27 +141,6 @@ export default function ReaderScreen({
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
   const [secondaryReady, setSecondaryReady] = useState(false);
-  useEffect(() => {
-    if (secondaryVersion === null) {
-      const setInitialSecondary = async () => {
-        try {
-          const saved = await AsyncStorage.getItem("secondaryVersion");
-          if (saved) {
-            setSecondaryVersion(saved);
-          } else {
-            const avail = availableBibleVersions.filter(
-              (v) => v !== currentVersion
-            );
-            setSecondaryVersion(avail[0] || availableBibleVersions[0]);
-          }
-        } catch (error) {
-          console.error("Failed to load initial secondary version:", error);
-          setSecondaryVersion(availableBibleVersions[0]);
-        }
-      };
-      setInitialSecondary();
-    }
-  }, [secondaryVersion, availableBibleVersions, currentVersion]);
   const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(false);
   const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
@@ -244,6 +223,44 @@ export default function ReaderScreen({
       ),
     [secondaryScrollY, secondaryContentHeight, secondaryScrollViewHeight]
   );
+  const reloadSecondaryDB = useCallback(
+    async (retries = 3): Promise<boolean> => {
+      if (!secondaryVersion) return false;
+      for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+          if (secondaryDB.current) {
+            await secondaryDB.current.close().catch(console.error);
+            secondaryDB.current = null;
+          }
+          secondaryDB.current = new BibleDatabase(secondaryVersion);
+          await secondaryDB.current.init();
+          setSecondaryReady(true);
+          return true;
+        } catch (error) {
+          console.error(
+            `Secondary DB reload attempt ${attempt + 1} failed:`,
+            error
+          );
+          if (secondaryDB.current) {
+            await secondaryDB.current.close().catch(console.error);
+            secondaryDB.current = null;
+          }
+          if (attempt < retries - 1) {
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000 * (attempt + 1))
+            );
+          }
+        }
+      }
+      setSecondaryReady(false);
+      Alert.alert(
+        "Error",
+        `Failed to load ${getVersionDisplayName(secondaryVersion)} after ${retries} attempts.`
+      );
+      return false;
+    },
+    [secondaryVersion]
+  );
   useEffect(() => {
     if (!showMultiVersion) return;
 
@@ -276,21 +293,29 @@ export default function ReaderScreen({
     };
   }, [primaryProgress, secondaryProgress, showMultiVersion]);
   useEffect(() => {
-    if (showMultiVersion && secondaryVersion) {
-      if (secondaryVersion === currentVersion) {
-        setSecondaryReady(true);
-      } else {
-        setSecondaryReady(false);
-        const initSecondaryDB = async () => {
-          secondaryDB.current = new BibleDatabase(secondaryVersion);
-          await secondaryDB.current.init();
-          setSecondaryReady(true);
-        };
-        initSecondaryDB();
-      }
-    } else {
+    if (!showMultiVersion || !secondaryVersion) {
       setSecondaryReady(false);
+      if (secondaryDB.current) {
+        secondaryDB.current.close().catch(console.error);
+        secondaryDB.current = null;
+      }
+      return () => {
+        if (secondaryDB.current) {
+          secondaryDB.current.close().catch(console.error);
+          secondaryDB.current = null;
+        }
+        setSecondaryReady(false);
+      };
     }
+
+    setSecondaryReady(false);
+    const initSecondary = async () => {
+      const success = await reloadSecondaryDB();
+      if (!success) {
+        setShowMultiVersion(false);
+      }
+    };
+    initSecondary();
 
     return () => {
       if (secondaryDB.current) {
@@ -299,7 +324,7 @@ export default function ReaderScreen({
       }
       setSecondaryReady(false);
     };
-  }, [showMultiVersion, secondaryVersion, currentVersion]);
+  }, [showMultiVersion, secondaryVersion, reloadSecondaryDB]);
   const getHighlightVerse = useCallback(
     (isPrimary: boolean): number | undefined => {
       if (isLinked || !showMultiVersion) {
@@ -359,38 +384,81 @@ export default function ReaderScreen({
       if (bibleDB) {
         try {
           const chCount = await bibleDB.getChapterCount(primaryLocation.bookId);
-          setPrimaryMaxChapter(chCount);
+          setPrimaryMaxChapter(chCount || 0);
         } catch (error) {
           console.error("Failed to load navigation data:", error);
+          try {
+            setIsSwitchingVersion(true);
+            await switchVersion(currentVersion);
+            const chCount = await bibleDB.getChapterCount(
+              primaryLocation.bookId
+            );
+            setPrimaryMaxChapter(chCount || 0);
+          } catch (reloadError) {
+            console.error("Failed to reload primary database:", reloadError);
+            setPrimaryMaxChapter(0);
+            Alert.alert(
+              "Error",
+              "Failed to load book information. Please try switching versions or restart the app."
+            );
+          } finally {
+            setIsSwitchingVersion(false);
+          }
         }
+      } else {
+        setPrimaryMaxChapter(0);
       }
     };
     load();
-  }, [bibleDB, primaryLocation.bookId]);
+  }, [
+    bibleDB,
+    primaryLocation.bookId,
+    currentVersion,
+    switchVersion,
+    setIsSwitchingVersion,
+  ]);
   useEffect(() => {
     const load = async () => {
-      if (showMultiVersion && secondaryVersion && secondaryReady) {
-        let db =
-          secondaryVersion === currentVersion ? bibleDB : secondaryDB.current;
-        if (db) {
-          try {
-            const chCount = await db.getChapterCount(secondaryLocation.bookId);
-            setSecondaryMaxChapter(chCount);
-          } catch (error) {
-            console.error("Failed to load secondary max chapter:", error);
+      if (
+        showMultiVersion &&
+        secondaryVersion &&
+        secondaryReady &&
+        secondaryDB.current
+      ) {
+        try {
+          const chCount = await secondaryDB.current.getChapterCount(
+            secondaryLocation.bookId
+          );
+          setSecondaryMaxChapter(chCount || 0);
+        } catch (error) {
+          console.error("Failed to load secondary max chapter:", error);
+          const success = await reloadSecondaryDB();
+          if (success && secondaryDB.current) {
+            try {
+              const chCount = await secondaryDB.current.getChapterCount(
+                secondaryLocation.bookId
+              );
+              setSecondaryMaxChapter(chCount || 0);
+            } catch (retryError) {
+              console.error("Retry load secondary max failed:", retryError);
+              setSecondaryMaxChapter(0);
+            }
+          } else {
+            setSecondaryMaxChapter(0);
           }
         }
+      } else {
+        setSecondaryMaxChapter(0);
       }
     };
     load();
   }, [
     showMultiVersion,
     secondaryVersion,
-    currentVersion,
     secondaryLocation.bookId,
     secondaryReady,
-    bibleDB,
     secondaryDB,
+    reloadSecondaryDB,
   ]);
   useEffect(() => {
     const loadLayoutPreference = async () => {
@@ -459,17 +527,67 @@ export default function ReaderScreen({
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion) return;
+      const originalSecondaryVersion = secondaryVersion;
+      let wasSwapped = false;
+      if (
+        version === secondaryVersion &&
+        showMultiVersion &&
+        secondaryVersion !== null
+      ) {
+        // Swap versions
+        setSecondaryVersion(currentVersion);
+        wasSwapped = true;
+      }
       try {
         setIsSwitchingVersion(true);
         await switchVersion(version);
       } catch (error) {
-        Alert.alert("Error", "Failed to switch Bible version.");
+        console.error("Switch version failed:", error);
+        const originalVersion = currentVersion;
+        // Try revert to original
+        try {
+          await switchVersion(originalVersion);
+        } catch (revertError) {
+          console.error("Failed to revert version:", revertError);
+          Alert.alert(
+            "Error",
+            "Version switch failed and revert failed. Please restart."
+          );
+          return;
+        }
+        // Then retry the new version
+        try {
+          await switchVersion(version);
+        } catch (retryError) {
+          console.error("Retry switch failed:", retryError);
+          // Revert swap if switch failed
+          if (wasSwapped) {
+            setSecondaryVersion(originalSecondaryVersion);
+          }
+          Alert.alert("Error", "Failed to switch Bible version after retry.");
+        }
       } finally {
         setIsSwitchingVersion(false);
       }
     },
-    [currentVersion, switchVersion]
+    [currentVersion, secondaryVersion, showMultiVersion, switchVersion]
   );
+  useEffect(() => {
+    if (showMultiVersion && secondaryVersion === currentVersion) {
+      const avail = availableBibleVersions.filter((v) => v !== currentVersion);
+      if (avail.length > 0) {
+        setSecondaryVersion(avail[0]);
+      } else {
+        setSecondaryVersion(null);
+        setShowMultiVersion(false);
+      }
+    }
+  }, [
+    currentVersion,
+    secondaryVersion,
+    showMultiVersion,
+    availableBibleVersions,
+  ]);
   const toggleMultiVersion = useCallback(() => {
     setShowMultiVersion((prev) => !prev);
     resetButtonOpacity();
@@ -1066,12 +1184,17 @@ export default function ReaderScreen({
           AsyncStorage.getItem("secondaryVersion"),
           AsyncStorage.getItem("isLinked"),
         ]);
-        if (showMultiStr === "true" && !showMultiVersion) {
+        if (showMultiStr === "true") {
           setShowMultiVersion(true);
         }
-        if (secVer && secVer !== secondaryVersion) {
-          setSecondaryVersion(secVer);
+        let initialSec = secVer;
+        if (!initialSec) {
+          const avail = availableBibleVersions.filter(
+            (v) => v !== currentVersion
+          );
+          initialSec = avail[0] || availableBibleVersions[0];
         }
+        setSecondaryVersion(initialSec);
         if (linkedStr !== null) {
           setIsLinked(linkedStr === "true");
         }
@@ -1080,7 +1203,7 @@ export default function ReaderScreen({
       }
     };
     load();
-  }, []);
+  }, [availableBibleVersions, currentVersion]);
   useEffect(() => {
     AsyncStorage.setItem(
       "showMultiVersion",
@@ -1095,39 +1218,52 @@ export default function ReaderScreen({
     }
   }, [secondaryVersion]);
   const loadSecondaryVerses = useCallback(async () => {
-    if (!showMultiVersion || !secondaryVersion || !secondaryReady) {
+    if (
+      !showMultiVersion ||
+      !secondaryVersion ||
+      !secondaryReady ||
+      !secondaryDB.current
+    ) {
       setSecondaryVerses([]);
+      setSecondaryLoading(false);
       return;
     }
     setSecondaryLoading(true);
     secondaryVerseMeasurementsRef.current = {};
     try {
-      let db =
-        secondaryVersion === currentVersion ? bibleDB : secondaryDB.current;
-      if (!db) {
-        setSecondaryVerses([]);
-        return;
-      }
-      const verses = await db.getVerses(
+      const verses = await secondaryDB.current.getVerses(
         secondaryLocation.bookId,
         secondaryLocation.chapter
       );
       setSecondaryVerses(verses);
     } catch (error) {
       console.error("Failed to load secondary verses:", error);
-      setSecondaryVerses([]);
+      const success = await reloadSecondaryDB();
+      if (success && secondaryDB.current) {
+        try {
+          const verses = await secondaryDB.current.getVerses(
+            secondaryLocation.bookId,
+            secondaryLocation.chapter
+          );
+          setSecondaryVerses(verses);
+        } catch (retryError) {
+          console.error("Retry load secondary verses failed:", retryError);
+          setSecondaryVerses([]);
+        }
+      } else {
+        setSecondaryVerses([]);
+      }
     } finally {
       setSecondaryLoading(false);
     }
   }, [
     showMultiVersion,
     secondaryVersion,
-    currentVersion,
+    secondaryReady,
     secondaryLocation.bookId,
     secondaryLocation.chapter,
-    secondaryReady,
-    bibleDB,
     secondaryDB,
+    reloadSecondaryDB,
   ]);
   useEffect(() => {
     loadSecondaryVerses();
@@ -1145,9 +1281,13 @@ export default function ReaderScreen({
   const secondaryDisplayBookName =
     secondaryBookInfo?.long || secondaryLocation.bookName;
   const versionName = getVersionDisplayName(currentVersion);
-  const handleSecondaryVersionSelect = useCallback((version: string) => {
-    setSecondaryVersion(version);
-  }, []);
+  const handleSecondaryVersionSelect = useCallback(
+    (version: string) => {
+      if (version === currentVersion) return;
+      setSecondaryVersion(version);
+    },
+    [currentVersion]
+  );
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   if (!bibleDB || highlightedVersesLoading) {
     return (
@@ -1193,6 +1333,20 @@ export default function ReaderScreen({
       }
     }
   }
+  const versionsToShow = useMemo(() => {
+    if (openSelector === "primary" && showMultiVersion && secondaryVersion) {
+      return availableBibleVersions.filter((v) => v !== secondaryVersion);
+    } else if (openSelector === "secondary") {
+      return availableBibleVersions.filter((v) => v !== currentVersion);
+    }
+    return availableBibleVersions;
+  }, [
+    openSelector,
+    availableBibleVersions,
+    currentVersion,
+    showMultiVersion,
+    secondaryVersion,
+  ]);
   const renderChevronButtons = useMemo(() => {
     const pairGap = isLandscape ? 200 : 48;
     if (!showMultiVersion || isLinked) {
@@ -1733,7 +1887,7 @@ export default function ReaderScreen({
                   <ActivityIndicator size="small" color={primaryTextColor} />
                 </View>
               ) : openSelector ? (
-                availableBibleVersions.map((v, index) => (
+                versionsToShow.map((v, index) => (
                   <TouchableOpacity
                     key={v}
                     onPress={async () => {
@@ -1748,7 +1902,7 @@ export default function ReaderScreen({
                       paddingHorizontal: 16,
                       paddingVertical: 8,
                       borderBottomWidth:
-                        index < availableBibleVersions.length - 1 ? 1 : 0,
+                        index < versionsToShow.length - 1 ? 1 : 0,
                       borderBottomColor: colors.primary + "40",
                     }}
                     activeOpacity={0.7}

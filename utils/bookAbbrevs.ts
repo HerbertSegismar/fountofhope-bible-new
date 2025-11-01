@@ -40,6 +40,7 @@ export const BOOK_ABBREVS: Record<string, string[]> = {
   "1 Kings": [
     "1 Kings",
     "1 Kgs",
+    "1 Kgs.",
     "1 Ki",
     "1Kgs",
     "1Kin",
@@ -121,7 +122,7 @@ export const BOOK_ABBREVS: Record<string, string[]> = {
   Hosea: ["Hos.", "Ho."],
   Joel: ["Joel", "Jl."],
   Amos: ["Amos"],
-  Obadiah: ["Obad.", "Ob."],
+  Obadiah: ["Ob.", "Obad."],
   Jonah: ["Jonah", "Jnh.", "Jon."],
   Micah: ["Mic.", "Mc."],
   Nahum: ["Nah.", "Na."],

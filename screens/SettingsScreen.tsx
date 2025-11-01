@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -10,12 +10,9 @@ import {
   Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
-import {
-  useTheme,
-  ColorScheme,
-  FontFamily,
-} from "../context/ThemeContext";
+import { useTheme, ColorScheme, FontFamily } from "../context/ThemeContext";
 import { VersionSelector } from "../components/VersionSelector";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Fonts } from "../utils/fonts";
@@ -45,6 +42,9 @@ const SettingsScreen = () => {
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
   const [isSwitching, setIsSwitching] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
+  const [fontSize, setFontSize] = useState(16);
+  const [showMultiVersion, setShowMultiVersion] = useState(false);
+  const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
 
   const themeColors = getThemeColors(theme, colorScheme, customColor);
 
@@ -61,13 +61,75 @@ const SettingsScreen = () => {
   }, []);
 
   useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const [fontStr, multiStr, secVer] = await Promise.all([
+          AsyncStorage.getItem("fontSize"),
+          AsyncStorage.getItem("showMultiVersion"),
+          AsyncStorage.getItem("secondaryVersion"),
+        ]);
+        if (fontStr) setFontSize(parseInt(fontStr, 10));
+        if (multiStr === "true") setShowMultiVersion(true);
+        if (secVer) setSecondaryVersion(secVer);
+      } catch (e) {
+        console.error("Failed to load settings", e);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem("fontSize", fontSize.toString()).catch(console.error);
+  }, [fontSize]);
+
+  useEffect(() => {
+    AsyncStorage.setItem("showMultiVersion", showMultiVersion.toString()).catch(
+      console.error
+    );
+  }, [showMultiVersion]);
+
+  useEffect(() => {
+    if (secondaryVersion) {
+      AsyncStorage.setItem("secondaryVersion", secondaryVersion).catch(
+        console.error
+      );
+    }
+  }, [secondaryVersion]);
+
+  useEffect(() => {
     setSelectedVersion(currentVersion);
   }, [currentVersion]);
+
+  useEffect(() => {
+    if (showMultiVersion && secondaryVersion === currentVersion) {
+      const avail = availableBibleVersions.filter((v) => v !== currentVersion);
+      if (avail.length > 0) {
+        setSecondaryVersion(avail[0]);
+      } else {
+        setSecondaryVersion(null);
+        setShowMultiVersion(false);
+      }
+    }
+  }, [
+    currentVersion,
+    secondaryVersion,
+    showMultiVersion,
+    availableBibleVersions,
+  ]);
 
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion || isSwitching) return;
-
+      const originalSecondaryVersion = secondaryVersion;
+      let wasSwapped = false;
+      if (
+        version === secondaryVersion &&
+        showMultiVersion &&
+        secondaryVersion !== null
+      ) {
+        setSecondaryVersion(currentVersion);
+        wasSwapped = true;
+      }
       setSelectedVersion(version);
       setIsSwitching(true);
 
@@ -93,6 +155,10 @@ const SettingsScreen = () => {
         }
       }
 
+      if (wasSwapped) {
+        setSecondaryVersion(originalSecondaryVersion);
+      }
+
       let errorMessage =
         "Failed to switch Bible version after multiple attempts. Please try another version.";
       if (lastError instanceof Error) {
@@ -108,7 +174,30 @@ const SettingsScreen = () => {
       setSelectedVersion(currentVersion);
       setIsSwitching(false);
     },
-    [currentVersion, isSwitching, switchVersion]
+    [
+      currentVersion,
+      isSwitching,
+      switchVersion,
+      secondaryVersion,
+      showMultiVersion,
+    ]
+  );
+
+  const handleSecondaryVersionSelect = useCallback(
+    (version: string) => {
+      if (version === currentVersion) return;
+      setSecondaryVersion(version);
+    },
+    [currentVersion]
+  );
+
+  const increaseFontSize = useCallback(
+    () => setFontSize((prev) => Math.min(prev + 1, 24)),
+    []
+  );
+  const decreaseFontSize = useCallback(
+    () => setFontSize((prev) => Math.max(prev - 1, 12)),
+    []
   );
 
   const isLoading = isInitializing || isSwitching;
@@ -269,10 +358,16 @@ const SettingsScreen = () => {
     isSelected: boolean;
     onPress: () => void;
   }) => {
+    const previewCustomColor =
+      scheme.name === "custom"
+        ? customColor
+        : colorScheme === scheme.name
+          ? customColor
+          : undefined;
     const previewThemeColors = getThemeColors(
       theme,
       scheme.name as ColorScheme,
-      colorScheme === scheme.name ? customColor : undefined
+      previewCustomColor
     );
     const previewPrimary = previewThemeColors.primary;
     const previewBg = previewThemeColors.background;
@@ -361,6 +456,19 @@ const SettingsScreen = () => {
     );
   };
 
+  const primaryAvailableVersions = useMemo(
+    () =>
+      showMultiVersion && secondaryVersion
+        ? availableBibleVersions.filter((v) => v !== secondaryVersion)
+        : availableBibleVersions,
+    [availableBibleVersions, showMultiVersion, secondaryVersion]
+  );
+
+  const secondaryAvailableVersions = useMemo(
+    () => availableBibleVersions.filter((v) => v !== currentVersion),
+    [availableBibleVersions, currentVersion]
+  );
+
   return (
     <ScrollView
       className="flex-1"
@@ -409,7 +517,7 @@ const SettingsScreen = () => {
         <VersionSelector
           currentVersion={currentVersion}
           selectedVersion={selectedVersion}
-          availableVersions={availableBibleVersions}
+          availableVersions={primaryAvailableVersions}
           onVersionSelect={handleVersionSelect}
           title=""
           description=""
@@ -419,7 +527,7 @@ const SettingsScreen = () => {
         />
 
         <View
-          className="mt-4 p-3 rounded-lg"
+          className={`mt-4 p-3 rounded-lg ${showMultiVersion ? "mb-4" : ""}`}
           style={{ backgroundColor: themeColors.border }}
         >
           <Text
@@ -438,6 +546,26 @@ const SettingsScreen = () => {
             {getVersionDisplayName(currentVersion)}
           </Text>
         </View>
+
+        {showMultiVersion && (
+          <VersionSelector
+            currentVersion={secondaryVersion || ""}
+            selectedVersion={secondaryVersion || ""}
+            availableVersions={secondaryAvailableVersions}
+            onVersionSelect={handleSecondaryVersionSelect}
+            title="Secondary Bible Version"
+            description="Choose a different translation for comparison"
+            showCurrentVersion={true}
+            colors={{
+              primary: themeColors.primary,
+              background: themeColors.background,
+              text: themeColors.textPrimary,
+              muted: themeColors.textMuted,
+              card: themeColors.card,
+              border: themeColors.border,
+            }}
+          />
+        )}
       </SettingSection>
 
       <SettingSection
@@ -526,6 +654,75 @@ const SettingsScreen = () => {
       </SettingSection>
 
       <SettingSection
+        title="Reader Settings"
+        subtitle="Customize reading experience"
+        icon="reader-outline"
+      >
+        <View
+          className="flex-row justify-between items-center py-3"
+          style={{
+            borderBottomWidth: 1,
+            borderBottomColor: themeColors.border,
+          }}
+        >
+          <Text
+            className="text-base font-medium"
+            style={{ color: themeColors.textPrimary }}
+          >
+            Font Size
+          </Text>
+          <View className="flex-row items-center">
+            <TouchableOpacity
+              onPress={decreaseFontSize}
+              className="size-8 rounded-full items-center justify-center mr-3"
+              style={{ backgroundColor: themeColors.card }}
+            >
+              <Text
+                className="font-bold text-lg"
+                style={{ color: themeColors.primary }}
+              >
+                A-
+              </Text>
+            </TouchableOpacity>
+            <Text
+              className="text-base font-medium mx-4"
+              style={{ color: themeColors.textPrimary }}
+            >
+              {fontSize}px
+            </Text>
+            <TouchableOpacity
+              onPress={increaseFontSize}
+              className="size-8 rounded-full items-center justify-center ml-3"
+              style={{ backgroundColor: themeColors.card }}
+            >
+              <Text
+                className="font-bold text-lg"
+                style={{ color: themeColors.primary }}
+              >
+                A+
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <SettingItem
+          title="Multi-Version Display"
+          subtitle="Show two Bible versions side by side"
+          icon="copy-outline"
+        >
+          <Switch
+            value={showMultiVersion}
+            onValueChange={setShowMultiVersion}
+            thumbColor={showMultiVersion ? themeColors.primary : "#f4f3f4"}
+            trackColor={{
+              false: themeColors.textMuted,
+              true: themeColors.primary + "80",
+            }}
+          />
+        </SettingItem>
+      </SettingSection>
+
+      <SettingSection
         title="More Options"
         subtitle="Additional preferences"
         icon="settings-outline"
@@ -538,29 +735,6 @@ const SettingsScreen = () => {
             Alert.alert(
               "Coming Soon",
               "Data management features will be available in the next update."
-            )
-          }
-        >
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={themeColors.textMuted}
-          />
-        </SettingItem>
-
-        <View
-          className="border-t my-3"
-          style={{ borderColor: themeColors.border }}
-        />
-
-        <SettingItem
-          title="Reading Preferences"
-          subtitle="Customize reading experience"
-          icon="reader-outline"
-          onPress={() =>
-            Alert.alert(
-              "Coming Soon",
-              "Reading preferences will be available in the next update."
             )
           }
         >
@@ -608,11 +782,7 @@ const SettingsScreen = () => {
               )
             }
           >
-            <Ionicons
-              name="refresh"
-              size={20}
-              color="white"
-            />
+            <Ionicons name="refresh" size={20} color="white" />
             <Text
               className="text-white font-medium mt-2 text-center"
               style={{

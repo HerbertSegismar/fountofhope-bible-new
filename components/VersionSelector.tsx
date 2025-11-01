@@ -106,7 +106,7 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
                   ? effectiveColors.primary
                   : undefined,
               }}
-              onPress={() => !disabled && !loading && onVersionSelect(version)} 
+              onPress={() => !disabled && !loading && onVersionSelect(version)}
               disabled={disabled || loading}
             >
               <View className="flex-row justify-between items-center">

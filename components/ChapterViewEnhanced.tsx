@@ -364,7 +364,7 @@ const renderCommentaryWithVerseLinks = (
 
   const bookKeys = Object.keys(bookToNumber);
   const escapedKeys = bookKeys.map(escapeRegex);
-  const bookPattern = escapedKeys.join("|");
+  const bookPattern = escapedKeys.map((key) => `\\b${key}\\b`).join("|");
   const DASH_PATTERN = "[-–—]";
 
   const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\s*\\d+)?`;
