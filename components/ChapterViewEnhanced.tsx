@@ -854,6 +854,7 @@ interface ChapterViewProps {
   ) => void;
   bgImageIndex?: number;
   bgTextureOpacity?: number;
+  noBackground?: boolean;
 }
 
 type DictHistoryEntry = {
@@ -901,6 +902,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   displayVersion,
   bgImageIndex: propBgImageIndex,
   bgTextureOpacity: propBgTextureOpacity,
+  noBackground,
 }) => {
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
@@ -911,6 +913,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [bgImageIndex, setBgImageIndex] = useState(0);
   const [bgTextureOpacity, setBgTextureOpacity] = useState(0.5);
 
+  const effectiveNoBg = noBackground ?? false;
   const effectiveTextureOpacity =
     propBgTextureOpacity !== undefined
       ? propBgTextureOpacity
@@ -929,7 +932,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   }, [propBgTextureOpacity]);
 
   useEffect(() => {
-    if (propBgImageIndex === undefined) {
+    if (propBgImageIndex === undefined && !effectiveNoBg) {
       AsyncStorage.getItem("bgImageIndex")
         .then((str) => {
           if (str !== null) {
@@ -938,10 +941,10 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         })
         .catch(console.error);
     }
-  }, [propBgImageIndex]);
+  }, [propBgImageIndex, effectiveNoBg]);
 
   useEffect(() => {
-    if (propBgTextureOpacity === undefined) {
+    if (propBgTextureOpacity === undefined && !effectiveNoBg) {
       AsyncStorage.getItem("bgTextureOpacity")
         .then((str) => {
           if (str !== null) {
@@ -950,11 +953,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         })
         .catch(console.error);
     }
-  }, [propBgTextureOpacity]);
+  }, [propBgTextureOpacity, effectiveNoBg]);
 
   useFocusEffect(
     useCallback(() => {
-      if (propBgImageIndex === undefined) {
+      if (propBgImageIndex === undefined && !effectiveNoBg) {
         AsyncStorage.getItem("bgImageIndex")
           .then((str) => {
             if (str !== null) {
@@ -964,7 +967,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           })
           .catch(console.error);
       }
-      if (propBgTextureOpacity === undefined) {
+      if (propBgTextureOpacity === undefined && !effectiveNoBg) {
         AsyncStorage.getItem("bgTextureOpacity")
           .then((str) => {
             if (str !== null) {
@@ -974,7 +977,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           })
           .catch(console.error);
       }
-    }, [propBgImageIndex, propBgTextureOpacity])
+    }, [propBgImageIndex, propBgTextureOpacity, effectiveNoBg])
   );
 
   const bookToNumber = useMemo(() => {
@@ -1325,6 +1328,26 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     setModalStack([]);
   }, []);
 
+  const memoizedBgSource = useMemo(
+    () =>
+      effectiveNoBg || bgImageIndex <= 0 ? undefined : bgImages[bgImageIndex],
+    [effectiveNoBg, bgImageIndex]
+  );
+  const hasBg = !!memoizedBgSource;
+
+  const overlayStyle = useMemo(
+    () => ({
+      flex: 1,
+      backgroundColor:
+        theme === "dark"
+          ? `rgba(24, 19, 56, ${hasBg ? 1 - effectiveTextureOpacity : 1})`
+          : `rgba(222, 216, 182, ${hasBg ? 1 - effectiveTextureOpacity : 1})`,
+    }),
+    [theme, hasBg, effectiveTextureOpacity]
+  );
+
+  const overlayKey = `overlay-${Math.floor(effectiveTextureOpacity * 1000)}`;
+
   const sortedVerses = useMemo(
     () => [...verses].sort((a, b) => a.verse - b.verse),
     [verses]
@@ -1359,30 +1382,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const hasDictBack =
     modalView === "commentary" && isDictMode && currentDictIndex > 0;
 
-  const memoizedBgSource = useMemo(
-    () => (bgImageIndex > 0 ? bgImages[bgImageIndex] : undefined),
-    [bgImageIndex]
-  );
-
-  const overlayStyle = useMemo(
-    () => ({
-      flex: 1,
-      backgroundColor:
-        theme === "dark"
-          ? `rgba(24, 19, 56, ${memoizedBgSource ? 1 - effectiveTextureOpacity : 1})`
-          : `rgba(222, 216, 182, ${memoizedBgSource ? 1 - effectiveTextureOpacity : 1})`,
-    }),
-    [theme, memoizedBgSource, effectiveTextureOpacity]
-  );
-
-  const overlayKey = `overlay-${Math.floor(effectiveTextureOpacity * 1000)}`;
-
   if (sortedVerses.length === 0) {
     return (
       <View
         style={[
           {
-            backgroundColor: themeColors.card,
+            backgroundColor: effectiveNoBg ? "transparent" : themeColors.card,
             padding: isFullScreen ? 8 : 16,
             borderRadius: 8,
             borderWidth: 1,
@@ -1535,9 +1540,18 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     () => ({
       ...STYLES.container,
       flex: isFullScreen ? 1 : undefined,
-      backgroundColor: memoizedBgSource ? undefined : themeColors.card,
+      backgroundColor: effectiveNoBg
+        ? "transparent"
+        : hasBg
+          ? undefined
+          : themeColors.card,
+      // Conditionally disable shadow/elevation to avoid border-like artifacts with bg image
+      shadowOpacity: hasBg ? 0 : 0.1,
+      shadowRadius: hasBg ? 0 : 4,
+      shadowOffset: hasBg ? { width: 0, height: 0 } : { width: 0, height: 2 },
+      elevation: 0,
     }),
-    [isFullScreen, memoizedBgSource, themeColors.card]
+    [isFullScreen, effectiveNoBg, hasBg, themeColors.card]
   );
 
   const contentContainerStyle = useMemo(
@@ -1582,32 +1596,32 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     </>
   );
 
+  const scrollOrView = effectiveNoBg ? (
+    <View style={contentContainerStyle}>{innerContent}</View>
+  ) : (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={contentContainerStyle}
+      showsVerticalScrollIndicator={false}
+    >
+      {innerContent}
+    </ScrollView>
+  );
+
   const chapterContent = (
     <View style={[wrapperStyle, style]}>
-      {memoizedBgSource ? (
+      {hasBg ? (
         <ImageBackground
           source={memoizedBgSource}
-          resizeMode="repeat"
+          resizeMode="cover"
           style={{ flex: 1 }}
         >
           <View key={overlayKey} style={overlayStyle}>
-            <ScrollView
-              style={{ flex: 1 }}
-              contentContainerStyle={contentContainerStyle}
-              showsVerticalScrollIndicator={false}
-            >
-              {innerContent}
-            </ScrollView>
+            {scrollOrView}
           </View>
         </ImageBackground>
       ) : (
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={contentContainerStyle}
-          showsVerticalScrollIndicator={false}
-        >
-          {innerContent}
-        </ScrollView>
+        scrollOrView
       )}
     </View>
   );

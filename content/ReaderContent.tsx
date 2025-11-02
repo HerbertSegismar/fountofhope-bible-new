@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,9 +6,49 @@ import {
   ScrollView,
   ActivityIndicator,
   LayoutChangeEvent,
+  ImageBackground,
 } from "react-native";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import type { Verse as VerseType } from "../types";
+import { useTheme } from "../context/ThemeContext";
+import { useFocusEffect } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const bgImages: { [key: number]: any } = {
+  1: require("../assets/textures/1.jpg"),
+  2: require("../assets/textures/2.jpg"),
+  3: require("../assets/textures/3.jpg"),
+  4: require("../assets/textures/4.jpg"),
+  5: require("../assets/textures/5.jpg"),
+  6: require("../assets/textures/6.jpg"),
+  7: require("../assets/textures/7.jpg"),
+  8: require("../assets/textures/8.jpg"),
+  9: require("../assets/textures/9.jpg"),
+  10: require("../assets/textures/10.jpg"),
+  11: require("../assets/textures/11.jpg"),
+  12: require("../assets/textures/12.jpg"),
+  13: require("../assets/textures/13.jpg"),
+  14: require("../assets/textures/14.jpg"),
+  15: require("../assets/textures/15.jpg"),
+  16: require("../assets/textures/16.jpg"),
+  17: require("../assets/textures/17.jpg"),
+  18: require("../assets/textures/18.jpg"),
+  19: require("../assets/textures/19.jpg"),
+  20: require("../assets/textures/20.jpg"),
+  21: require("../assets/textures/21.jpg"),
+  22: require("../assets/textures/22.jpg"),
+  23: require("../assets/textures/23.jpg"),
+  24: require("../assets/textures/24.jpg"),
+  25: require("../assets/textures/25.jpg"),
+  26: require("../assets/textures/26.jpg"),
+  27: require("../assets/textures/27.jpg"),
+  28: require("../assets/textures/28.jpg"),
+  29: require("../assets/textures/29.jpg"),
+  30: require("../assets/textures/30.jpg"),
+  31: require("../assets/textures/31.jpg"),
+  32: require("../assets/textures/32.jpg"),
+  33: require("../assets/textures/33.jpg"),
+};
 
 interface ReaderContentProps {
   primaryVerses: VerseType[];
@@ -124,7 +164,56 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
   secondaryScrollViewRef,
   bgTextureOpacity,
 }) => {
-  const renderPrimaryContent = () => {
+  const { theme } = useTheme();
+  const [bgImageIndex, setBgImageIndex] = useState(0);
+
+  useEffect(() => {
+    AsyncStorage.getItem("bgImageIndex")
+      .then((str) => {
+        if (str !== null) {
+          setBgImageIndex(parseInt(str, 10) || 0);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      AsyncStorage.getItem("bgImageIndex")
+        .then((str) => {
+          if (str !== null) {
+            const newIndex = parseInt(str, 10) || 0;
+            setBgImageIndex(newIndex);
+          }
+        })
+        .catch(console.error);
+    }, [])
+  );
+
+  const memoizedBgSource = useMemo(
+    () => (bgImageIndex > 0 ? bgImages[bgImageIndex] : undefined),
+    [bgImageIndex]
+  );
+
+  const hasBgImage = !!memoizedBgSource;
+
+  const overlayStyle = useMemo(
+    () => ({
+      flex: 1,
+      backgroundColor:
+        theme === "dark"
+          ? `rgba(24, 19, 56, ${hasBgImage ? 1 - bgTextureOpacity : 1})`
+          : `rgba(222, 216, 182, ${hasBgImage ? 1 - bgTextureOpacity : 1})`,
+    }),
+    [theme, hasBgImage, bgTextureOpacity]
+  );
+
+  const overlayKey = `overlay-${Math.floor(bgTextureOpacity * 1000)}`;
+
+  const primaryDisplay = getVersionDisplayName(currentVersion);
+  const secondaryDisplay = getVersionDisplayName(secondaryVersion || "");
+
+  const renderPrimaryContent = useCallback(() => {
     if (primaryLoading) {
       return (
         <View
@@ -149,7 +238,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
           }}
         >
           <Text style={{ color: colors.muted, textAlign: "center" }}>
-            Unable to load {getVersionDisplayName(currentVersion)} version
+            Unable to load {primaryDisplay} version
           </Text>
           <Text
             style={{
@@ -196,231 +285,51 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
             highlightedVerses={new Set(primaryHighlightedVerses)}
             bookmarkedVerses={primaryBookmarkedVerses}
             isFullScreen={isFullScreen}
-            displayVersion={getVersionDisplayName(currentVersion)}
+            displayVersion={primaryDisplay}
             colors={colors}
+            bgImageIndex={bgImageIndex}
             bgTextureOpacity={bgTextureOpacity}
+            noBackground={hasBgImage}
           />
         </View>
       </ScrollView>
     );
-  };
+  }, [
+    primaryLoading,
+    primaryVerses,
+    primaryLocation,
+    primaryDisplay,
+    primaryScrollViewRef,
+    primaryHandleScroll,
+    handlePrimaryContentSizeChange,
+    primaryProps,
+    fontSize,
+    primaryOnVersePress,
+    getHighlightVerse,
+    primaryHighlightedVerses,
+    primaryBookmarkedVerses,
+    isFullScreen,
+    colors,
+    bgImageIndex,
+    bgTextureOpacity,
+    hasBgImage,
+  ]);
 
-  if (!showMultiVersion) {
-    return renderPrimaryContent();
-  }
+  const innerContent = useMemo(() => {
+    if (!showMultiVersion) {
+      return renderPrimaryContent();
+    }
 
-  const primaryDisplay = getVersionDisplayName(currentVersion);
-  const secondaryDisplay = getVersionDisplayName(secondaryVersion || "");
-
-  if (effectiveLayout === "horizontal") {
-    return (
-      <View style={{ flex: 1, flexDirection: "row" }}>
-        <View
-          style={{
-            flex: 1,
-            borderRightWidth: 1,
-            borderRightColor: colors.border?.default,
-          }}
-        >
+    if (effectiveLayout === "horizontal") {
+      return (
+        <View style={{ flex: 1, flexDirection: "row" }}>
           <View
-            ref={primaryHeaderRef}
-            onLayout={() => {
-              primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                setPrimaryHeaderX(x);
-                setPrimaryHeaderY(y);
-                setPrimaryHeaderWidth(w);
-                setPrimaryHeaderHeight(h);
-              });
-            }}
             style={{
-              backgroundColor: colors.muted + "40",
-              paddingVertical: versionHeaderPaddingVertical,
-              paddingHorizontal: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border?.default,
-              flexDirection: "row",
-              gap: 5,
+              flex: 1,
+              borderRightWidth: 1,
+              borderRightColor: colors.border?.default,
             }}
           >
-            <TouchableOpacity
-              onPress={openPrimaryNavigation}
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 4,
-                backgroundColor: colors.card + "70",
-                borderRadius: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontWeight: "500",
-                  fontSize: 14,
-                }}
-                numberOfLines={1}
-              >
-                {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={openPrimaryVersionSelector}
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 4,
-                backgroundColor: colors.card + "70",
-                borderRadius: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontWeight: "500",
-                  fontSize: 14,
-                }}
-                numberOfLines={1}
-              >
-                {primaryDisplay}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {renderPrimaryContent()}
-        </View>
-        <View style={{ flex: 1 }}>
-          <View
-            ref={secondaryHeaderRef}
-            onLayout={() => {
-              secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                setSecondaryHeaderX(x);
-                setSecondaryHeaderY(y);
-                setSecondaryHeaderWidth(w);
-                setSecondaryHeaderHeight(h);
-              });
-            }}
-            style={{
-              backgroundColor: colors.muted + "40",
-              paddingVertical: versionHeaderPaddingVertical,
-              paddingHorizontal: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border?.default,
-              flexDirection: "row",
-              gap: 5,
-            }}
-          >
-            <TouchableOpacity
-              onPress={openSecondaryNavigation}
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 4,
-                backgroundColor: colors.card + "70",
-                borderRadius: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontWeight: "500",
-                  fontSize: 14,
-                }}
-                numberOfLines={1}
-              >
-                {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={openSecondaryVersionSelector}
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 4,
-                backgroundColor: colors.card + "70",
-                borderRadius: 4,
-              }}
-            >
-              <Text
-                style={{
-                  color: colors.primary,
-                  fontWeight: "500",
-                  fontSize: 14,
-                }}
-                numberOfLines={1}
-              >
-                {secondaryDisplay}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {secondaryLoading ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={{ color: colors.muted, marginTop: 8 }}>Loading</Text>
-            </View>
-          ) : secondaryVerses.length === 0 ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: colors.muted, textAlign: "center" }}>
-                Unable to load {secondaryDisplay} version
-              </Text>
-              <Text
-                style={{
-                  color: colors.muted + "80",
-                  fontSize: 12,
-                  textAlign: "center",
-                  marginTop: 4,
-                }}
-              >
-                This version may not be available
-              </Text>
-            </View>
-          ) : (
-            <ScrollView
-              style={{ flex: 1 }}
-              ref={secondaryScrollViewRef}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingBottom: 40,
-                paddingTop: 0,
-              }}
-              onScroll={secondaryHandleScrollCb}
-              scrollEventThrottle={16}
-              onContentSizeChange={handleSecondaryContentSizeChange}
-              onLayout={handleSecondaryScrollViewLayout}
-            >
-              <ChapterViewEnhanced
-                verses={secondaryVerses}
-                bookName={secondaryLocation.bookName}
-                chapterNumber={secondaryLocation.chapter}
-                bookId={secondaryLocation.bookId}
-                showVerseNumbers
-                fontSize={fontSize}
-                onVersePress={secondaryOnVersePress}
-                onVerseLayout={handleSecondaryVerseLayout}
-                highlightVerse={getHighlightVerse(false)}
-                highlightedVerses={new Set(secondaryHighlightedVerses)}
-                bookmarkedVerses={secondaryBookmarkedVerses}
-                isFullScreen={isFullScreen}
-                displayVersion={secondaryDisplay}
-                colors={colors}
-                bgTextureOpacity={bgTextureOpacity}
-              />
-            </ScrollView>
-          )}
-        </View>
-      </View>
-    );
-  } else {
-    return (
-      <View style={{ flex: 1, flexDirection: "column" }}>
-        <View style={{ flex: 1 }}>
-          {isFullScreen && (
             <View
               ref={primaryHeaderRef}
               onLayout={() => {
@@ -429,6 +338,278 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   setPrimaryHeaderY(y);
                   setPrimaryHeaderWidth(w);
                   setPrimaryHeaderHeight(h);
+                });
+              }}
+              style={{
+                paddingVertical: versionHeaderPaddingVertical,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default,
+                flexDirection: "row",
+                gap: 5,
+              }}
+            >
+              <TouchableOpacity
+                onPress={openPrimaryNavigation}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: colors.card,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openPrimaryVersionSelector}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: colors.card,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {primaryDisplay}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {renderPrimaryContent()}
+          </View>
+          <View style={{ flex: 1 }}>
+            <View
+              ref={secondaryHeaderRef}
+              onLayout={() => {
+                secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                  setSecondaryHeaderX(x);
+                  setSecondaryHeaderY(y);
+                  setSecondaryHeaderWidth(w);
+                  setSecondaryHeaderHeight(h);
+                });
+              }}
+              style={{
+                paddingVertical: versionHeaderPaddingVertical,
+                paddingHorizontal: 16,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border?.default,
+                flexDirection: "row",
+                gap: 5,
+              }}
+            >
+              <TouchableOpacity
+                onPress={openSecondaryNavigation}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: colors.card,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={openSecondaryVersionSelector}
+                style={{
+                  paddingHorizontal: 5,
+                  paddingVertical: 4,
+                  backgroundColor: colors.card,
+                  borderRadius: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    color: colors.primary,
+                    fontWeight: "500",
+                    fontSize: 14,
+                  }}
+                  numberOfLines={1}
+                >
+                  {secondaryDisplay}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {secondaryLoading ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ color: colors.muted, marginTop: 8 }}>
+                  Loading
+                </Text>
+              </View>
+            ) : secondaryVerses.length === 0 ? (
+              <View
+                style={{
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ color: colors.muted, textAlign: "center" }}>
+                  Unable to load {secondaryDisplay} version
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted + "80",
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  This version may not be available
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={{ flex: 1 }}
+                ref={secondaryScrollViewRef}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: 40,
+                  paddingTop: 0,
+                }}
+                onScroll={secondaryHandleScrollCb}
+                scrollEventThrottle={16}
+                onContentSizeChange={handleSecondaryContentSizeChange}
+                onLayout={handleSecondaryScrollViewLayout}
+              >
+                <ChapterViewEnhanced
+                  verses={secondaryVerses}
+                  bookName={secondaryLocation.bookName}
+                  chapterNumber={secondaryLocation.chapter}
+                  bookId={secondaryLocation.bookId}
+                  showVerseNumbers
+                  fontSize={fontSize}
+                  onVersePress={secondaryOnVersePress}
+                  onVerseLayout={handleSecondaryVerseLayout}
+                  highlightVerse={getHighlightVerse(false)}
+                  highlightedVerses={new Set(secondaryHighlightedVerses)}
+                  bookmarkedVerses={secondaryBookmarkedVerses}
+                  isFullScreen={isFullScreen}
+                  displayVersion={secondaryDisplay}
+                  colors={colors}
+                  bgImageIndex={bgImageIndex}
+                  bgTextureOpacity={bgTextureOpacity}
+                  noBackground={hasBgImage}
+                />
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      );
+    } else {
+      return (
+        <View style={{ flex: 1, flexDirection: "column" }}>
+          <View style={{ flex: 1 }}>
+            {isFullScreen && (
+              <View
+                ref={primaryHeaderRef}
+                onLayout={() => {
+                  primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                    setPrimaryHeaderX(x);
+                    setPrimaryHeaderY(y);
+                    setPrimaryHeaderWidth(w);
+                    setPrimaryHeaderHeight(h);
+                  });
+                }}
+                style={{
+                  backgroundColor: colors.primary,
+                  paddingVertical: versionHeaderPaddingVertical,
+                  paddingHorizontal: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border?.default,
+                  flexDirection: "row",
+                  gap: 10,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={openPrimaryNavigation}
+                  style={{
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    backgroundColor: "rgba(255,255,255,0.15)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontWeight: "500",
+                      fontSize: 16,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={openPrimaryVersionSelector}
+                  style={{
+                    paddingHorizontal: 5,
+                    paddingVertical: 4,
+                    backgroundColor: "rgba(255,255,255,0.15)",
+                    borderRadius: 4,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontWeight: "500",
+                      fontSize: 16,
+                    }}
+                    numberOfLines={1}
+                  >
+                    {primaryDisplay}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            {renderPrimaryContent()}
+          </View>
+          <View
+            style={{
+              flex: 1,
+              borderTopWidth: 1,
+              borderTopColor: colors.border?.default,
+            }}
+          >
+            <View
+              ref={secondaryHeaderRef}
+              onLayout={() => {
+                secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+                  setSecondaryHeaderX(x);
+                  setSecondaryHeaderY(y);
+                  setSecondaryHeaderWidth(w);
+                  setSecondaryHeaderHeight(h);
                 });
               }}
               style={{
@@ -442,7 +623,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
               }}
             >
               <TouchableOpacity
-                onPress={openPrimaryNavigation}
+                onPress={openSecondaryNavigation}
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
@@ -458,11 +639,11 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   }}
                   numberOfLines={1}
                 >
-                  {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
+                  {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={openPrimaryVersionSelector}
+                onPress={openSecondaryVersionSelector}
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
@@ -478,149 +659,140 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   }}
                   numberOfLines={1}
                 >
-                  {primaryDisplay}
+                  {secondaryDisplay}
                 </Text>
               </TouchableOpacity>
             </View>
-          )}
-          {renderPrimaryContent()}
-        </View>
-        <View
-          style={{
-            flex: 1,
-            borderTopWidth: 1,
-            borderTopColor: colors.border?.default,
-          }}
-        >
-          <View
-            ref={secondaryHeaderRef}
-            onLayout={() => {
-              secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-                setSecondaryHeaderX(x);
-                setSecondaryHeaderY(y);
-                setSecondaryHeaderWidth(w);
-                setSecondaryHeaderHeight(h);
-              });
-            }}
-            style={{
-              backgroundColor: colors.primary,
-              paddingVertical: versionHeaderPaddingVertical,
-              paddingHorizontal: 16,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.border?.default,
-              flexDirection: "row",
-              gap: 10,
-            }}
-          >
-            <TouchableOpacity
-              onPress={openSecondaryNavigation}
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 4,
-                backgroundColor: "rgba(255,255,255,0.15)",
-                borderRadius: 4,
-              }}
-            >
-              <Text
+            {secondaryLoading ? (
+              <View
                 style={{
-                  color: "white",
-                  fontWeight: "500",
-                  fontSize: 16,
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
                 }}
-                numberOfLines={1}
               >
-                {`${secondaryDisplayBookName} ${secondaryLocation.chapter}`}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={openSecondaryVersionSelector}
-              style={{
-                paddingHorizontal: 5,
-                paddingVertical: 4,
-                backgroundColor: "rgba(255,255,255,0.15)",
-                borderRadius: 4,
-              }}
-            >
-              <Text
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={{ color: colors.muted, marginTop: 8 }}>
+                  Loading
+                </Text>
+              </View>
+            ) : secondaryVerses.length === 0 ? (
+              <View
                 style={{
-                  color: "white",
-                  fontWeight: "500",
-                  fontSize: 16,
+                  flex: 1,
+                  justifyContent: "center",
+                  alignItems: "center",
                 }}
-                numberOfLines={1}
               >
-                {secondaryDisplay}
-              </Text>
-            </TouchableOpacity>
+                <Text style={{ color: colors.muted, textAlign: "center" }}>
+                  Unable to load {secondaryDisplay} version
+                </Text>
+                <Text
+                  style={{
+                    color: colors.muted + "80",
+                    fontSize: 12,
+                    textAlign: "center",
+                    marginTop: 4,
+                  }}
+                >
+                  This version may not be available
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={{ flex: 1 }}
+                ref={secondaryScrollViewRef}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{
+                  paddingBottom: 40,
+                  paddingTop: 0,
+                }}
+                onScroll={secondaryHandleScrollCb}
+                scrollEventThrottle={16}
+                onContentSizeChange={handleSecondaryContentSizeChange}
+                onLayout={handleSecondaryScrollViewLayout}
+              >
+                <ChapterViewEnhanced
+                  verses={secondaryVerses}
+                  bookName={secondaryLocation.bookName}
+                  chapterNumber={secondaryLocation.chapter}
+                  bookId={secondaryLocation.bookId}
+                  showVerseNumbers
+                  fontSize={fontSize}
+                  onVersePress={secondaryOnVersePress}
+                  onVerseLayout={handleSecondaryVerseLayout}
+                  highlightVerse={getHighlightVerse(false)}
+                  highlightedVerses={new Set(secondaryHighlightedVerses)}
+                  bookmarkedVerses={secondaryBookmarkedVerses}
+                  isFullScreen={isFullScreen}
+                  displayVersion={secondaryDisplay}
+                  colors={colors}
+                  bgImageIndex={bgImageIndex}
+                  bgTextureOpacity={bgTextureOpacity}
+                  noBackground={hasBgImage}
+                />
+              </ScrollView>
+            )}
           </View>
-          {secondaryLoading ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <ActivityIndicator size="small" color={colors.primary} />
-              <Text style={{ color: colors.muted, marginTop: 8 }}>Loading</Text>
-            </View>
-          ) : secondaryVerses.length === 0 ? (
-            <View
-              style={{
-                flex: 1,
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ color: colors.muted, textAlign: "center" }}>
-                Unable to load {secondaryDisplay} version
-              </Text>
-              <Text
-                style={{
-                  color: colors.muted + "80",
-                  fontSize: 12,
-                  textAlign: "center",
-                  marginTop: 4,
-                }}
-              >
-                This version may not be available
-              </Text>
-            </View>
-          ) : (
-            <ScrollView
-              style={{ flex: 1 }}
-              ref={secondaryScrollViewRef}
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{
-                paddingBottom: 40,
-                paddingTop: 0,
-              }}
-              onScroll={secondaryHandleScrollCb}
-              scrollEventThrottle={16}
-              onContentSizeChange={handleSecondaryContentSizeChange}
-              onLayout={handleSecondaryScrollViewLayout}
-            >
-              <ChapterViewEnhanced
-                verses={secondaryVerses}
-                bookName={secondaryLocation.bookName}
-                chapterNumber={secondaryLocation.chapter}
-                bookId={secondaryLocation.bookId}
-                showVerseNumbers
-                fontSize={fontSize}
-                onVersePress={secondaryOnVersePress}
-                onVerseLayout={handleSecondaryVerseLayout}
-                highlightVerse={getHighlightVerse(false)}
-                highlightedVerses={new Set(secondaryHighlightedVerses)}
-                bookmarkedVerses={secondaryBookmarkedVerses}
-                isFullScreen={isFullScreen}
-                displayVersion={secondaryDisplay}
-                colors={colors}
-                bgTextureOpacity={bgTextureOpacity}
-              />
-            </ScrollView>
-          )}
         </View>
-      </View>
+      );
+    }
+  }, [
+    showMultiVersion,
+    effectiveLayout,
+    renderPrimaryContent,
+    secondaryLoading,
+    secondaryVerses,
+    secondaryLocation,
+    secondaryDisplay,
+    secondaryScrollViewRef,
+    secondaryHandleScrollCb,
+    handleSecondaryContentSizeChange,
+    handleSecondaryScrollViewLayout,
+    fontSize,
+    secondaryOnVersePress,
+    getHighlightVerse,
+    secondaryHighlightedVerses,
+    secondaryBookmarkedVerses,
+    isFullScreen,
+    colors,
+    bgImageIndex,
+    bgTextureOpacity,
+    hasBgImage,
+    primaryHeaderRef,
+    setPrimaryHeaderX,
+    setPrimaryHeaderY,
+    setPrimaryHeaderWidth,
+    setPrimaryHeaderHeight,
+    versionHeaderPaddingVertical,
+    openPrimaryNavigation,
+    primaryDisplayBookName,
+    primaryLocation,
+    openPrimaryVersionSelector,
+    primaryDisplay,
+    secondaryHeaderRef,
+    setSecondaryHeaderX,
+    setSecondaryHeaderY,
+    setSecondaryHeaderWidth,
+    setSecondaryHeaderHeight,
+    openSecondaryNavigation,
+    secondaryDisplayBookName,
+    openSecondaryVersionSelector,
+  ]);
+
+  if (hasBgImage) {
+    return (
+      <ImageBackground
+        source={memoizedBgSource}
+        resizeMode="repeat"
+        style={{ flex: 1 }}
+      >
+        <View key={overlayKey} style={overlayStyle}>
+          {innerContent}
+        </View>
+      </ImageBackground>
     );
   }
+
+  return innerContent;
 };
