@@ -16,7 +16,9 @@ import {
   Alert,
   LayoutChangeEvent,
   ScrollView,
+  TextInput,
 } from "react-native";
+import Slider from "@react-native-community/slider";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -57,6 +59,228 @@ interface Location {
   chapter: number;
   verse?: number;
 }
+interface DropdownProps {
+  visible: boolean;
+  onClose: () => void;
+  menuItems: MenuItem[];
+  filteredMenuItems: MenuItem[];
+  primaryTextColor: string;
+  colors: any;
+  onSetBgTextureOpacity: (value: number) => void;
+  bgTextureOpacity: number;
+  headerTotalHeight: number;
+  bgImageIndex: number;
+}
+const DropdownMenu: React.FC<DropdownProps> = ({
+  visible,
+  onClose,
+  filteredMenuItems,
+  primaryTextColor,
+  colors,
+  onSetBgTextureOpacity,
+  bgTextureOpacity,
+  headerTotalHeight,
+  bgImageIndex,
+}) => {
+  const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
+  useEffect(() => {
+    setTempOpacity(bgTextureOpacity);
+  }, [bgTextureOpacity]);
+  if (!visible) return null;
+  const handleClose = async () => {
+    onSetBgTextureOpacity(tempOpacity);
+    await AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString());
+    onClose();
+  };
+  return (
+    <TouchableOpacity
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 1000,
+      }}
+      activeOpacity={1}
+      onPress={handleClose}
+    >
+      <View
+        style={{
+          position: "absolute",
+          top: headerTotalHeight,
+          right: 16,
+          backgroundColor: colors.primary,
+          borderRadius: 8,
+          paddingVertical: 8,
+          minWidth: 160,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 5,
+        }}
+        onStartShouldSetResponder={() => true}
+      >
+        {filteredMenuItems.slice(0, -1).map((item, index) => (
+          <TouchableOpacity
+            key={item.key}
+            onPress={() => {
+              item.onPress();
+              if (item.key !== "close") {
+                handleClose();
+              }
+            }}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderBottomWidth: index < filteredMenuItems.length - 2 ? 1 : 0,
+              borderBottomColor: colors.primary + "40",
+            }}
+          >
+            <Ionicons
+              name={item.icon}
+              size={20}
+              color={item.color}
+              style={{ marginRight: 12 }}
+            />
+            <Text
+              style={{
+                color: primaryTextColor,
+                fontSize: 16,
+              }}
+            >
+              {item.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        {bgImageIndex !== 0 && (
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderTopWidth: 1,
+              borderTopColor: colors.primary + "40",
+            }}
+          >
+            <Text
+              style={{
+                color: primaryTextColor,
+                fontSize: 14,
+                marginBottom: 4,
+              }}
+            >
+              BG Image Opacity
+            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <TextInput
+                style={{
+                  color: primaryTextColor,
+                  fontSize: 12,
+                  width: 32,
+                  height: 32,
+                  textAlign: "center",
+                  borderWidth: 1,
+                  borderColor: primaryTextColor,
+                  borderRadius: 4,
+                  paddingHorizontal: 2,
+                  paddingVertical: 2,
+                }}
+                value={(tempOpacity * 100).toFixed(0)}
+                onChangeText={(text) => {
+                  const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
+                  const clampedNum = Math.min(100, Math.max(0, num));
+                  setTempOpacity(clampedNum / 100);
+                }}
+                onSubmitEditing={() => {
+                  onSetBgTextureOpacity(tempOpacity);
+                  AsyncStorage.setItem(
+                    "bgTextureOpacity",
+                    tempOpacity.toString()
+                  );
+                }}
+                onBlur={() => {
+                  onSetBgTextureOpacity(tempOpacity);
+                  AsyncStorage.setItem(
+                    "bgTextureOpacity",
+                    tempOpacity.toString()
+                  );
+                }}
+                keyboardType="numeric"
+                selectTextOnFocus={true}
+                maxLength={3}
+              />
+              <View
+                style={{
+                  flex: 1,
+                  height: 32,
+                  marginLeft: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: primaryTextColor,
+                  borderRadius: 4,
+                }}
+              >
+                <Slider
+                  style={{ width: "100%", height: 40 }}
+                  minimumValue={0}
+                  maximumValue={1}
+                  value={tempOpacity}
+                  onValueChange={setTempOpacity}
+                  onSlidingComplete={async (value) => {
+                    onSetBgTextureOpacity(value);
+                    await AsyncStorage.setItem(
+                      "bgTextureOpacity",
+                      value.toString()
+                    );
+                  }}
+                  minimumTrackTintColor={primaryTextColor}
+                  maximumTrackTintColor={colors.primary + "40"}
+                  thumbTintColor={primaryTextColor}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+        <TouchableOpacity
+          onPress={handleClose}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.primary + "40",
+          }}
+        >
+          <Ionicons
+            name="close-outline"
+            size={20}
+            color={primaryTextColor}
+            style={{ marginRight: 12 }}
+          />
+          <Text
+            style={{
+              color: primaryTextColor,
+              fontSize: 16,
+            }}
+          >
+            Close
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+};
 export default function ReaderScreen({
   navigation,
   route,
@@ -106,13 +330,8 @@ export default function ReaderScreen({
   const [dimensions, setDimensions] = useState(initialDimensions);
   const screenWidth = dimensions.width;
   const themeColors = useThemeColors();
-  const {
-    colors,
-    versionSelectorColors,
-    primaryTextColor,
-    handleColorSchemePress,
-    toggleTheme,
-  } = themeColors;
+  const { colors, primaryTextColor, handleColorSchemePress, toggleTheme } =
+    themeColors;
   const [primaryLocation, setPrimaryLocation] = useState<Location>({
     bookId,
     bookName,
@@ -156,6 +375,8 @@ export default function ReaderScreen({
   const [navigationTarget, setNavigationTarget] = useState<
     "primary" | "secondary"
   >("primary");
+  const [bgTextureOpacity, setBgTextureOpacity] = useState(0.1);
+  const [bgImageIndex, setBgImageIndex] = useState(0);
   const lastScrollYRef = useRef(0);
   const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -349,6 +570,7 @@ export default function ReaderScreen({
       updatePrimaryOffset(0);
     }
   }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
+  
   const resetSecondaryScroll = useCallback(() => {
     secondaryScrollY.setValue(0);
     secondaryProgressRef.current = 0;
@@ -492,16 +714,33 @@ export default function ReaderScreen({
       console.error("Failed to load reader settings", e);
     }
   }, [availableBibleVersions, currentVersion]);
+  const loadBackgroundSettings = useCallback(async () => {
+    try {
+      const [savedOpacity, savedIndex] = await Promise.all([
+        AsyncStorage.getItem("bgTextureOpacity"),
+        AsyncStorage.getItem("bgImageIndex"),
+      ]);
+      if (savedOpacity !== null) {
+        setBgTextureOpacity(parseFloat(savedOpacity) || 0.1);
+      }
+      if (savedIndex !== null) {
+        setBgImageIndex(parseInt(savedIndex, 10) || 0);
+      }
+    } catch (error) {
+      console.error("Failed to load background settings:", error);
+    }
+  }, []);
   useFocusEffect(
     useCallback(() => {
       loadPreferences();
       loadReaderSettings();
+      loadBackgroundSettings();
       const currentDimensions = Dimensions.get("window");
       const currentIsLandscape =
         currentDimensions.width > currentDimensions.height;
       setDimensions(currentDimensions);
       setIsLandscape(currentIsLandscape);
-    }, [loadPreferences, loadReaderSettings])
+    }, [loadPreferences, loadReaderSettings, loadBackgroundSettings])
   );
   useEffect(() => {
     AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
@@ -518,6 +757,12 @@ export default function ReaderScreen({
       console.error("Failed to save fontSize", e)
     );
   }, [fontSize]);
+  useEffect(() => {
+    // Save changes to AsyncStorage for sync with SettingsScreen
+    AsyncStorage.setItem("bgTextureOpacity", bgTextureOpacity.toString()).catch(
+      (e) => console.error("Failed to save bgTextureOpacity", e)
+    );
+  }, [bgTextureOpacity]);
   const closeSelector = useCallback(() => setOpenSelector(null), []);
   const openPrimaryNavigation = useCallback(() => {
     if (showMultiVersion && !isLinked) {
@@ -1076,6 +1321,7 @@ export default function ReaderScreen({
     secondaryVerseMeasurementsRef.current = {};
     setSecondaryMeasuredVerses(new Set());
   }, [secondaryVerses]);
+  
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -1286,6 +1532,8 @@ export default function ReaderScreen({
     [currentVersion]
   );
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
+  const headerContentHeight = 60;
+  const headerTotalHeight = insets.top + headerContentHeight;
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1303,8 +1551,6 @@ export default function ReaderScreen({
       </SafeAreaView>
     );
   }
-  const headerContentHeight = 60;
-  const headerTotalHeight = insets.top + headerContentHeight;
   const chevronBottom = 20;
   const toggleBottom = 22;
   const buttonSize = 35;
@@ -1573,6 +1819,9 @@ export default function ReaderScreen({
     secondaryProgress,
     isSecondaryOnTop,
   ]);
+  const handleSetBgTextureOpacity = useCallback((value: number) => {
+    setBgTextureOpacity(Math.round(value * 100) / 100); // Round to 2 decimals for stability
+  }, []);
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -1690,6 +1939,16 @@ export default function ReaderScreen({
                       />
                     </TouchableOpacity>
                   ))}
+                  <TouchableOpacity
+                    onPress={() => setShowDropdown(true)}
+                    style={{ padding: 8 }}
+                  >
+                    <Ionicons
+                      name="ellipsis-horizontal"
+                      size={20}
+                      color={primaryTextColor}
+                    />
+                  </TouchableOpacity>
                 </View>
               ) : (
                 <View
@@ -1752,74 +2011,18 @@ export default function ReaderScreen({
           {renderProgressBar()}
         </View>
       )}
-      {!isLandscape && showDropdown && (
-        <TouchableOpacity
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 1000,
-          }}
-          activeOpacity={1}
-          onPress={() => setShowDropdown(false)}
-        >
-          <View
-            style={{
-              position: "absolute",
-              top: headerTotalHeight,
-              right: 16,
-              backgroundColor: colors.primary,
-              borderRadius: 8,
-              paddingVertical: 8,
-              minWidth: 160,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.25,
-              shadowRadius: 4,
-              elevation: 5,
-            }}
-            onStartShouldSetResponder={() => true}
-          >
-            {filteredMenuItems.map((item, index) => (
-              <TouchableOpacity
-                key={item.key}
-                onPress={() => {
-                  item.onPress();
-                  if (item.key !== "close") {
-                    setShowDropdown(false);
-                  }
-                }}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderBottomWidth:
-                    index < filteredMenuItems.length - 1 ? 1 : 0,
-                  borderBottomColor: colors.primary + "40",
-                }}
-              >
-                <Ionicons
-                  name={item.icon}
-                  size={20}
-                  color={item.color}
-                  style={{ marginRight: 12 }}
-                />
-                <Text
-                  style={{
-                    color: primaryTextColor,
-                    fontSize: 16,
-                  }}
-                >
-                  {item.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      )}
+      <DropdownMenu
+        visible={showDropdown}
+        onClose={() => setShowDropdown(false)}
+        menuItems={menuItems}
+        filteredMenuItems={filteredMenuItems}
+        primaryTextColor={primaryTextColor}
+        colors={colors}
+        onSetBgTextureOpacity={handleSetBgTextureOpacity}
+        bgTextureOpacity={bgTextureOpacity}
+        headerTotalHeight={headerTotalHeight}
+        bgImageIndex={bgImageIndex}
+      />
       {openSelector && (
         <TouchableOpacity
           style={{
@@ -2004,6 +2207,7 @@ export default function ReaderScreen({
           isLandscape={isLandscape}
           primaryScrollViewRef={primaryScrollViewRef}
           secondaryScrollViewRef={secondaryScrollViewRef}
+          bgTextureOpacity={bgTextureOpacity}
         />
       </View>
       <Animated.View

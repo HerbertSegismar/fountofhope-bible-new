@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import ColorPicker from "react-native-wheel-color-picker";
 import { useTheme } from "../context/ThemeContext";
-import { getThemeColors, getAccessibleTextColor } from "../utils/themeUtils";
+import { getThemeColors } from "../utils/themeUtils";
 
 const ColorWheelPicker = () => {
   const {
@@ -466,7 +466,7 @@ const ColorWheelPicker = () => {
                         )}
 
                         <Text style={dynamicStyles.instructions}>
-                          Drag the wheel to pick a color or tap above to type a
+                          Tap the wheel & slider to pick a color or type the
                           hex code
                         </Text>
                       </View>

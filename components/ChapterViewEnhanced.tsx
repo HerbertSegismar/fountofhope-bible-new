@@ -793,8 +793,6 @@ const STYLES = {
   },
 } as const;
 
-// Pre-require all background images statically to avoid dynamic require issues
-// Memoized as a constant object for stable references
 const bgImages: { [key: number]: any } = {
   1: require("../assets/textures/1.jpg"),
   2: require("../assets/textures/2.jpg"),
@@ -855,6 +853,7 @@ interface ChapterViewProps {
     verse: number
   ) => void;
   bgImageIndex?: number;
+  bgTextureOpacity?: number;
 }
 
 type DictHistoryEntry = {
@@ -901,6 +900,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   isFullScreen,
   displayVersion,
   bgImageIndex: propBgImageIndex,
+  bgTextureOpacity: propBgTextureOpacity,
 }) => {
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
@@ -909,12 +909,24 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const { bibleDB, getDatabase } = useBibleDatabase();
 
   const [bgImageIndex, setBgImageIndex] = useState(0);
+  const [bgTextureOpacity, setBgTextureOpacity] = useState(0.5);
+
+  const effectiveTextureOpacity =
+    propBgTextureOpacity !== undefined
+      ? propBgTextureOpacity
+      : bgTextureOpacity;
 
   useEffect(() => {
     if (propBgImageIndex !== undefined) {
       setBgImageIndex(propBgImageIndex);
     }
   }, [propBgImageIndex]);
+
+  useEffect(() => {
+    if (propBgTextureOpacity !== undefined) {
+      setBgTextureOpacity(propBgTextureOpacity);
+    }
+  }, [propBgTextureOpacity]);
 
   useEffect(() => {
     if (propBgImageIndex === undefined) {
@@ -928,6 +940,18 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     }
   }, [propBgImageIndex]);
 
+  useEffect(() => {
+    if (propBgTextureOpacity === undefined) {
+      AsyncStorage.getItem("bgTextureOpacity")
+        .then((str) => {
+          if (str !== null) {
+            setBgTextureOpacity(parseFloat(str) || 0.5);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [propBgTextureOpacity]);
+
   useFocusEffect(
     useCallback(() => {
       if (propBgImageIndex === undefined) {
@@ -940,7 +964,17 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           })
           .catch(console.error);
       }
-    }, [propBgImageIndex])
+      if (propBgTextureOpacity === undefined) {
+        AsyncStorage.getItem("bgTextureOpacity")
+          .then((str) => {
+            if (str !== null) {
+              const newOpacity = parseFloat(str) || 0.5;
+              setBgTextureOpacity(newOpacity);
+            }
+          })
+          .catch(console.error);
+      }
+    }, [propBgImageIndex, propBgTextureOpacity])
   );
 
   const bookToNumber = useMemo(() => {
@@ -1310,21 +1344,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     onVersePress?.(verse);
   };
 
-  const getHeaderTitle = () => {
-    let title = `${bookName} ${chapterNumber}`;
-    if (highlightVerse) {
-      title += ` : ${highlightVerse}`;
-    }
-    return title;
-  };
-
-  const versionText = useMemo(
-    () => (displayVersion ? ` • ${displayVersion.toUpperCase()}` : ""),
-    [displayVersion]
-  );
-
-  const bookColor = sortedVerses[0]?.book_color || themeColors.primary;
-
   const modalVerseTextColor = themeColors.textPrimary;
 
   const commentaryModalStyle: TextStyle = {
@@ -1334,21 +1353,29 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     fontFamily: actualFontFamily,
   };
 
-  const closeButtonTextColor = getAccessibleTextColor(themeColors.primary);
-
   const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
 
   const hasViewBack = modalStack.length > 1;
   const hasDictBack =
     modalView === "commentary" && isDictMode && currentDictIndex > 0;
 
-  const headerTextColor = getAccessibleTextColor(bookColor);
-
-  // Memoized background source to ensure stable reference and prevent re-renders
   const memoizedBgSource = useMemo(
     () => (bgImageIndex > 0 ? bgImages[bgImageIndex] : undefined),
     [bgImageIndex]
   );
+
+  const overlayStyle = useMemo(
+    () => ({
+      flex: 1,
+      backgroundColor:
+        theme === "dark"
+          ? `rgba(24, 19, 56, ${memoizedBgSource ? 1 - effectiveTextureOpacity : 1})`
+          : `rgba(222, 216, 182, ${memoizedBgSource ? 1 - effectiveTextureOpacity : 1})`,
+    }),
+    [theme, memoizedBgSource, effectiveTextureOpacity]
+  );
+
+  const overlayKey = `overlay-${Math.floor(effectiveTextureOpacity * 1000)}`;
 
   if (sortedVerses.length === 0) {
     return (
@@ -1476,7 +1503,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 <Text style={numberStyle}>{verse.verse}</Text>
               )}
               {bookmarkedVerses.has(verse.verse) && (
-                <Text style={bookmarkStyle}>🔖</Text>
+                <Ionicons
+                  name="bookmark-sharp"
+                  size={20}
+                  color={themeColors.primary}
+                />
               )}
               {isHighlighted && <Text style={starStyle}>★</Text>}
               {showVerseNumbers ||
@@ -1527,9 +1558,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     [isFullScreen, themeColors.border]
   );
 
-  const overlayColor =
-    theme === "dark" ? "rgba(24, 19, 56, 0.95)" : "rgba(222, 216, 182, 0.95)";
-
   const innerContent = (
     <>
       {renderVerses()}
@@ -1562,12 +1590,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           resizeMode="repeat"
           style={{ flex: 1 }}
         >
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: overlayColor,
-            }}
-          >
+          <View key={overlayKey} style={overlayStyle}>
             <ScrollView
               style={{ flex: 1 }}
               contentContainerStyle={contentContainerStyle}

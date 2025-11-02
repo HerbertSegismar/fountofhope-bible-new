@@ -71,6 +71,7 @@ interface ReaderContentProps {
   isLandscape: boolean;
   primaryScrollViewRef: React.RefObject<ScrollView | null>;
   secondaryScrollViewRef: React.RefObject<ScrollView | null>;
+  bgTextureOpacity: number;
 }
 
 export const ReaderContent: React.FC<ReaderContentProps> = ({
@@ -117,12 +118,11 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
   openSecondaryNavigation,
   openPrimaryVersionSelector,
   openSecondaryVersionSelector,
-  primaryTextColor,
   effectiveLayout,
   showMultiVersion,
-  isLandscape,
   primaryScrollViewRef,
   secondaryScrollViewRef,
+  bgTextureOpacity,
 }) => {
   const renderPrimaryContent = () => {
     if (primaryLoading) {
@@ -198,6 +198,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
             isFullScreen={isFullScreen}
             displayVersion={getVersionDisplayName(currentVersion)}
             colors={colors}
+            bgTextureOpacity={bgTextureOpacity}
           />
         </View>
       </ScrollView>
@@ -408,6 +409,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 isFullScreen={isFullScreen}
                 displayVersion={secondaryDisplay}
                 colors={colors}
+                bgTextureOpacity={bgTextureOpacity}
               />
             </ScrollView>
           )}
@@ -613,6 +615,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 isFullScreen={isFullScreen}
                 displayVersion={secondaryDisplay}
                 colors={colors}
+                bgTextureOpacity={bgTextureOpacity}
               />
             </ScrollView>
           )}
