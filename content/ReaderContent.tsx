@@ -728,7 +728,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
       resizeMode="repeat"
       style={{
         flex: 1,
-        marginBottom: 40,
+        marginBottom: 0,
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
         overflow: "hidden",
