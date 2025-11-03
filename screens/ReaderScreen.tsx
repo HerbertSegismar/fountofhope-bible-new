@@ -35,8 +35,8 @@ import { useChapterLoader } from "../hooks/useChapterLoader";
 import { useScrollSync } from "../hooks/useScrollSync";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
-import { Verse, Book, ChapterInfo } from "../types";
-import { getBookInfo, getTestament } from "../utils/testamentUtils";
+import { Verse } from "../types";
+import { getBookInfo } from "../utils/testamentUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
@@ -70,6 +70,7 @@ interface DropdownProps {
   bgTextureOpacity: number;
   headerTotalHeight: number;
   bgImageIndex: number;
+  onSetBgImageIndex: (value: number) => void;
 }
 const DropdownMenu: React.FC<DropdownProps> = ({
   visible,
@@ -81,16 +82,47 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   bgTextureOpacity,
   headerTotalHeight,
   bgImageIndex,
+  onSetBgImageIndex,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
   useEffect(() => {
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
   if (!visible) return null;
-  const handleClose = async () => {
+  const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
-    await AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString());
+    AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
+      console.error
+    );
     onClose();
+  };
+  const handleOpacityChange = (text: string) => {
+    const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
+    const clampedNum = Math.min(100, Math.max(0, num));
+    setTempOpacity(clampedNum / 100);
+  };
+  const handleOpacitySubmit = () => {
+    onSetBgTextureOpacity(tempOpacity);
+    AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
+      console.error
+    );
+  };
+  const maxBgIndex = 33;
+  const handlePrevTexture = () => {
+    if (bgImageIndex === 0) {
+      onSetBgImageIndex(33);
+    } else {
+      onSetBgImageIndex(bgImageIndex - 1);
+    }
+  };
+  const handleNextTexture = () => {
+    if (bgImageIndex === 0) {
+      onSetBgImageIndex(1);
+    } else if (bgImageIndex === 33) {
+      onSetBgImageIndex(0);
+    } else {
+      onSetBgImageIndex(bgImageIndex + 1);
+    }
   };
   return (
     <TouchableOpacity
@@ -105,7 +137,10 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       activeOpacity={1}
       onPress={handleClose}
     >
-      <View
+      {/* Menu container now uses TouchableOpacity to reliably swallow background touches */}
+      <TouchableOpacity
+        activeOpacity={1}
+        onPress={() => {}} // Empty: swallows touches without closing
         style={{
           position: "absolute",
           top: headerTotalHeight,
@@ -120,7 +155,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
           shadowRadius: 4,
           elevation: 5,
         }}
-        onStartShouldSetResponder={() => true}
       >
         {filteredMenuItems.slice(0, -1).map((item, index) => (
           <TouchableOpacity
@@ -156,108 +190,116 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             </Text>
           </TouchableOpacity>
         ))}
-        {bgImageIndex !== 0 && (
-          <View
+        <View
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderTopWidth: 1,
+            borderTopColor: colors.primary + "40",
+            marginBottom: 4,
+          }}
+        >
+          <View className="h-[1px] w-full bg-white" />
+          <Text
             style={{
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderTopWidth: 1,
-              borderTopColor: colors.primary + "40",
+              color: primaryTextColor,
+              fontSize: 14,
+              marginVertical: 8,
             }}
           >
-            <Text
+            BG Image & Opacity
+          </Text>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <TouchableOpacity
+              onPress={handlePrevTexture}
               style={{
-                color: primaryTextColor,
-                fontSize: 14,
-                marginBottom: 4,
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: primaryTextColor + "20",
+                justifyContent: "center",
+                alignItems: "center",
               }}
             >
-              BG Image Opacity
-            </Text>
+              <Ionicons
+                name="chevron-back"
+                size={16}
+                color={primaryTextColor}
+              />
+            </TouchableOpacity>
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "space-between",
+                justifyContent: "center",
+                flex: 1,
+                marginHorizontal: 8,
               }}
             >
               <TextInput
                 style={{
                   color: primaryTextColor,
-                  fontSize: 12,
-                  width: 32,
+                  fontSize: 14,
+                  width: 40,
                   height: 32,
                   textAlign: "center",
                   borderWidth: 1,
                   borderColor: primaryTextColor,
                   borderRadius: 4,
-                  paddingHorizontal: 2,
-                  paddingVertical: 2,
+                  paddingHorizontal: 4,
+                  paddingVertical: 6,
                 }}
                 value={(tempOpacity * 100).toFixed(0)}
-                onChangeText={(text) => {
-                  const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
-                  const clampedNum = Math.min(100, Math.max(0, num));
-                  setTempOpacity(clampedNum / 100);
-                }}
-                onSubmitEditing={() => {
-                  onSetBgTextureOpacity(tempOpacity);
-                  AsyncStorage.setItem(
-                    "bgTextureOpacity",
-                    tempOpacity.toString()
-                  );
-                }}
-                onBlur={() => {
-                  onSetBgTextureOpacity(tempOpacity);
-                  AsyncStorage.setItem(
-                    "bgTextureOpacity",
-                    tempOpacity.toString()
-                  );
-                }}
+                onChangeText={handleOpacityChange}
+                onSubmitEditing={handleClose}
+                onBlur={handleOpacitySubmit}
                 keyboardType="numeric"
                 selectTextOnFocus={true}
                 maxLength={3}
               />
-              <View
+              <Text
                 style={{
-                  flex: 1,
-                  height: 32,
+                  color: primaryTextColor,
+                  fontSize: 14,
                   marginLeft: 4,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: primaryTextColor,
-                  borderRadius: 4,
                 }}
               >
-                <Slider
-                  style={{ width: "100%", height: 40 }}
-                  minimumValue={0}
-                  maximumValue={1}
-                  value={tempOpacity}
-                  onValueChange={setTempOpacity}
-                  onSlidingComplete={async (value) => {
-                    onSetBgTextureOpacity(value);
-                    await AsyncStorage.setItem(
-                      "bgTextureOpacity",
-                      value.toString()
-                    );
-                  }}
-                  minimumTrackTintColor={primaryTextColor}
-                  maximumTrackTintColor={colors.primary + "40"}
-                  thumbTintColor={primaryTextColor}
-                />
-              </View>
+                %
+              </Text>
             </View>
+            <TouchableOpacity
+              onPress={handleNextTexture}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: primaryTextColor + "20",
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={primaryTextColor}
+              />
+            </TouchableOpacity>
           </View>
-        )}
+        </View>
+        <View className="h-[1px] bg-white mx-3" />
         <TouchableOpacity
           onPress={handleClose}
           style={{
             flexDirection: "row",
             alignItems: "center",
             paddingHorizontal: 12,
-            paddingVertical: 8,
+            paddingVertical: 4,
             borderTopWidth: 1,
             borderTopColor: colors.primary + "40",
           }}
@@ -277,7 +319,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             Close
           </Text>
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 };
@@ -383,10 +425,10 @@ export default function ReaderScreen({
   const secondaryScrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const primaryProgressRef = useRef(0);
-  const secondaryProgressRef = useRef(0);
-  const isSecondaryOnTopRef = useRef(false);
-  const [isSecondaryOnTop, setIsSecondaryOnTop] = useState(false);
+  const showMultiVersionRef = useRef(false);
+  const isLinkedRef = useRef(true);
+  const handleScrollRef = useRef<(event: any) => void>(() => {});
+  const handleSecondaryScrollRef = useRef<(event: any) => void>(() => {});
   const effectiveLayout = useMemo(
     () => (isLandscape ? "horizontal" : multiViewLayout),
     [isLandscape, multiViewLayout]
@@ -440,7 +482,7 @@ export default function ReaderScreen({
     [secondaryScrollY, secondaryContentHeight, secondaryScrollViewHeight]
   );
   const reloadSecondaryDB = useCallback(
-    async (retries = 3): Promise<boolean> => {
+    async (retries = 10): Promise<boolean> => {
       if (!secondaryVersion) return false;
       for (let attempt = 0; attempt < retries; attempt++) {
         try {
@@ -463,7 +505,7 @@ export default function ReaderScreen({
           }
           if (attempt < retries - 1) {
             await new Promise((resolve) =>
-              setTimeout(resolve, 1000 * (attempt + 1))
+              setTimeout(resolve, 2000 * (attempt + 1))
             );
           }
         }
@@ -477,33 +519,6 @@ export default function ReaderScreen({
     },
     [secondaryVersion]
   );
-  useEffect(() => {
-    if (!showMultiVersion) return;
-    primaryProgressRef.current = 0;
-    secondaryProgressRef.current = 0;
-    isSecondaryOnTopRef.current = false;
-    setIsSecondaryOnTop(false);
-    const primaryListenerId = primaryProgress.addListener(({ value }) => {
-      primaryProgressRef.current = value;
-      const newOnTop = secondaryProgressRef.current < value;
-      if (newOnTop !== isSecondaryOnTopRef.current) {
-        isSecondaryOnTopRef.current = newOnTop;
-        setIsSecondaryOnTop(newOnTop);
-      }
-    });
-    const secondaryListenerId = secondaryProgress.addListener(({ value }) => {
-      secondaryProgressRef.current = value;
-      const newOnTop = value < primaryProgressRef.current;
-      if (newOnTop !== isSecondaryOnTopRef.current) {
-        isSecondaryOnTopRef.current = newOnTop;
-        setIsSecondaryOnTop(newOnTop);
-      }
-    });
-    return () => {
-      primaryProgress.removeListener(primaryListenerId);
-      secondaryProgress.removeListener(secondaryListenerId);
-    };
-  }, [primaryProgress, secondaryProgress, showMultiVersion]);
   useEffect(() => {
     if (!showMultiVersion || !secondaryVersion) {
       setSecondaryReady(false);
@@ -535,6 +550,18 @@ export default function ReaderScreen({
       setSecondaryReady(false);
     };
   }, [showMultiVersion, secondaryVersion, reloadSecondaryDB]);
+  useEffect(() => {
+    showMultiVersionRef.current = showMultiVersion;
+  }, [showMultiVersion]);
+  useEffect(() => {
+    isLinkedRef.current = isLinked;
+  }, [isLinked]);
+  useEffect(() => {
+    handleScrollRef.current = handleScroll;
+  }, [handleScroll]);
+  useEffect(() => {
+    handleSecondaryScrollRef.current = handleSecondaryScroll;
+  }, [handleSecondaryScroll]);
   const getHighlightVerse = useCallback(
     (isPrimary: boolean): number | undefined => {
       if (isLinked || !showMultiVersion) {
@@ -563,17 +590,14 @@ export default function ReaderScreen({
   }, [buttonOpacity]);
   const resetPrimaryScroll = useCallback(() => {
     scrollY.setValue(0);
-    primaryProgressRef.current = 0;
     lastScrollYRef.current = 0;
     if (primaryScrollViewRef.current) {
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
     }
   }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
-  
   const resetSecondaryScroll = useCallback(() => {
     secondaryScrollY.setValue(0);
-    secondaryProgressRef.current = 0;
     if (secondaryScrollViewRef.current) {
       secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updateSecondaryOffset(0);
@@ -758,11 +782,15 @@ export default function ReaderScreen({
     );
   }, [fontSize]);
   useEffect(() => {
-    // Save changes to AsyncStorage for sync with SettingsScreen
     AsyncStorage.setItem("bgTextureOpacity", bgTextureOpacity.toString()).catch(
       (e) => console.error("Failed to save bgTextureOpacity", e)
     );
   }, [bgTextureOpacity]);
+  useEffect(() => {
+    AsyncStorage.setItem("bgImageIndex", bgImageIndex.toString()).catch((e) =>
+      console.error("Failed to save bgImageIndex", e)
+    );
+  }, [bgImageIndex]);
   const closeSelector = useCallback(() => setOpenSelector(null), []);
   const openPrimaryNavigation = useCallback(() => {
     if (showMultiVersion && !isLinked) {
@@ -1011,14 +1039,6 @@ export default function ReaderScreen({
     () => menuItems.find((item) => item.key === "color"),
     [menuItems]
   );
-  const increaseFontSize = useCallback(
-    () => setFontSize((prev) => Math.min(prev + 1, 24)),
-    []
-  );
-  const decreaseFontSize = useCallback(
-    () => setFontSize((prev) => Math.max(prev - 1, 12)),
-    []
-  );
   const handleVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
@@ -1056,40 +1076,6 @@ export default function ReaderScreen({
       setPrimaryTargetVerse,
     ]
   );
-  const handlePrimaryVersePress = useCallback(
-    (verse: Verse) => {
-      const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
-      Alert.alert(
-        `${verse.book_name} ${verse.chapter}:${verse.verse}`,
-        "Options:",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: isHighlighted ? "Remove Highlight" : "Highlight",
-            onPress: () => toggleVerseHighlight(verse),
-          },
-          {
-            text: "Bookmark",
-            onPress: () => {
-              addBookmark(verse);
-              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
-            },
-          },
-          {
-            text: "Center Verse",
-            onPress: () => {
-              setPrimaryTargetVerse(verse.verse);
-            },
-          },
-          {
-            text: "Share",
-            onPress: () => Alert.alert("Share", "Coming soon!"),
-          },
-        ]
-      );
-    },
-    [primaryHighlightedVerses, toggleVerseHighlight, addBookmark]
-  );
   const handleSecondaryVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = secondaryHighlightedVerses.includes(verse.verse);
@@ -1124,6 +1110,11 @@ export default function ReaderScreen({
     },
     [secondaryHighlightedVerses, toggleVerseHighlight, addBookmark]
   );
+  const primaryOnVersePress = handleVersePress;
+  const secondaryOnVersePress =
+    showMultiVersion && !isLinked
+      ? handleSecondaryVersePress
+      : handleVersePress;
   const goToPrimaryPreviousChapter = useCallback(() => {
     if (primaryLocation.chapter > 1) {
       resetPrimaryScroll();
@@ -1247,22 +1238,22 @@ export default function ReaderScreen({
       const y = event.nativeEvent.contentOffset.y;
       lastScrollYRef.current = y;
       scrollY.setValue(y);
-      if (showMultiVersion && isLinked) {
-        handleScroll(event);
+      if (showMultiVersionRef.current && isLinkedRef.current) {
+        handleScrollRef.current(event);
       }
     },
-    [handleScroll, showMultiVersion, isLinked, scrollY]
+    [scrollY]
   );
   const secondaryHandleScrollCb = useCallback(
     (event: any) => {
-      if (showMultiVersion && isLinked) {
-        handleSecondaryScroll(event);
-      } else if (showMultiVersion) {
+      if (showMultiVersionRef.current && isLinkedRef.current) {
+        handleSecondaryScrollRef.current(event);
+      } else if (showMultiVersionRef.current) {
         const y = event.nativeEvent.contentOffset.y;
         secondaryScrollY.setValue(y);
       }
     },
-    [handleSecondaryScroll, showMultiVersion, isLinked, secondaryScrollY]
+    [secondaryScrollY]
   );
   useEffect(() => {
     const updateLayout = () => {
@@ -1299,10 +1290,8 @@ export default function ReaderScreen({
           lastScrollYRef.current = y;
           return;
         }
-        // If measurements not ready yet, do nothing and wait for next update
         return;
       }
-      // Only scroll to top if no target verse
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
       lastScrollYRef.current = 0;
@@ -1321,7 +1310,6 @@ export default function ReaderScreen({
     secondaryVerseMeasurementsRef.current = {};
     setSecondaryMeasuredVerses(new Set());
   }, [secondaryVerses]);
-  
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -1551,6 +1539,9 @@ export default function ReaderScreen({
       </SafeAreaView>
     );
   }
+  const overlaysOpen =
+    showDropdown || openSelector !== null || showNavigationModal;
+  const contentScrollEnabled = !overlaysOpen;
   const chevronBottom = 20;
   const toggleBottom = 22;
   const buttonSize = 35;
@@ -1721,12 +1712,6 @@ export default function ReaderScreen({
     buttonSize,
     iconSize,
   ]);
-  const primaryOnVersePress =
-    showMultiVersion && !isLinked ? handlePrimaryVersePress : handleVersePress;
-  const secondaryOnVersePress =
-    showMultiVersion && !isLinked
-      ? handleSecondaryVersePress
-      : handleVersePress;
   const renderProgressBar = useCallback(() => {
     if (!showMultiVersion || isLinked) {
       return (
@@ -1743,7 +1728,7 @@ export default function ReaderScreen({
           <Animated.View
             style={{
               height: 6,
-              backgroundColor: colors.secondary,
+              backgroundColor: "#FFFFFF80",
               borderRadius: 3,
               width: primaryProgress.interpolate({
                 inputRange: [0, 1],
@@ -1755,7 +1740,6 @@ export default function ReaderScreen({
         </View>
       );
     } else {
-      const secondaryOnTop = isSecondaryOnTop;
       const PrimaryBar = (
         <Animated.View
           style={{
@@ -1763,14 +1747,13 @@ export default function ReaderScreen({
             left: 0,
             top: 0,
             height: 6,
-            backgroundColor: colors.secondary,
+            backgroundColor: "#FFFFFF80",
             borderRadius: 3,
             width: primaryProgress.interpolate({
               inputRange: [0, 1],
               outputRange: ["0%", "100%"],
               extrapolate: "clamp",
             }),
-            zIndex: secondaryOnTop ? 1 : 2,
           }}
         />
       );
@@ -1781,14 +1764,13 @@ export default function ReaderScreen({
             left: 0,
             top: 0,
             height: 6,
-            backgroundColor: "#F5F5DC",
+            backgroundColor: "#00000080",
             borderRadius: 3,
             width: secondaryProgress.interpolate({
               inputRange: [0, 1],
               outputRange: ["0%", "100%"],
               extrapolate: "clamp",
             }),
-            zIndex: secondaryOnTop ? 2 : 1,
           }}
         />
       );
@@ -1804,8 +1786,8 @@ export default function ReaderScreen({
             position: "relative",
           }}
         >
-          {secondaryOnTop ? PrimaryBar : SecondaryBar}
-          {secondaryOnTop ? SecondaryBar : PrimaryBar}
+          {SecondaryBar}
+          {PrimaryBar}
         </View>
       );
     }
@@ -1817,10 +1799,9 @@ export default function ReaderScreen({
     colors.secondary,
     primaryProgress,
     secondaryProgress,
-    isSecondaryOnTop,
   ]);
   const handleSetBgTextureOpacity = useCallback((value: number) => {
-    setBgTextureOpacity(Math.round(value * 100) / 100); // Round to 2 decimals for stability
+    setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
   return (
     <SafeAreaView
@@ -2022,6 +2003,7 @@ export default function ReaderScreen({
         bgTextureOpacity={bgTextureOpacity}
         headerTotalHeight={headerTotalHeight}
         bgImageIndex={bgImageIndex}
+        onSetBgImageIndex={setBgImageIndex}
       />
       {openSelector && (
         <TouchableOpacity
@@ -2208,6 +2190,8 @@ export default function ReaderScreen({
           primaryScrollViewRef={primaryScrollViewRef}
           secondaryScrollViewRef={secondaryScrollViewRef}
           bgTextureOpacity={bgTextureOpacity}
+          bgImageIndex={bgImageIndex}
+          scrollEnabled={contentScrollEnabled}
         />
       </View>
       <Animated.View

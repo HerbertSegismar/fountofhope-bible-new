@@ -630,11 +630,11 @@ export default function BookmarksScreen({ navigation }: Props) {
                 <Ionicons
                   name="eye"
                   size={12}
-                  color={getContrastColor(themeColors.primary, themeColors)}
+                  color="white"
                 />
                 <Text
                   style={{
-                    color: getContrastColor(themeColors.primary, themeColors),
+                    color: "white",
                     fontSize: 12,
                     fontWeight: "500",
                     marginLeft: 4,

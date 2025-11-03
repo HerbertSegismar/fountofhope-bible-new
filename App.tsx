@@ -366,12 +366,12 @@ function AppStack() {
       <RootStack.Screen
         name="Home"
         component={HomeScreen}
-        options={{ title: "Fount of Hope" }}
+        options={{ title: "Home" }}
       />
       <RootStack.Screen
         name="BookList"
         component={BookListScreen}
-        options={{ title: "Books of the Bible" }}
+        options={{ title: "Bible Books" }}
       />
       <RootStack.Screen
         name="ChapterList"
@@ -409,7 +409,7 @@ function AppStack() {
       <RootStack.Screen
         name="Bookmarks"
         component={BookmarksScreen}
-        options={{ title: "Saved Bookmarks" }}
+        options={{ title: "Bookmarks" }}
       />
       <RootStack.Screen
         name="Settings"

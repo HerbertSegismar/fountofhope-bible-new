@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -6,49 +6,11 @@ import {
   ScrollView,
   ActivityIndicator,
   LayoutChangeEvent,
-  ImageBackground,
 } from "react-native";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import type { Verse as VerseType } from "../types";
-import { useTheme } from "../context/ThemeContext";
-import { useFocusEffect } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const bgImages: { [key: number]: any } = {
-  1: require("../assets/textures/1.jpg"),
-  2: require("../assets/textures/2.jpg"),
-  3: require("../assets/textures/3.jpg"),
-  4: require("../assets/textures/4.jpg"),
-  5: require("../assets/textures/5.jpg"),
-  6: require("../assets/textures/6.jpg"),
-  7: require("../assets/textures/7.jpg"),
-  8: require("../assets/textures/8.jpg"),
-  9: require("../assets/textures/9.jpg"),
-  10: require("../assets/textures/10.jpg"),
-  11: require("../assets/textures/11.jpg"),
-  12: require("../assets/textures/12.jpg"),
-  13: require("../assets/textures/13.jpg"),
-  14: require("../assets/textures/14.jpg"),
-  15: require("../assets/textures/15.jpg"),
-  16: require("../assets/textures/16.jpg"),
-  17: require("../assets/textures/17.jpg"),
-  18: require("../assets/textures/18.jpg"),
-  19: require("../assets/textures/19.jpg"),
-  20: require("../assets/textures/20.jpg"),
-  21: require("../assets/textures/21.jpg"),
-  22: require("../assets/textures/22.jpg"),
-  23: require("../assets/textures/23.jpg"),
-  24: require("../assets/textures/24.jpg"),
-  25: require("../assets/textures/25.jpg"),
-  26: require("../assets/textures/26.jpg"),
-  27: require("../assets/textures/27.jpg"),
-  28: require("../assets/textures/28.jpg"),
-  29: require("../assets/textures/29.jpg"),
-  30: require("../assets/textures/30.jpg"),
-  31: require("../assets/textures/31.jpg"),
-  32: require("../assets/textures/32.jpg"),
-  33: require("../assets/textures/33.jpg"),
-};
+import { BackgroundTexture } from "../components/BackgroundTexture";
+import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 
 interface ReaderContentProps {
   primaryVerses: VerseType[];
@@ -112,6 +74,8 @@ interface ReaderContentProps {
   primaryScrollViewRef: React.RefObject<ScrollView | null>;
   secondaryScrollViewRef: React.RefObject<ScrollView | null>;
   bgTextureOpacity: number;
+  scrollEnabled: boolean;
+  bgImageIndex: number;
 }
 
 export const ReaderContent: React.FC<ReaderContentProps> = ({
@@ -163,52 +127,17 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
   primaryScrollViewRef,
   secondaryScrollViewRef,
   bgTextureOpacity,
+  scrollEnabled,
+  bgImageIndex,
 }) => {
-  const { theme } = useTheme();
-  const [bgImageIndex, setBgImageIndex] = useState(0);
-
-  useEffect(() => {
-    AsyncStorage.getItem("bgImageIndex")
-      .then((str) => {
-        if (str !== null) {
-          setBgImageIndex(parseInt(str, 10) || 0);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      AsyncStorage.getItem("bgImageIndex")
-        .then((str) => {
-          if (str !== null) {
-            const newIndex = parseInt(str, 10) || 0;
-            setBgImageIndex(newIndex);
-          }
-        })
-        .catch(console.error);
-    }, [])
-  );
-
-  const memoizedBgSource = useMemo(
-    () => (bgImageIndex > 0 ? bgImages[bgImageIndex] : undefined),
-    [bgImageIndex]
-  );
-
-  const hasBgImage = !!memoizedBgSource;
-
-  const overlayStyle = useMemo(
-    () => ({
-      flex: 1,
-      backgroundColor:
-        theme === "dark"
-          ? `rgba(24, 19, 56, ${hasBgImage ? 1 - bgTextureOpacity : 1})`
-          : `rgba(222, 216, 182, ${hasBgImage ? 1 - bgTextureOpacity : 1})`,
-    }),
-    [theme, hasBgImage, bgTextureOpacity]
-  );
-
-  const overlayKey = `overlay-${Math.floor(bgTextureOpacity * 1000)}`;
+  const bgHook = useBackgroundTexture({
+    opacity: bgTextureOpacity,
+    index: bgImageIndex,
+  });
+  const hasNoBgTexture = !bgHook.hasSource;
+  const headerBgColor = colors.primary;
+  const headerTextColor = "white";
+  const headerButtonBg = "rgba(255,255,255,0.15)";
 
   const primaryDisplay = getVersionDisplayName(currentVersion);
   const secondaryDisplay = getVersionDisplayName(secondaryVersion || "");
@@ -266,6 +195,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
         scrollEventThrottle={16}
         onContentSizeChange={handlePrimaryContentSizeChange}
         onLayout={primaryProps.handleScrollViewLayout}
+        scrollEnabled={scrollEnabled}
       >
         <View
           ref={primaryProps.chapterContainerRef}
@@ -287,9 +217,9 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
             isFullScreen={isFullScreen}
             displayVersion={primaryDisplay}
             colors={colors}
-            bgImageIndex={bgImageIndex}
-            bgTextureOpacity={bgTextureOpacity}
-            noBackground={hasBgImage}
+            bgImageIndex={bgHook.effectiveIndex}
+            bgTextureOpacity={bgHook.effectiveOpacity}
+            noBackground={bgHook.hasSource}
           />
         </View>
       </ScrollView>
@@ -310,9 +240,10 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
     primaryBookmarkedVerses,
     isFullScreen,
     colors,
-    bgImageIndex,
-    bgTextureOpacity,
-    hasBgImage,
+    bgHook.effectiveIndex,
+    bgHook.effectiveOpacity,
+    bgHook.hasSource,
+    scrollEnabled,
   ]);
 
   const innerContent = useMemo(() => {
@@ -341,6 +272,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 });
               }}
               style={{
+                backgroundColor: headerBgColor,
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
@@ -354,13 +286,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
-                  backgroundColor: colors.card,
+                  backgroundColor: headerButtonBg,
                   borderRadius: 4,
                 }}
               >
                 <Text
                   style={{
-                    color: colors.primary,
+                    color: headerTextColor,
                     fontWeight: "500",
                     fontSize: 14,
                   }}
@@ -374,13 +306,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
-                  backgroundColor: colors.card,
+                  backgroundColor: headerButtonBg,
                   borderRadius: 4,
                 }}
               >
                 <Text
                   style={{
-                    color: colors.primary,
+                    color: headerTextColor,
                     fontWeight: "500",
                     fontSize: 14,
                   }}
@@ -404,6 +336,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 });
               }}
               style={{
+                backgroundColor: headerBgColor,
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
@@ -417,13 +350,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
-                  backgroundColor: colors.card,
+                  backgroundColor: headerButtonBg,
                   borderRadius: 4,
                 }}
               >
                 <Text
                   style={{
-                    color: colors.primary,
+                    color: headerTextColor,
                     fontWeight: "500",
                     fontSize: 14,
                   }}
@@ -437,13 +370,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
-                  backgroundColor: colors.card,
+                  backgroundColor: headerButtonBg,
                   borderRadius: 4,
                 }}
               >
                 <Text
                   style={{
-                    color: colors.primary,
+                    color: headerTextColor,
                     fontWeight: "500",
                     fontSize: 14,
                   }}
@@ -501,6 +434,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 scrollEventThrottle={16}
                 onContentSizeChange={handleSecondaryContentSizeChange}
                 onLayout={handleSecondaryScrollViewLayout}
+                scrollEnabled={scrollEnabled}
               >
                 <ChapterViewEnhanced
                   verses={secondaryVerses}
@@ -517,9 +451,9 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   isFullScreen={isFullScreen}
                   displayVersion={secondaryDisplay}
                   colors={colors}
-                  bgImageIndex={bgImageIndex}
-                  bgTextureOpacity={bgTextureOpacity}
-                  noBackground={hasBgImage}
+                  bgImageIndex={bgHook.effectiveIndex}
+                  bgTextureOpacity={bgHook.effectiveOpacity}
+                  noBackground={bgHook.hasSource}
                 />
               </ScrollView>
             )}
@@ -542,7 +476,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   });
                 }}
                 style={{
-                  backgroundColor: colors.primary,
+                  backgroundColor: headerBgColor,
                   paddingVertical: versionHeaderPaddingVertical,
                   paddingHorizontal: 16,
                   borderBottomWidth: 1,
@@ -556,13 +490,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   style={{
                     paddingHorizontal: 5,
                     paddingVertical: 4,
-                    backgroundColor: "rgba(255,255,255,0.15)",
+                    backgroundColor: headerButtonBg,
                     borderRadius: 4,
                   }}
                 >
                   <Text
                     style={{
-                      color: "white",
+                      color: headerTextColor,
                       fontWeight: "500",
                       fontSize: 16,
                     }}
@@ -576,13 +510,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   style={{
                     paddingHorizontal: 5,
                     paddingVertical: 4,
-                    backgroundColor: "rgba(255,255,255,0.15)",
+                    backgroundColor: headerButtonBg,
                     borderRadius: 4,
                   }}
                 >
                   <Text
                     style={{
-                      color: "white",
+                      color: headerTextColor,
                       fontWeight: "500",
                       fontSize: 16,
                     }}
@@ -613,7 +547,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 });
               }}
               style={{
-                backgroundColor: colors.primary,
+                backgroundColor: headerBgColor,
                 paddingVertical: versionHeaderPaddingVertical,
                 paddingHorizontal: 16,
                 borderBottomWidth: 1,
@@ -627,13 +561,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
-                  backgroundColor: "rgba(255,255,255,0.15)",
+                  backgroundColor: headerButtonBg,
                   borderRadius: 4,
                 }}
               >
                 <Text
                   style={{
-                    color: "white",
+                    color: headerTextColor,
                     fontWeight: "500",
                     fontSize: 16,
                   }}
@@ -647,13 +581,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 style={{
                   paddingHorizontal: 5,
                   paddingVertical: 4,
-                  backgroundColor: "rgba(255,255,255,0.15)",
+                  backgroundColor: headerButtonBg,
                   borderRadius: 4,
                 }}
               >
                 <Text
                   style={{
-                    color: "white",
+                    color: headerTextColor,
                     fontWeight: "500",
                     fontSize: 16,
                   }}
@@ -711,6 +645,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 scrollEventThrottle={16}
                 onContentSizeChange={handleSecondaryContentSizeChange}
                 onLayout={handleSecondaryScrollViewLayout}
+                scrollEnabled={scrollEnabled}
               >
                 <ChapterViewEnhanced
                   verses={secondaryVerses}
@@ -727,9 +662,9 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                   isFullScreen={isFullScreen}
                   displayVersion={secondaryDisplay}
                   colors={colors}
-                  bgImageIndex={bgImageIndex}
-                  bgTextureOpacity={bgTextureOpacity}
-                  noBackground={hasBgImage}
+                  bgImageIndex={bgHook.effectiveIndex}
+                  bgTextureOpacity={bgHook.effectiveOpacity}
+                  noBackground={bgHook.hasSource}
                 />
               </ScrollView>
             )}
@@ -756,9 +691,9 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
     secondaryBookmarkedVerses,
     isFullScreen,
     colors,
-    bgImageIndex,
-    bgTextureOpacity,
-    hasBgImage,
+    bgHook.effectiveIndex,
+    bgHook.effectiveOpacity,
+    bgHook.hasSource,
     primaryHeaderRef,
     setPrimaryHeaderX,
     setPrimaryHeaderY,
@@ -778,21 +713,33 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
     openSecondaryNavigation,
     secondaryDisplayBookName,
     openSecondaryVersionSelector,
+    scrollEnabled,
+    headerBgColor,
+    headerTextColor,
+    headerButtonBg,
   ]);
 
-  if (hasBgImage) {
-    return (
-      <ImageBackground
-        source={memoizedBgSource}
-        resizeMode="repeat"
-        style={{ flex: 1 }}
-      >
-        <View key={overlayKey} style={overlayStyle}>
-          {innerContent}
-        </View>
-      </ImageBackground>
-    );
-  }
-
-  return innerContent;
+  return (
+    <BackgroundTexture
+      source={bgHook.source}
+      hasBg={bgHook.hasSource}
+      overlayStyle={bgHook.overlayStyle}
+      overlayKey={bgHook.overlayKey}
+      resizeMode="repeat"
+      style={{
+        flex: 1,
+        marginBottom: 40,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        overflow: "hidden",
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        elevation: hasNoBgTexture? 0: 5,
+      }}
+    >
+      {innerContent}
+    </BackgroundTexture>
+  );
 };

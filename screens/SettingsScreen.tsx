@@ -977,6 +977,7 @@ const SettingsScreen = () => {
           style={{
             flex: 1,
             backgroundColor: themeColors.background,
+            marginBottom: 20,
           }}
         >
           <View

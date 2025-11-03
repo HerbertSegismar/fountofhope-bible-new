@@ -11,11 +11,8 @@ import {
   ScrollView,
   ActivityIndicator,
   TextStyle,
-  ImageBackground,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Verse } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
@@ -27,13 +24,11 @@ import {
   getDatabaseFilename,
 } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
-import {
-  getThemeColors,
-  type ThemeColors,
-  getAccessibleTextColor,
-} from "../utils/themeUtils";
+import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 import { getFontFamily } from "../utils/fontUtils";
 import { useCommentary } from "../hooks/useCommentary";
+import { BackgroundTexture } from "../components/BackgroundTexture";
+import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 
 type ParsedNode = {
   type: "text" | "opening-tag" | "closing-tag" | "self-closing-tag";
@@ -793,42 +788,6 @@ const STYLES = {
   },
 } as const;
 
-const bgImages: { [key: number]: any } = {
-  1: require("../assets/textures/1.jpg"),
-  2: require("../assets/textures/2.jpg"),
-  3: require("../assets/textures/3.jpg"),
-  4: require("../assets/textures/4.jpg"),
-  5: require("../assets/textures/5.jpg"),
-  6: require("../assets/textures/6.jpg"),
-  7: require("../assets/textures/7.jpg"),
-  8: require("../assets/textures/8.jpg"),
-  9: require("../assets/textures/9.jpg"),
-  10: require("../assets/textures/10.jpg"),
-  11: require("../assets/textures/11.jpg"),
-  12: require("../assets/textures/12.jpg"),
-  13: require("../assets/textures/13.jpg"),
-  14: require("../assets/textures/14.jpg"),
-  15: require("../assets/textures/15.jpg"),
-  16: require("../assets/textures/16.jpg"),
-  17: require("../assets/textures/17.jpg"),
-  18: require("../assets/textures/18.jpg"),
-  19: require("../assets/textures/19.jpg"),
-  20: require("../assets/textures/20.jpg"),
-  21: require("../assets/textures/21.jpg"),
-  22: require("../assets/textures/22.jpg"),
-  23: require("../assets/textures/23.jpg"),
-  24: require("../assets/textures/24.jpg"),
-  25: require("../assets/textures/25.jpg"),
-  26: require("../assets/textures/26.jpg"),
-  27: require("../assets/textures/27.jpg"),
-  28: require("../assets/textures/28.jpg"),
-  29: require("../assets/textures/29.jpg"),
-  30: require("../assets/textures/30.jpg"),
-  31: require("../assets/textures/31.jpg"),
-  32: require("../assets/textures/32.jpg"),
-  33: require("../assets/textures/33.jpg"),
-};
-
 interface ChapterViewProps {
   verses: Verse[];
   bookName: string;
@@ -900,6 +859,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   style,
   isFullScreen,
   displayVersion,
+  colors,
+  onNavigateToVerse,
   bgImageIndex: propBgImageIndex,
   bgTextureOpacity: propBgTextureOpacity,
   noBackground,
@@ -910,98 +871,14 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
   const { bibleDB, getDatabase } = useBibleDatabase();
 
-  const [bgImageIndex, setBgImageIndex] = useState(0);
-  const [bgTextureOpacity, setBgTextureOpacity] = useState(0.5);
-
   const effectiveNoBg = noBackground ?? false;
-  const effectiveTextureOpacity =
-    propBgTextureOpacity !== undefined
-      ? propBgTextureOpacity
-      : bgTextureOpacity;
+  const bgHook = useBackgroundTexture({
+    index: propBgImageIndex,
+    opacity: propBgTextureOpacity,
+    noBackground: effectiveNoBg,
+  });
 
-  useEffect(() => {
-    if (propBgImageIndex !== undefined) {
-      setBgImageIndex(propBgImageIndex);
-    }
-  }, [propBgImageIndex]);
-
-  useEffect(() => {
-    if (propBgTextureOpacity !== undefined) {
-      setBgTextureOpacity(propBgTextureOpacity);
-    }
-  }, [propBgTextureOpacity]);
-
-  useEffect(() => {
-    if (propBgImageIndex === undefined && !effectiveNoBg) {
-      AsyncStorage.getItem("bgImageIndex")
-        .then((str) => {
-          if (str !== null) {
-            setBgImageIndex(parseInt(str, 10) || 0);
-          }
-        })
-        .catch(console.error);
-    }
-  }, [propBgImageIndex, effectiveNoBg]);
-
-  useEffect(() => {
-    if (propBgTextureOpacity === undefined && !effectiveNoBg) {
-      AsyncStorage.getItem("bgTextureOpacity")
-        .then((str) => {
-          if (str !== null) {
-            setBgTextureOpacity(parseFloat(str) || 0.5);
-          }
-        })
-        .catch(console.error);
-    }
-  }, [propBgTextureOpacity, effectiveNoBg]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (propBgImageIndex === undefined && !effectiveNoBg) {
-        AsyncStorage.getItem("bgImageIndex")
-          .then((str) => {
-            if (str !== null) {
-              const newIndex = parseInt(str, 10) || 0;
-              setBgImageIndex(newIndex);
-            }
-          })
-          .catch(console.error);
-      }
-      if (propBgTextureOpacity === undefined && !effectiveNoBg) {
-        AsyncStorage.getItem("bgTextureOpacity")
-          .then((str) => {
-            if (str !== null) {
-              const newOpacity = parseFloat(str) || 0.5;
-              setBgTextureOpacity(newOpacity);
-            }
-          })
-          .catch(console.error);
-      }
-    }, [propBgImageIndex, propBgTextureOpacity, effectiveNoBg])
-  );
-
-  const bookToNumber = useMemo(() => {
-    const map: Record<string, number> = {};
-    Object.entries(BIBLE_BOOKS_MAP).forEach(([dbNumStr, { long, short }]) => {
-      const dbNum = parseInt(dbNumStr, 10);
-      map[long] = dbNum;
-      map[short] = dbNum;
-      const abbrevs = BOOK_ABBREVS[long] || [];
-      abbrevs.forEach((abb) => {
-        if (!map[abb]) {
-          map[abb] = dbNum;
-        }
-      });
-    });
-    return map;
-  }, []);
-
-  const getBookName = useCallback((bookNum: number) => {
-    const entry = Object.entries(BIBLE_BOOKS_MAP).find(
-      ([key, value]) => parseInt(key) === bookNum
-    );
-    return entry ? entry[1].long : "Unknown Book";
-  }, []);
+  const hasBg = !effectiveNoBg && bgHook.hasSource;
 
   const [showTagModal, setShowTagModal] = useState(false);
   const [modalStack, setModalStack] = useState<ModalState[]>([]);
@@ -1328,25 +1205,28 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     setModalStack([]);
   }, []);
 
-  const memoizedBgSource = useMemo(
-    () =>
-      effectiveNoBg || bgImageIndex <= 0 ? undefined : bgImages[bgImageIndex],
-    [effectiveNoBg, bgImageIndex]
-  );
-  const hasBg = !!memoizedBgSource;
+  const bookToNumber = useMemo(() => {
+    const map: Record<string, number> = {};
+    Object.entries(BIBLE_BOOKS_MAP).forEach(([dbNumStr, { long, short }]) => {
+      const dbNum = parseInt(dbNumStr, 10);
+      map[long] = dbNum;
+      map[short] = dbNum;
+      const abbrevs = BOOK_ABBREVS[long] || [];
+      abbrevs.forEach((abb) => {
+        if (!map[abb]) {
+          map[abb] = dbNum;
+        }
+      });
+    });
+    return map;
+  }, []);
 
-  const overlayStyle = useMemo(
-    () => ({
-      flex: 1,
-      backgroundColor:
-        theme === "dark"
-          ? `rgba(24, 19, 56, ${hasBg ? 1 - effectiveTextureOpacity : 1})`
-          : `rgba(222, 216, 182, ${hasBg ? 1 - effectiveTextureOpacity : 1})`,
-    }),
-    [theme, hasBg, effectiveTextureOpacity]
-  );
-
-  const overlayKey = `overlay-${Math.floor(effectiveTextureOpacity * 1000)}`;
+  const getBookName = useCallback((bookNum: number) => {
+    const entry = Object.entries(BIBLE_BOOKS_MAP).find(
+      ([key, value]) => parseInt(key) === bookNum
+    );
+    return entry ? entry[1].long : "Unknown Book";
+  }, []);
 
   const sortedVerses = useMemo(
     () => [...verses].sort((a, b) => a.verse - b.verse),
@@ -1461,12 +1341,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       fontFamily: actualFontFamily,
     };
 
-    const bookmarkStyle = {
-      fontSize: indicatorSize * 0.9,
-      color: themeColors.primary,
-      fontFamily: actualFontFamily,
-    };
-
     return (
       <TouchableOpacity
         key={verse.verse}
@@ -1545,11 +1419,13 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         : hasBg
           ? undefined
           : themeColors.card,
-      // Conditionally disable shadow/elevation to avoid border-like artifacts with bg image
-      shadowOpacity: hasBg ? 0 : 0.1,
-      shadowRadius: hasBg ? 0 : 4,
-      shadowOffset: hasBg ? { width: 0, height: 0 } : { width: 0, height: 2 },
-      elevation: 0,
+      shadowOpacity: effectiveNoBg || hasBg ? 0 : 0.1,
+      shadowRadius: effectiveNoBg || hasBg ? 0 : 4,
+      shadowOffset:
+        effectiveNoBg || hasBg
+          ? { width: 0, height: 0 }
+          : { width: 0, height: 2 },
+      elevation: effectiveNoBg || hasBg ? 0 : 2,
     }),
     [isFullScreen, effectiveNoBg, hasBg, themeColors.card]
   );
@@ -1609,21 +1485,15 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   );
 
   const chapterContent = (
-    <View style={[wrapperStyle, style]}>
-      {hasBg ? (
-        <ImageBackground
-          source={memoizedBgSource}
-          resizeMode="cover"
-          style={{ flex: 1 }}
-        >
-          <View key={overlayKey} style={overlayStyle}>
-            {scrollOrView}
-          </View>
-        </ImageBackground>
-      ) : (
-        scrollOrView
-      )}
-    </View>
+    <BackgroundTexture
+      source={bgHook.source}
+      hasBg={hasBg}
+      overlayStyle={bgHook.overlayStyle}
+      overlayKey={bgHook.overlayKey}
+      style={[wrapperStyle, style]}
+    >
+      {scrollOrView}
+    </BackgroundTexture>
   );
 
   if (onPress) {
