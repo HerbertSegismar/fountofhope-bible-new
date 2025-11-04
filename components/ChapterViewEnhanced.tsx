@@ -346,6 +346,8 @@ const findBookNumber = (
   return undefined;
 };
 
+const SINGLE_CHAPTER_BOOKS = new Set([380, 640, 700, 710, 720]);
+
 const renderCommentaryWithVerseLinks = (
   text: string,
   themeColors: ThemeColors,
@@ -353,16 +355,18 @@ const renderCommentaryWithVerseLinks = (
   bookToNumber: Record<string, number>,
   onNavigate: (
     bookNum: number,
-    chapter: number,
-    ranges: { start: number; end: number }[]
+    chapterStart: number,
+    ranges?: { start: number; end: number }[],
+    chapterEnd?: number
   ) => void,
-  currentBookNum?: number
+  currentBookNum?: number,
+  currentChapterNum?: number
 ): React.ReactNode[] => {
   if (!text) return [];
 
   const bookKeys = Object.keys(bookToNumber);
   const escapedKeys = bookKeys.map(escapeRegex);
-  const bookPattern = escapedKeys.map((key) => `\\b${key}\\b`).join("|");
+  const bookPattern = escapedKeys.map((key) => `\\b${key}`).join("|");
   const DASH_PATTERN = "[-–—]";
 
   const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\s*\\d+)?`;
@@ -373,12 +377,17 @@ const renderCommentaryWithVerseLinks = (
     "gi"
   );
 
-  const continuationRegex = new RegExp(/[,;]\\s*(${VERSE_LIST})\\b/gi);
+  const continuationRegex = new RegExp(/[,;]\s*(${VERSE_LIST})\\b/gi);
 
-  const chapterOnlyRegex = /(?:ch\\.|chapter)\\.\\s+(\\d+)\\b/gi;
+  const chapterOnlyRegex = /(?:ch\\.|chs\\.|chapter)\\.\\s+(\\d+)\\b/gi;
 
   const verseOnlyRegex = new RegExp(
-    `(?:v\\.|vv?\\.?|verse)s?\\s+${VERSE_LIST}\\b`,
+    `(?:v\\.|vv?\\.?|ver\\.|verse)s?\\s+${VERSE_LIST}\\b`,
+    "gi"
+  );
+
+  const chapVerseRegex = new RegExp(
+    `(?:(${bookPattern})\\s+)?(\\d+)(?:\\s*${DASH_PATTERN}\\s*(\\d+))?\\b`,
     "gi"
   );
 
@@ -398,7 +407,7 @@ const renderCommentaryWithVerseLinks = (
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let currentBook: number | undefined = currentBookNum;
-  let currentChapter: number | undefined = undefined;
+  let currentChapter: number | undefined = currentChapterNum;
 
   while (true) {
     fullRefRegex.lastIndex = lastIndex;
@@ -417,32 +426,73 @@ const renderCommentaryWithVerseLinks = (
     const verseMatch = verseOnlyRegex.exec(text);
     const versePos = verseMatch ? verseMatch.index : Infinity;
 
+    chapVerseRegex.lastIndex = lastIndex;
+    const chapVerseMatch = chapVerseRegex.exec(text);
+    const chapVersePos = chapVerseMatch ? chapVerseMatch.index : Infinity;
+
     let minPos = Infinity;
-    let selectedMatch: RegExpExecArray | null = null;
-    let matchType = "";
+    let selectedType: "full" | "cont" | "chap" | "verse" | "chapVerse" | null =
+      null;
 
-    const candidates = [
-      { match: fullMatch, type: "full", pos: fullPos },
-      { match: contMatch, type: "cont", pos: contPos },
-      { match: chapMatch, type: "chap", pos: chapPos },
-      { match: verseMatch, type: "verse", pos: versePos },
-    ];
+    if (fullPos < minPos && fullMatch !== null) {
+      minPos = fullPos;
+      selectedType = "full";
+    }
+    if (contPos < minPos && contMatch !== null) {
+      minPos = contPos;
+      selectedType = "cont";
+    }
+    if (chapPos < minPos && chapMatch !== null) {
+      minPos = chapPos;
+      selectedType = "chap";
+    }
+    if (versePos < minPos && verseMatch !== null) {
+      minPos = versePos;
+      selectedType = "verse";
+    }
+    if (chapVersePos < minPos && chapVerseMatch !== null) {
+      minPos = chapVersePos;
+      selectedType = "chapVerse";
+    }
 
-    candidates.forEach(({ match, type, pos }) => {
-      if (pos < minPos && match !== null) {
-        minPos = pos;
-        selectedMatch = match;
-        matchType = type;
-      }
-    });
-
-    if (minPos === Infinity || selectedMatch === null) {
+    if (minPos === Infinity || selectedType === null) {
       break;
     }
 
     const matchIndex = minPos;
-    const fullMatchStr = (selectedMatch as RegExpExecArray)[0];
-    const matchEnd = minPos + fullMatchStr.length;
+    const refText = (() => {
+      switch (selectedType) {
+        case "full":
+          return fullMatch![0];
+        case "cont":
+          return contMatch![0];
+        case "chap":
+          return chapMatch![0];
+        case "verse":
+          return verseMatch![0];
+        case "chapVerse":
+          return chapVerseMatch![0];
+        default:
+          return "";
+      }
+    })();
+    const theMatch = (() => {
+      switch (selectedType) {
+        case "full":
+          return fullMatch!;
+        case "cont":
+          return contMatch!;
+        case "chap":
+          return chapMatch!;
+        case "verse":
+          return verseMatch!;
+        case "chapVerse":
+          return chapVerseMatch!;
+        default:
+          return null as never;
+      }
+    })();
+    const matchEnd = minPos + refText.length;
 
     if (lastIndex < matchIndex) {
       parts.push(
@@ -452,45 +502,57 @@ const renderCommentaryWithVerseLinks = (
       );
     }
 
-    if (matchType === "full") {
-      const bookStr = selectedMatch[1];
-      let bookNum = currentBook;
-      if (bookStr) {
-        bookNum = findBookNumber(bookStr, bookToNumber);
-        if (bookNum !== undefined) {
-          currentBook = bookNum;
+    switch (selectedType) {
+      case "full": {
+        const bookStr = theMatch[1] ?? "";
+        let bookNum = currentBook;
+        if (bookStr) {
+          bookNum = findBookNumber(bookStr, bookToNumber);
+          if (bookNum !== undefined) {
+            currentBook = bookNum;
+          }
         }
-      }
-      const chapter = parseInt(selectedMatch[2] as string, 10);
-      const verseListStr = selectedMatch[3] as string;
-      const ranges = parseVerseList(verseListStr);
-      const refText = fullMatchStr;
-
-      if (bookNum !== undefined && ranges.length > 0) {
-        currentChapter = chapter;
-        parts.push(
-          <Text
-            key={parts.length}
-            onPress={() => onNavigate(bookNum!, chapter, ranges)}
-            style={linkStyle}
-          >
-            {refText}
-          </Text>
-        );
-      } else {
-        parts.push(
-          <Text key={parts.length} style={plainStyle}>
-            {refText}
-          </Text>
-        );
-      }
-    } else if (matchType === "cont") {
-      if (currentBook !== undefined && currentChapter !== undefined) {
-        const verseListStr = selectedMatch[1] as string;
+        const chapterStr = theMatch[2];
+        const chapter = chapterStr ? parseInt(`${chapterStr}`, 10) : 0;
+        const verseListStr = theMatch[3] ?? "";
         const ranges = parseVerseList(verseListStr);
-        const prefixMatch = fullMatchStr.match(/^[,;]\\s*/);
+
+        if (bookNum !== undefined && ranges.length > 0) {
+          currentChapter = chapter;
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={() => onNavigate(bookNum, chapter, ranges)}
+              style={linkStyle}
+            >
+              {refText}
+            </Text>
+          );
+        } else {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+        }
+        break;
+      }
+      case "cont": {
+        if (currentBook === undefined || currentChapter === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+          break;
+        }
+        const _currentBook = currentBook;
+        const _currentChapter = currentChapter;
+        const verseListStr = theMatch[1] ?? "";
+        const ranges = parseVerseList(verseListStr);
+        const prefixMatch = refText.match(/^[,;]\s*/);
         const prefix = prefixMatch ? prefixMatch[0] : "";
-        const rangeText = fullMatchStr.slice(prefix.length);
+        const rangeText = refText.slice(prefix.length);
 
         if (prefix) {
           parts.push(
@@ -503,7 +565,7 @@ const renderCommentaryWithVerseLinks = (
           parts.push(
             <Text
               key={parts.length}
-              onPress={() => onNavigate(currentBook!, currentChapter!, ranges)}
+              onPress={() => onNavigate(_currentBook, _currentChapter, ranges)}
               style={linkStyle}
             >
               {rangeText}
@@ -516,46 +578,50 @@ const renderCommentaryWithVerseLinks = (
             </Text>
           );
         }
-      } else {
-        parts.push(
-          <Text key={parts.length} style={plainStyle}>
-            {fullMatchStr}
-          </Text>
-        );
+        break;
       }
-    } else if (matchType === "chap") {
-      if (currentBook !== undefined) {
-        const ch = parseInt(selectedMatch[1] as string, 10);
-        const refText = fullMatchStr;
+      case "chap": {
+        const chStr = theMatch[1];
+        if (chStr === undefined || currentBook === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+          break;
+        }
+        const _currentBook = currentBook;
+        const ch = parseInt(`${chStr}`, 10);
         parts.push(
           <Text
             key={parts.length}
-            onPress={() =>
-              onNavigate(currentBook!, ch, [{ start: 1, end: 9999 }])
-            }
+            onPress={() => onNavigate(_currentBook, ch)}
             style={linkStyle}
           >
             {refText}
           </Text>
         );
         currentChapter = ch;
-      } else {
-        parts.push(
-          <Text key={parts.length} style={plainStyle}>
-            {fullMatchStr}
-          </Text>
-        );
+        break;
       }
-    } else if (matchType === "verse") {
-      if (currentBook !== undefined && currentChapter !== undefined) {
-        const verseListStr = selectedMatch[1] as string;
+      case "verse": {
+        if (currentBook === undefined || currentChapter === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+          break;
+        }
+        const _currentBook = currentBook;
+        const _currentChapter = currentChapter;
+        const verseListStr = theMatch[1] ?? "";
         const ranges = parseVerseList(verseListStr);
-        const refText = fullMatchStr;
         if (ranges.length > 0) {
           parts.push(
             <Text
               key={parts.length}
-              onPress={() => onNavigate(currentBook!, currentChapter!, ranges)}
+              onPress={() => onNavigate(_currentBook, _currentChapter, ranges)}
               style={linkStyle}
             >
               {refText}
@@ -568,12 +634,68 @@ const renderCommentaryWithVerseLinks = (
             </Text>
           );
         }
-      } else {
-        parts.push(
-          <Text key={parts.length} style={plainStyle}>
-            {fullMatchStr}
-          </Text>
-        );
+        break;
+      }
+      case "chapVerse": {
+        const bookStr = theMatch[1] ?? "";
+        let bookNum = currentBook;
+        if (bookStr) {
+          bookNum = findBookNumber(bookStr, bookToNumber);
+          if (bookNum !== undefined) {
+            currentBook = bookNum;
+          }
+        }
+        const num1Str = theMatch[2];
+        const num2Str = theMatch[3];
+        if (num1Str === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+          break;
+        }
+        const num1 = parseInt(`${num1Str}`, 10);
+        const num2 = num2Str ? parseInt(`${num2Str}`, 10) : undefined;
+
+        if (bookNum === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+        } else {
+          const isSingleChapterBook = SINGLE_CHAPTER_BOOKS.has(bookNum);
+          let onPressCallback;
+          let tempCurrentChapter: number;
+          if (isSingleChapterBook) {
+            const verseStart = num1;
+            const verseEnd = num2 !== undefined ? num2 : num1;
+            onPressCallback = () =>
+              onNavigate(bookNum, 1, [{ start: verseStart, end: verseEnd }]);
+            tempCurrentChapter = 1;
+          } else {
+            if (num2 !== undefined) {
+              onPressCallback = () =>
+                onNavigate(bookNum, num1, undefined, num2);
+              tempCurrentChapter = num2;
+            } else {
+              onPressCallback = () => onNavigate(bookNum, num1);
+              tempCurrentChapter = num1;
+            }
+          }
+          currentChapter = tempCurrentChapter;
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={onPressCallback}
+              style={linkStyle}
+            >
+              {refText}
+            </Text>
+          );
+        }
+        break;
       }
     }
 
@@ -831,13 +953,16 @@ type CommentaryState = {
   commentaryText: string;
 };
 
+type VerseRef = {
+  bookNum: number;
+  chapterStart: number;
+  chapterEnd?: number;
+  ranges?: { start: number; end: number }[];
+};
+
 type VerseState = {
   view: "verse";
-  currentVerseRef: {
-    bookNum: number;
-    chapter: number;
-    ranges: { start: number; end: number }[];
-  };
+  currentVerseRef: VerseRef;
   verseVerses: Verse[];
 };
 
@@ -889,11 +1014,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [selectedVerse, setSelectedVerse] = useState<Verse | null>(null);
   const [commentaryLoading, setCommentaryLoading] = useState(false);
   const [commentaryText, setCommentaryText] = useState("");
-  const [currentVerseRef, setCurrentVerseRef] = useState<{
-    bookNum: number;
-    chapter: number;
-    ranges: { start: number; end: number }[];
-  } | null>(null);
+  const [currentVerseRef, setCurrentVerseRef] = useState<VerseRef | null>(null);
   const [verseLoading, setVerseLoading] = useState(false);
   const [verseVerses, setVerseVerses] = useState<Verse[]>([]);
   const [dictHistory, setDictHistory] = useState<DictHistoryEntry[]>([]);
@@ -1147,10 +1268,18 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const handleVerseLinkPress = useCallback(
     async (
       bookNum: number,
-      ch: number,
-      ranges: { start: number; end: number }[]
+      chapterStart: number,
+      ranges?: { start: number; end: number }[],
+      chapterEnd?: number
     ) => {
-      const newRef = { bookNum, chapter: ch, ranges };
+      const isMultiChapter =
+        chapterEnd !== undefined && chapterEnd > chapterStart;
+      const newRef: VerseRef = {
+        bookNum,
+        chapterStart,
+        ...(chapterEnd !== undefined && { chapterEnd }),
+        ...(ranges && { ranges }),
+      };
       const newState: VerseState = {
         view: "verse",
         currentVerseRef: newRef,
@@ -1162,31 +1291,46 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       setVerseVerses([]);
       setVerseLoading(true);
 
-      let loadedVerses: Verse[] = [];
+      let allVerses: Verse[] = [];
+      const chapters = isMultiChapter
+        ? Array.from(
+            { length: chapterEnd! - chapterStart + 1 },
+            (_, i) => chapterStart + i
+          )
+        : [chapterStart];
       try {
-        if (displayVersion) {
-          const dbFilename = getDatabaseFilename(displayVersion);
-          if (dbFilename) {
-            const secondaryDB = await getDatabase(dbFilename);
-            if (secondaryDB) {
-              loadedVerses = await secondaryDB.getVerses(bookNum, ch);
-            } else {
-              console.warn(
-                `Secondary DB not available for ${displayVersion}, falling back to primary`
-              );
+        for (const ch of chapters) {
+          let loadedVerses: Verse[] = [];
+          if (displayVersion) {
+            const dbFilename = getDatabaseFilename(displayVersion);
+            if (dbFilename) {
+              const secondaryDB = await getDatabase(dbFilename);
+              if (secondaryDB) {
+                loadedVerses = await secondaryDB.getVerses(bookNum, ch);
+              } else {
+                console.warn(
+                  `Secondary DB not available for ${displayVersion}, falling back to primary`
+                );
+              }
             }
           }
-        }
-        if (loadedVerses.length === 0 && bibleDB) {
-          loadedVerses = await bibleDB.getVerses(bookNum, ch);
+          if (loadedVerses.length === 0 && bibleDB) {
+            loadedVerses = await bibleDB.getVerses(bookNum, ch);
+          }
+          allVerses.push(...loadedVerses);
         }
       } catch (e) {
         console.error("Error loading verses:", e);
       }
 
-      const targetVerses = loadedVerses.filter((verse) =>
-        ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
-      );
+      allVerses.sort((a, b) => a.chapter - b.chapter || a.verse - b.verse);
+
+      let targetVerses = allVerses;
+      if (!isMultiChapter && ranges && ranges.length > 0) {
+        targetVerses = allVerses.filter((verse) =>
+          ranges.some((r) => verse.verse >= r.start && verse.verse <= r.end)
+        );
+      }
       setVerseLoading(false);
       setVerseVerses(targetVerses);
       setModalStack((prev) => {
@@ -1227,6 +1371,20 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     );
     return entry ? entry[1].long : "Unknown Book";
   }, []);
+
+  const verseTitle = useMemo(() => {
+    if (!currentVerseRef) return "";
+    const { bookNum, chapterStart, chapterEnd, ranges } = currentVerseRef;
+    let chStr = `${chapterStart}`;
+    if (chapterEnd && chapterEnd > chapterStart) {
+      chStr += `-${chapterEnd}`;
+    } else if (ranges && ranges.length > 0) {
+      chStr += `:${ranges
+        .map((r) => (r.start === r.end ? r.start : `${r.start}-${r.end}`))
+        .join(",")}`;
+    }
+    return `${getBookName(bookNum)} ${chStr}`;
+  }, [currentVerseRef, getBookName]);
 
   const sortedVerses = useMemo(
     () => [...verses].sort((a, b) => a.verse - b.verse),
@@ -1504,14 +1662,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     );
   }
 
-  const verseTitle = currentVerseRef
-    ? `${getBookName(currentVerseRef.bookNum)} ${currentVerseRef.chapter}:${currentVerseRef.ranges
-        .map((r) =>
-          r.start === r.end ? r.start.toString() : `${r.start}-${r.end}`
-        )
-        .join(",")}`
-    : "";
-
   const showCommentaryBack = hasViewBack || hasDictBack;
   const commentaryBackOnPress = hasViewBack ? handleViewBack : handleBack;
 
@@ -1596,7 +1746,10 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                     style={{ maxHeight: 300 }}
                   >
                     {verseVerses.map((verse) => (
-                      <View key={verse.verse} style={{ marginBottom: 8 }}>
+                      <View
+                        key={`${verse.chapter}-${verse.verse}`}
+                        style={{ marginBottom: 8 }}
+                      >
                         <Text
                           style={{
                             fontSize: 16,
@@ -1616,7 +1769,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                               fontFamily: actualFontFamily,
                             }}
                           >
-                            {verse.verse}
+                            {verse.chapter}:{verse.verse}
                           </Text>{" "}
                           {renderVerseTextWithXmlHighlight(
                             verse.text,
@@ -1922,7 +2075,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                           actualFontFamily,
                           bookToNumber,
                           handleVerseLinkPress,
-                          selectedVerse?.book_number
+                          selectedVerse?.book_number,
+                          selectedVerse?.chapter
                         )}
                       </Text>
                     )}
