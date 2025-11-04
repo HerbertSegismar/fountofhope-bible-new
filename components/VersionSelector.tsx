@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme, getColorClasses } from "../context/ThemeContext";
+import { useTheme } from "../context/ThemeContext";
 import {
   getVersionDisplayName,
   getVersionDescription,

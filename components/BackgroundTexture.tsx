@@ -31,7 +31,11 @@ export const BackgroundTexture: React.FC<BackgroundTextureProps> = ({
   }
 
   return (
-    <ImageBackground source={source} resizeMode={resizeMode} style={style}>
+    <ImageBackground
+      source={source}
+      resizeMode={resizeMode}
+      style={style}
+    >
       <View key={overlayKey} style={overlayStyle}>
         {children}
       </View>

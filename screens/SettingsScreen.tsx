@@ -140,20 +140,10 @@ const SettingsScreen = () => {
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion || isSwitching) return;
-      const originalSecondaryVersion = secondaryVersion;
-      let wasSwapped = false;
-      if (
-        version === secondaryVersion &&
-        showMultiVersion &&
-        secondaryVersion !== null
-      ) {
-        setSecondaryVersion(currentVersion);
-        wasSwapped = true;
-      }
       setSelectedVersion(version);
       setIsSwitching(true);
 
-      const maxRetries = 3;
+      const maxRetries = 5;
       let lastError: unknown;
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -175,10 +165,6 @@ const SettingsScreen = () => {
         }
       }
 
-      if (wasSwapped) {
-        setSecondaryVersion(originalSecondaryVersion);
-      }
-
       let errorMessage =
         "Failed to switch Bible version after multiple attempts. Please try another version.";
       if (lastError instanceof Error) {
@@ -194,13 +180,7 @@ const SettingsScreen = () => {
       setSelectedVersion(currentVersion);
       setIsSwitching(false);
     },
-    [
-      currentVersion,
-      isSwitching,
-      switchVersion,
-      secondaryVersion,
-      showMultiVersion,
-    ]
+    [currentVersion, isSwitching, switchVersion]
   );
 
   const handleSecondaryVersionSelect = useCallback(
@@ -225,10 +205,8 @@ const SettingsScreen = () => {
     setShowBgModal(false);
   }, []);
 
-  // Memoized image sources to ensure stable references and prevent unnecessary re-renders
   const memoizedBgTextures = useMemo(() => bgTextures, []);
 
-  // Memoized BgOption component to prevent re-renders of individual list items unless props change
   const BgOption = useMemo(
     () =>
       React.memo(
@@ -279,7 +257,6 @@ const SettingsScreen = () => {
                         borderRadius: 8,
                         marginRight: 12,
                       }}
-                      resizeMode="cover"
                     />
                   )}
                   <Text

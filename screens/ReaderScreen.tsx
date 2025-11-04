@@ -18,7 +18,6 @@ import {
   ScrollView,
   TextInput,
 } from "react-native";
-import Slider from "@react-native-community/slider";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -41,9 +40,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
 import { ReaderContent } from "../content/ReaderContent";
+
 const initialDimensions = Dimensions.get("window");
+
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
+
 interface MenuItem {
   key: string;
   name: string;
@@ -51,7 +53,9 @@ interface MenuItem {
   onPress: () => void;
   color: string;
 }
+
 type MultiViewLayout = "horizontal" | "vertical";
+
 interface Location {
   bookId: number;
   bookName: string;
@@ -59,6 +63,7 @@ interface Location {
   chapter: number;
   verse?: number;
 }
+
 interface DropdownProps {
   visible: boolean;
   onClose: () => void;
@@ -72,6 +77,7 @@ interface DropdownProps {
   bgImageIndex: number;
   onSetBgImageIndex: (value: number) => void;
 }
+
 const DropdownMenu: React.FC<DropdownProps> = ({
   visible,
   onClose,
@@ -85,10 +91,13 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   onSetBgImageIndex,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
+
   useEffect(() => {
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
+
   if (!visible) return null;
+
   const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
@@ -96,34 +105,40 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     );
     onClose();
   };
+
   const handleOpacityChange = (text: string) => {
     const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
     const clampedNum = Math.min(100, Math.max(0, num));
     setTempOpacity(clampedNum / 100);
   };
+
   const handleOpacitySubmit = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
       console.error
     );
   };
+
   const maxBgIndex = 33;
+
   const handlePrevTexture = () => {
     if (bgImageIndex === 0) {
-      onSetBgImageIndex(33);
+      onSetBgImageIndex(maxBgIndex);
     } else {
       onSetBgImageIndex(bgImageIndex - 1);
     }
   };
+
   const handleNextTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(1);
-    } else if (bgImageIndex === 33) {
+    } else if (bgImageIndex === maxBgIndex) {
       onSetBgImageIndex(0);
     } else {
       onSetBgImageIndex(bgImageIndex + 1);
     }
   };
+
   return (
     <TouchableOpacity
       style={{
@@ -137,10 +152,9 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       activeOpacity={1}
       onPress={handleClose}
     >
-      {/* Menu container now uses TouchableOpacity to reliably swallow background touches */}
       <TouchableOpacity
         activeOpacity={1}
-        onPress={() => {}} // Empty: swallows touches without closing
+        onPress={() => {}}
         style={{
           position: "absolute",
           top: headerTotalHeight,
@@ -323,6 +337,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     </TouchableOpacity>
   );
 };
+
 export default function ReaderScreen({
   navigation,
   route,
@@ -346,6 +361,7 @@ export default function ReaderScreen({
   } = useHighlights();
   const { bibleDB, currentVersion, availableBibleVersions, switchVersion } =
     useBibleDatabase();
+
   const [primaryMaxChapter, setPrimaryMaxChapter] = useState(0);
   const [secondaryMaxChapter, setSecondaryMaxChapter] = useState(0);
   const [openSelector, setOpenSelector] = useState<SelectorType>(null);
@@ -835,24 +851,12 @@ export default function ReaderScreen({
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion) return;
-      const originalSecondaryVersion = secondaryVersion;
-      let wasSwapped = false;
-      if (
-        version === secondaryVersion &&
-        showMultiVersion &&
-        secondaryVersion !== null
-      ) {
-        // Swap versions
-        setSecondaryVersion(currentVersion);
-        wasSwapped = true;
-      }
       try {
         setIsSwitchingVersion(true);
         await switchVersion(version);
       } catch (error) {
         console.error("Switch version failed:", error);
         const originalVersion = currentVersion;
-        // Try revert to original
         try {
           await switchVersion(originalVersion);
         } catch (revertError) {
@@ -863,22 +867,17 @@ export default function ReaderScreen({
           );
           return;
         }
-        // Then retry the new version
         try {
           await switchVersion(version);
         } catch (retryError) {
           console.error("Retry switch failed:", retryError);
-          // Revert swap if switch failed
-          if (wasSwapped) {
-            setSecondaryVersion(originalSecondaryVersion);
-          }
           Alert.alert("Error", "Failed to switch Bible version after retry.");
         }
       } finally {
         setIsSwitchingVersion(false);
       }
     },
-    [currentVersion, secondaryVersion, showMultiVersion, switchVersion]
+    [currentVersion, switchVersion]
   );
   useEffect(() => {
     if (showMultiVersion && secondaryVersion === currentVersion) {
@@ -1522,6 +1521,7 @@ export default function ReaderScreen({
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   const headerContentHeight = 60;
   const headerTotalHeight = insets.top + headerContentHeight;
+
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1539,6 +1539,7 @@ export default function ReaderScreen({
       </SafeAreaView>
     );
   }
+
   const overlaysOpen =
     showDropdown || openSelector !== null || showNavigationModal;
   const contentScrollEnabled = !overlaysOpen;
@@ -1803,6 +1804,7 @@ export default function ReaderScreen({
   const handleSetBgTextureOpacity = useCallback((value: number) => {
     setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -1992,6 +1994,96 @@ export default function ReaderScreen({
           {renderProgressBar()}
         </View>
       )}
+      <NavigationModal
+        visible={showNavigationModal}
+        onClose={() => setShowNavigationModal(false)}
+        colors={colors}
+        primaryTextColor={primaryTextColor}
+        navigationTarget={navigationTarget}
+        currentVersion={currentVersion}
+        onLocationSelect={(location) => {
+          const bookInfo = getBookInfo(location.book.book_number);
+          const newLocation: Location = {
+            bookId: location.book.book_number,
+            bookName:
+              bookInfo?.long || location.book.long_name || "Unknown Book",
+            bookColor: bookInfo?.color || location.book.book_color || "#DC2626",
+            chapter: location.chapter,
+            verse: location.verse,
+          };
+          if (navigationTarget === "primary") {
+            setPrimaryLocation(newLocation);
+            setPrimaryTargetVerse(newLocation.verse);
+          } else {
+            setSecondaryLocation(newLocation);
+            setSecondaryTargetVerse(newLocation.verse);
+          }
+        }}
+        bibleDB={bibleDB}
+        secondaryDB={secondaryDB}
+      />
+      <View
+        style={{
+          flex: 1,
+          marginTop: isFullScreen ? 0 : headerTotalHeight - insets.top,
+        }}
+        pointerEvents={overlaysOpen ? "none" : "auto"}
+      >
+        <ReaderContent
+          primaryVerses={primaryVerses}
+          secondaryVerses={secondaryVerses}
+          primaryLoading={primaryLoading}
+          secondaryLoading={secondaryLoading}
+          primaryLocation={primaryLocation}
+          secondaryLocation={secondaryLocation}
+          primaryDisplayBookName={primaryDisplayBookName}
+          secondaryDisplayBookName={secondaryDisplayBookName}
+          currentVersion={currentVersion}
+          secondaryVersion={secondaryVersion}
+          getVersionDisplayName={getVersionDisplayName}
+          primaryOnVersePress={primaryOnVersePress}
+          secondaryOnVersePress={secondaryOnVersePress}
+          getHighlightVerse={getHighlightVerse}
+          primaryHighlightedVerses={primaryHighlightedVerses}
+          secondaryHighlightedVerses={secondaryHighlightedVerses}
+          primaryBookmarkedVerses={primaryBookmarkedVerses}
+          secondaryBookmarkedVerses={secondaryBookmarkedVerses}
+          isFullScreen={isFullScreen}
+          colors={colors}
+          fontSize={fontSize}
+          primaryProps={primaryProps}
+          primaryHandleScroll={primaryHandleScroll}
+          handlePrimaryContentSizeChange={handlePrimaryContentSizeChange}
+          secondaryHandleScrollCb={secondaryHandleScrollCb}
+          handleSecondaryContentSizeChange={handleSecondaryContentSizeChange}
+          handleSecondaryScrollViewLayout={handleSecondaryScrollViewLayout}
+          handleSecondaryVerseLayout={handleSecondaryVerseLayout}
+          primaryHeaderRef={primaryHeaderRef}
+          secondaryHeaderRef={secondaryHeaderRef}
+          setPrimaryHeaderX={setPrimaryHeaderX}
+          setPrimaryHeaderY={setPrimaryHeaderY}
+          setPrimaryHeaderWidth={setPrimaryHeaderWidth}
+          setPrimaryHeaderHeight={setPrimaryHeaderHeight}
+          setSecondaryHeaderX={setSecondaryHeaderX}
+          setSecondaryHeaderY={setSecondaryHeaderY}
+          setSecondaryHeaderWidth={setSecondaryHeaderWidth}
+          setSecondaryHeaderHeight={setSecondaryHeaderHeight}
+          versionHeaderPaddingVertical={versionHeaderPaddingVertical}
+          openPrimaryNavigation={openPrimaryNavigation}
+          openSecondaryNavigation={openSecondaryNavigation}
+          openPrimaryVersionSelector={openPrimaryVersionSelector}
+          openSecondaryVersionSelector={openSecondaryVersionSelector}
+          primaryTextColor={primaryTextColor}
+          effectiveLayout={effectiveLayout}
+          showMultiVersion={showMultiVersion}
+          isLandscape={isLandscape}
+          primaryScrollViewRef={primaryScrollViewRef}
+          secondaryScrollViewRef={secondaryScrollViewRef}
+          bgTextureOpacity={bgTextureOpacity}
+          bgImageIndex={bgImageIndex}
+          scrollEnabled={contentScrollEnabled}
+        />
+      </View>
       <DropdownMenu
         visible={showDropdown}
         onClose={() => setShowDropdown(false)}
@@ -2105,95 +2197,6 @@ export default function ReaderScreen({
           </View>
         </TouchableOpacity>
       )}
-      <NavigationModal
-        visible={showNavigationModal}
-        onClose={() => setShowNavigationModal(false)}
-        colors={colors}
-        primaryTextColor={primaryTextColor}
-        navigationTarget={navigationTarget}
-        currentVersion={currentVersion}
-        onLocationSelect={(location) => {
-          const bookInfo = getBookInfo(location.book.book_number);
-          const newLocation: Location = {
-            bookId: location.book.book_number,
-            bookName:
-              bookInfo?.long || location.book.long_name || "Unknown Book",
-            bookColor: bookInfo?.color || location.book.book_color || "#DC2626",
-            chapter: location.chapter,
-            verse: location.verse,
-          };
-          if (navigationTarget === "primary") {
-            setPrimaryLocation(newLocation);
-            setPrimaryTargetVerse(newLocation.verse);
-          } else {
-            setSecondaryLocation(newLocation);
-            setSecondaryTargetVerse(newLocation.verse);
-          }
-        }}
-        bibleDB={bibleDB}
-        secondaryDB={secondaryDB}
-      />
-      <View
-        style={{
-          flex: 1,
-          marginTop: isFullScreen ? 0 : headerTotalHeight - insets.top,
-        }}
-      >
-        <ReaderContent
-          primaryVerses={primaryVerses}
-          secondaryVerses={secondaryVerses}
-          primaryLoading={primaryLoading}
-          secondaryLoading={secondaryLoading}
-          primaryLocation={primaryLocation}
-          secondaryLocation={secondaryLocation}
-          primaryDisplayBookName={primaryDisplayBookName}
-          secondaryDisplayBookName={secondaryDisplayBookName}
-          currentVersion={currentVersion}
-          secondaryVersion={secondaryVersion}
-          getVersionDisplayName={getVersionDisplayName}
-          primaryOnVersePress={primaryOnVersePress}
-          secondaryOnVersePress={secondaryOnVersePress}
-          getHighlightVerse={getHighlightVerse}
-          primaryHighlightedVerses={primaryHighlightedVerses}
-          secondaryHighlightedVerses={secondaryHighlightedVerses}
-          primaryBookmarkedVerses={primaryBookmarkedVerses}
-          secondaryBookmarkedVerses={secondaryBookmarkedVerses}
-          isFullScreen={isFullScreen}
-          colors={colors}
-          fontSize={fontSize}
-          primaryProps={primaryProps}
-          primaryHandleScroll={primaryHandleScroll}
-          handlePrimaryContentSizeChange={handlePrimaryContentSizeChange}
-          secondaryHandleScrollCb={secondaryHandleScrollCb}
-          handleSecondaryContentSizeChange={handleSecondaryContentSizeChange}
-          handleSecondaryScrollViewLayout={handleSecondaryScrollViewLayout}
-          handleSecondaryVerseLayout={handleSecondaryVerseLayout}
-          primaryHeaderRef={primaryHeaderRef}
-          secondaryHeaderRef={secondaryHeaderRef}
-          setPrimaryHeaderX={setPrimaryHeaderX}
-          setPrimaryHeaderY={setPrimaryHeaderY}
-          setPrimaryHeaderWidth={setPrimaryHeaderWidth}
-          setPrimaryHeaderHeight={setPrimaryHeaderHeight}
-          setSecondaryHeaderX={setSecondaryHeaderX}
-          setSecondaryHeaderY={setSecondaryHeaderY}
-          setSecondaryHeaderWidth={setSecondaryHeaderWidth}
-          setSecondaryHeaderHeight={setSecondaryHeaderHeight}
-          versionHeaderPaddingVertical={versionHeaderPaddingVertical}
-          openPrimaryNavigation={openPrimaryNavigation}
-          openSecondaryNavigation={openSecondaryNavigation}
-          openPrimaryVersionSelector={openPrimaryVersionSelector}
-          openSecondaryVersionSelector={openSecondaryVersionSelector}
-          primaryTextColor={primaryTextColor}
-          effectiveLayout={effectiveLayout}
-          showMultiVersion={showMultiVersion}
-          isLandscape={isLandscape}
-          primaryScrollViewRef={primaryScrollViewRef}
-          secondaryScrollViewRef={secondaryScrollViewRef}
-          bgTextureOpacity={bgTextureOpacity}
-          bgImageIndex={bgImageIndex}
-          scrollEnabled={contentScrollEnabled}
-        />
-      </View>
       <Animated.View
         style={{
           position: "relative",

@@ -725,10 +725,9 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
       hasBg={bgHook.hasSource}
       overlayStyle={bgHook.overlayStyle}
       overlayKey={bgHook.overlayKey}
-      resizeMode="repeat"
       style={{
         flex: 1,
-        marginBottom: 0,
+        marginBottom: 5,
         borderBottomLeftRadius: 20,
         borderBottomRightRadius: 20,
         overflow: "hidden",
