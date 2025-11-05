@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, type FontFamily } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
@@ -25,10 +25,10 @@ import {
 } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
-import { getFontFamily } from "../utils/fontUtils";
 import { useCommentary } from "../hooks/useCommentary";
 import { BackgroundTexture } from "../components/BackgroundTexture";
 import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
+import { Fonts } from "../utils/fonts";
 
 type ParsedNode = {
   type: "text" | "opening-tag" | "closing-tag" | "self-closing-tag";
@@ -49,7 +49,6 @@ const buildTree = (nodes: ParsedNode[]): TreeNode[] => {
   const root: TreeNode[] = [];
   let current: TreeNode[] = root;
   const stack: TreeNode[][] = [];
-
   for (const node of nodes) {
     if (node.type === "opening-tag") {
       const element: TreeNode = {
@@ -69,32 +68,26 @@ const buildTree = (nodes: ParsedNode[]): TreeNode[] => {
       current.push(node as TreeNode);
     }
   }
-
   return root;
 };
 
 const parseXmlTags = (text: string): ParsedNode[] => {
   if (!text) return [];
-
   const nodes: ParsedNode[] = [];
   let currentText = "";
   let i = 0;
-
   while (i < text.length) {
     if (text[i] === "<") {
       if (currentText) {
         nodes.push({ type: "text", content: currentText });
         currentText = "";
       }
-
       const tagEnd = text.indexOf(">", i);
       if (tagEnd === -1) {
         currentText += text.substring(i);
         break;
       }
-
       const fullTag = text.substring(i, tagEnd + 1);
-
       if (fullTag.startsWith("</")) {
         nodes.push({ type: "closing-tag", tag: fullTag });
       } else if (fullTag.endsWith("/>")) {
@@ -104,18 +97,15 @@ const parseXmlTags = (text: string): ParsedNode[] => {
         const tagName = fullTag.slice(1, -1).trim().split(" ")[0];
         nodes.push({ type: "opening-tag", tag: tagName, fullTag });
       }
-
       i = tagEnd + 1;
     } else {
       currentText += text[i];
       i++;
     }
   }
-
   if (currentText) {
     nodes.push({ type: "text", content: currentText });
   }
-
   return nodes;
 };
 
@@ -130,13 +120,11 @@ const renderTree = (
 ): React.ReactNode[] => {
   const elements: React.ReactNode[] = [];
   let key = 0;
-
   const renderNode = (
     node: TreeNode,
     overrideTextColor?: string
   ): React.ReactNode => {
     key++;
-
     if (node.type === "text") {
       return renderTextWithHighlight(
         node.content || "",
@@ -172,14 +160,12 @@ const renderTree = (
         ch.length === 1 &&
         ch[0].type === "text" &&
         /^\d+$/.test((ch[0].content || "").trim());
-
       const tagContent = ch
         .map((child: TreeNode) =>
           child.type === "text" ? child.content || "" : ""
         )
         .join("")
         .trim();
-
       if (isTextContainer) {
         const children = ch.map((child: TreeNode) =>
           renderNode(child, textColor)
@@ -214,14 +200,11 @@ const renderTree = (
         );
       }
     }
-
     return null;
   };
-
   for (const node of tree) {
     elements.push(renderNode(node));
   }
-
   return elements;
 };
 
@@ -239,14 +222,12 @@ const renderTextWithHighlight = (
   textColor?: string
 ): React.ReactNode => {
   const innerStyle = { fontFamily, color: textColor };
-
   if (!highlight || !text)
     return (
       <Text key={keyPrefix} style={innerStyle}>
         {text}
       </Text>
     );
-
   const cleanText = text.replace(/<[^>]+>/g, "");
   if (!cleanText)
     return (
@@ -254,10 +235,8 @@ const renderTextWithHighlight = (
         {text}
       </Text>
     );
-
   const regex = new RegExp(`(${escapeRegex(highlight)})`, "gi");
   const parts = cleanText.split(regex);
-
   return (
     <Text key={keyPrefix} style={innerStyle}>
       {parts.map((part, i) =>
@@ -295,7 +274,6 @@ const renderVerseTextWithXmlHighlight = (
   textColor?: string
 ): React.ReactNode[] => {
   if (!text) return [];
-
   try {
     const nodes = parseXmlTags(text);
     const tree = buildTree(nodes);
@@ -328,21 +306,17 @@ const findBookNumber = (
   bookToNumber: Record<string, number>
 ): number | undefined => {
   if (!bookStr) return undefined;
-
   const trimmed = bookStr.trim();
   if (bookToNumber[trimmed]) {
     return bookToNumber[trimmed];
   }
-
   const cleanQuery = trimmed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-
   for (const [key, num] of Object.entries(bookToNumber)) {
     const cleanKey = key.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
     if (cleanQuery === cleanKey) {
       return num;
     }
   }
-
   return undefined;
 };
 
@@ -363,77 +337,60 @@ const renderCommentaryWithVerseLinks = (
   currentChapterNum?: number
 ): React.ReactNode[] => {
   if (!text) return [];
-
   const bookKeys = Object.keys(bookToNumber);
   const escapedKeys = bookKeys.map(escapeRegex);
   const bookPattern = escapedKeys.map((key) => `\\b${key}`).join("|");
   const DASH_PATTERN = "[-–—]";
-
   const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\s*\\d+)?`;
   const VERSE_LIST = `(${VERSE_RANGE}(?:\\s*,\\s*${VERSE_RANGE})*)`;
-
   const fullRefRegex = new RegExp(
     `(?:(${bookPattern})\\s+)?(\\d+)\\s*:\\s*${VERSE_LIST}\\b`,
     "gi"
   );
-
   const continuationRegex = new RegExp(/[,;]\s*(${VERSE_LIST})\\b/gi);
-
   const chapterOnlyRegex = /(?:ch\\.|chs\\.|chapter)\\.\\s+(\\d+)\\b/gi;
-
   const verseOnlyRegex = new RegExp(
     `(?:v\\.|vv?\\.?|ver\\.|verse)s?\\s+${VERSE_LIST}\\b`,
     "gi"
   );
-
   const chapVerseRegex = new RegExp(
     `(?:(${bookPattern})\\s+)?(\\d+)(?:\\s*${DASH_PATTERN}\\s*(\\d+))?\\b`,
     "gi"
   );
-
   const plainStyle: TextStyle = {
     color: themeColors.textPrimary,
     fontSize: 16,
     lineHeight: 24,
     fontFamily,
   };
-
   const linkStyle: TextStyle = {
     ...plainStyle,
     color: themeColors.primary,
     textDecorationLine: "underline",
   };
-
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let currentBook: number | undefined = currentBookNum;
   let currentChapter: number | undefined = currentChapterNum;
-
   while (true) {
     fullRefRegex.lastIndex = lastIndex;
     const fullMatch = fullRefRegex.exec(text);
     const fullPos = fullMatch ? fullMatch.index : Infinity;
-
     continuationRegex.lastIndex = lastIndex;
     const contMatch = continuationRegex.exec(text);
     const contPos = contMatch ? contMatch.index : Infinity;
-
     chapterOnlyRegex.lastIndex = lastIndex;
     const chapMatch = chapterOnlyRegex.exec(text);
     const chapPos = chapMatch ? chapMatch.index : Infinity;
-
     verseOnlyRegex.lastIndex = lastIndex;
     const verseMatch = verseOnlyRegex.exec(text);
     const versePos = verseMatch ? verseMatch.index : Infinity;
-
     chapVerseRegex.lastIndex = lastIndex;
     const chapVerseMatch = chapVerseRegex.exec(text);
     const chapVersePos = chapVerseMatch ? chapVerseMatch.index : Infinity;
-
     let minPos = Infinity;
     let selectedType: "full" | "cont" | "chap" | "verse" | "chapVerse" | null =
       null;
-
     if (fullPos < minPos && fullMatch !== null) {
       minPos = fullPos;
       selectedType = "full";
@@ -454,11 +411,9 @@ const renderCommentaryWithVerseLinks = (
       minPos = chapVersePos;
       selectedType = "chapVerse";
     }
-
     if (minPos === Infinity || selectedType === null) {
       break;
     }
-
     const matchIndex = minPos;
     const refText = (() => {
       switch (selectedType) {
@@ -493,7 +448,6 @@ const renderCommentaryWithVerseLinks = (
       }
     })();
     const matchEnd = minPos + refText.length;
-
     if (lastIndex < matchIndex) {
       parts.push(
         <Text key={parts.length} style={plainStyle}>
@@ -501,7 +455,6 @@ const renderCommentaryWithVerseLinks = (
         </Text>
       );
     }
-
     switch (selectedType) {
       case "full": {
         const bookStr = theMatch[1] ?? "";
@@ -516,7 +469,6 @@ const renderCommentaryWithVerseLinks = (
         const chapter = chapterStr ? parseInt(`${chapterStr}`, 10) : 0;
         const verseListStr = theMatch[3] ?? "";
         const ranges = parseVerseList(verseListStr);
-
         if (bookNum !== undefined && ranges.length > 0) {
           currentChapter = chapter;
           parts.push(
@@ -553,7 +505,6 @@ const renderCommentaryWithVerseLinks = (
         const prefixMatch = refText.match(/^[,;]\s*/);
         const prefix = prefixMatch ? prefixMatch[0] : "";
         const rangeText = refText.slice(prefix.length);
-
         if (prefix) {
           parts.push(
             <Text key={parts.length} style={plainStyle}>
@@ -657,7 +608,6 @@ const renderCommentaryWithVerseLinks = (
         }
         const num1 = parseInt(`${num1Str}`, 10);
         const num2 = num2Str ? parseInt(`${num2Str}`, 10) : undefined;
-
         if (bookNum === undefined) {
           parts.push(
             <Text key={parts.length} style={plainStyle}>
@@ -698,10 +648,8 @@ const renderCommentaryWithVerseLinks = (
         break;
       }
     }
-
     lastIndex = matchEnd;
   }
-
   if (lastIndex < text.length) {
     parts.push(
       <Text key={parts.length} style={plainStyle}>
@@ -709,7 +657,6 @@ const renderCommentaryWithVerseLinks = (
       </Text>
     );
   }
-
   return parts;
 };
 
@@ -740,9 +687,7 @@ const renderDictionaryText = (
   const noSpaceAfterPunctChars = new Set(["(", "'", "["]);
   let previousType: string | null = null;
   let lastPunctChar: string | null = null;
-
   const isAlpha = (char: string) => /[a-zA-Z\u00C0-\u00FF]/.test(char);
-
   const pushSpaceIfNeeded = () => {
     if (i < text.length && isAlpha(text[i])) {
       const needsSpace =
@@ -758,10 +703,8 @@ const renderDictionaryText = (
       }
     }
   };
-
   while (i < text.length) {
     const char = text[i];
-
     if (isAlpha(char)) {
       if (
         (char === "H" || char === "G") &&
@@ -880,7 +823,6 @@ const renderDictionaryText = (
       previousType = "ws";
     }
   }
-
   return parts;
 };
 
@@ -992,17 +934,30 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 }) => {
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
-  const actualFontFamily = getFontFamily(fontFamily);
+
+  const actualFontFamily = useMemo((): string | undefined => {
+    switch (fontFamily) {
+      case "system":
+        return undefined;
+      case "oswald":
+        return Fonts.OswaldVariable;
+      case "rubik-glitch":
+        return Fonts.RubikGlitchRegular;
+      case "poppins":
+        return Fonts.PoppinsRegular;
+      default:
+        return undefined;
+    }
+  }, [fontFamily]);
+
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
   const { bibleDB, getDatabase } = useBibleDatabase();
-
   const effectiveNoBg = noBackground ?? false;
   const bgHook = useBackgroundTexture({
     index: propBgImageIndex,
     opacity: propBgTextureOpacity,
     noBackground: effectiveNoBg,
   });
-
   const hasBg = !effectiveNoBg && bgHook.hasSource;
 
   const [showTagModal, setShowTagModal] = useState(false);
@@ -1025,10 +980,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       setShowTagModal(false);
       return;
     }
-
     const top = modalStack[modalStack.length - 1];
     setModalView(top.view);
-
     if (top.view === "commentary") {
       setTagContent(top.tagContent);
       setSelectedVerse(top.selectedVerse);
@@ -1053,15 +1006,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   useEffect(() => {
     if (!showTagModal || modalView !== "commentary") return;
-
     if (!selectedVerse || !tagContent) {
       setCommentaryLoading(false);
       return;
     }
-
     const versionKey = getVersionKey(displayVersion);
     const isDict = versionKey === "NASB" && /^\d+$/.test(tagContent);
-
     if (
       isDict &&
       currentDictIndex >= 0 &&
@@ -1070,14 +1020,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       setCommentaryLoading(false);
       return;
     }
-
     const loadAsync = async () => {
       setCommentaryLoading(true);
       const text = await loadCommentaryForVerse(selectedVerse, tagContent);
       setCommentaryLoading(false);
-
       const updates: Partial<CommentaryState> = { commentaryText: text };
-
       if (isDict) {
         const prefix =
           getTestament(
@@ -1088,7 +1035,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
             : "H";
         const full = `${prefix}${tagContent}`;
         const entry: DictHistoryEntry = { digits: tagContent, text, full };
-
         let newHistory: DictHistoryEntry[] = dictHistory;
         let newIndex = currentDictIndex;
         if (
@@ -1106,7 +1052,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         updates.dictHistory = newHistory;
         updates.dictIndex = newIndex;
       }
-
       setModalStack((prev) => {
         if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
           return prev;
@@ -1116,7 +1061,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         return [...prev.slice(0, -1), newTop];
       });
     };
-
     loadAsync();
   }, [
     showTagModal,
@@ -1132,7 +1076,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const currentTitle = useMemo(() => {
     const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
     if (!isDictMode) return `Commentary for "${tagContent}"`;
-
     const prefix = isNewTestament ? "G" : "H";
     const full =
       currentDictIndex >= 0
@@ -1179,11 +1122,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const handleStrongPress = useCallback(
     async (digits: string) => {
       if (!selectedVerse) return;
-
       setCommentaryLoading(true);
       const text = await loadCommentaryForVerse(selectedVerse, digits);
       setCommentaryLoading(false);
-
       const prefix =
         getTestament(
           selectedVerse.book_number,
@@ -1193,7 +1134,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           : "H";
       const full = `${prefix}${digits}`;
       const entry: DictHistoryEntry = { digits, text, full };
-
       let newHistory: DictHistoryEntry[] = dictHistory;
       let newIndex = currentDictIndex;
       if (
@@ -1208,12 +1148,10 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         );
         newIndex = currentDictIndex;
       }
-
       setTagContent(digits);
       setDictHistory(newHistory);
       setCurrentDictIndex(newIndex);
       setCommentaryText(text);
-
       setModalStack((prev) => {
         if (prev.length === 0 || prev[prev.length - 1].view !== "commentary") {
           return prev;
@@ -1290,7 +1228,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       setCurrentVerseRef(newRef);
       setVerseVerses([]);
       setVerseLoading(true);
-
       let allVerses: Verse[] = [];
       const chapters = isMultiChapter
         ? Array.from(
@@ -1322,9 +1259,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       } catch (e) {
         console.error("Error loading verses:", e);
       }
-
       allVerses.sort((a, b) => a.chapter - b.chapter || a.verse - b.verse);
-
       let targetVerses = allVerses;
       if (!isMultiChapter && ranges && ranges.length > 0) {
         targetVerses = allVerses.filter((verse) =>
@@ -1406,16 +1341,13 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   };
 
   const modalVerseTextColor = themeColors.textPrimary;
-
   const commentaryModalStyle: TextStyle = {
     color: themeColors.textPrimary,
     fontSize: 16,
     lineHeight: 24,
     fontFamily: actualFontFamily,
   };
-
   const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
-
   const hasViewBack = modalStack.length > 1;
   const hasDictBack =
     modalView === "commentary" && isDictMode && currentDictIndex > 0;
@@ -1454,14 +1386,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     const verseTextColor = isHighlighted
       ? themeColors.highlightText
       : themeColors.textPrimary;
-
     const localOnTagPress = useCallback(
       (content: string) => {
         handleTagPress(content, verse);
       },
       [handleTagPress, verse]
     );
-
     const renderedText = useMemo(
       () =>
         renderVerseTextWithXmlHighlight(
@@ -1482,7 +1412,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         verseTextColor,
       ]
     );
-
     const indicatorSize = isFullScreen ? fontSize * 0.7 : fontSize * 0.8;
     const numberStyle = {
       fontSize: indicatorSize,
@@ -1492,13 +1421,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         : themeColors.verseNumber,
       fontFamily: actualFontFamily,
     };
-
     const starStyle = {
       fontSize: indicatorSize * 0.9,
       color: themeColors.highlightIcon,
       fontFamily: actualFontFamily,
     };
-
     return (
       <TouchableOpacity
         key={verse.verse}
@@ -1526,6 +1453,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         >
           <View style={{ ...STYLES.verseText }}>
             <Text
+              className="fontfamily"
               style={{
                 fontSize,
                 lineHeight: fontSize * 1.4,
@@ -1664,7 +1592,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const showCommentaryBack = hasViewBack || hasDictBack;
   const commentaryBackOnPress = hasViewBack ? handleViewBack : handleBack;
-
   const commentaryLeftContent = showCommentaryBack ? (
     <TouchableOpacity
       onPress={commentaryBackOnPress}
@@ -1860,14 +1787,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                         const sections: React.ReactNode[] = [];
                         const headers = ["Derivation:"];
                         let keyCounter = 0;
-
                         for (const header of headers) {
                           const lowerHeader = header.toLowerCase();
                           const index = remainingText
                             .toLowerCase()
                             .indexOf(lowerHeader);
                           if (index === -1) continue;
-
                           const before = remainingText.substring(0, index);
                           if (before.trim()) {
                             sections.push(
@@ -1887,7 +1812,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                               </View>
                             );
                           }
-
                           const colonIndex = remainingText.indexOf(":", index);
                           const headerStart =
                             colonIndex !== -1
@@ -1899,7 +1823,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                           remainingText = remainingText
                             .substring(headerStart)
                             .trimStart();
-
                           sections.push(
                             <View
                               key={header}
@@ -1921,7 +1844,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             </View>
                           );
                         }
-
                         const lowerSee = "see:";
                         let seeStartIndex = remainingText
                           .toLowerCase()
@@ -1949,11 +1871,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                               </View>
                             );
                           }
-
                           const seeContents: string[] = [];
                           let searchPos = seeStartIndex;
                           let lastEnd = seeStartIndex;
-
                           while (true) {
                             const colonIndex = remainingText.indexOf(
                               ":",
@@ -1962,7 +1882,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             if (colonIndex === -1) {
                               break;
                             }
-
                             const contentStart = colonIndex + 1;
                             const nextSeeIndex = remainingText
                               .toLowerCase()
@@ -1971,22 +1890,18 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                               nextSeeIndex !== -1
                                 ? nextSeeIndex
                                 : remainingText.length;
-
                             const content = remainingText
                               .substring(contentStart, contentEnd)
                               .trim();
                             if (content) {
                               seeContents.push(content);
                             }
-
                             lastEnd = contentEnd;
                             if (nextSeeIndex === -1) break;
                             searchPos = nextSeeIndex;
                           }
-
                           if (seeContents.length > 0) {
                             const joinedSeeContent = seeContents.join(", ");
-
                             sections.push(
                               <View
                                 key="see"
@@ -2016,7 +1931,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                                 </Text>
                               </View>
                             );
-
                             remainingText = remainingText
                               .substring(lastEnd)
                               .trimStart();
@@ -2036,7 +1950,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             }
                           }
                         }
-
                         if (remainingText.trim()) {
                           sections.push(
                             <View key="remaining">
@@ -2052,7 +1965,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                             </View>
                           );
                         }
-
                         return sections.length > 0 ? (
                           sections
                         ) : (

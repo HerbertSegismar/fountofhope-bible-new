@@ -6,6 +6,7 @@ import { useTheme, type FontFamily } from "../context/ThemeContext";
 import { getBookInfo } from "../utils/testamentUtils";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 import { getAccessibleTextColor } from "../utils/themeUtils";
+import { Fonts } from "../utils/fonts";
 
 interface VerseViewProps {
   verses: Verse[];
@@ -21,6 +22,7 @@ interface VerseViewProps {
   compact?: boolean;
   bookColor?: string;
 }
+
 const parseXmlTags = (text: string): any[] => {
   if (!text) return [];
 
@@ -241,11 +243,18 @@ const renderVerseTextWithXmlHighlight = (
 };
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
-    case "serif":
-      return Platform.OS === "ios" ? "Georgia" : "serif";
-    case "sans-serif":
-      return Platform.OS === "ios" ? "Helvetica Neue" : "sans-serif";
     case "system":
+      return undefined;
+    case "serif":
+      return "Georgia, Times New Roman, serif";
+    case "sans-serif":
+      return "Helvetica, Arial, sans-serif";
+    case "oswald":
+      return Fonts.OswaldVariable;
+    case "rubik-glitch":
+      return Fonts.RubikGlitchRegular;
+    case "poppins":
+      return Fonts.PoppinsRegular;
     default:
       return undefined;
   }

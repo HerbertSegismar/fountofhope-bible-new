@@ -313,7 +313,7 @@ const SettingsScreen = () => {
       case "rubik-glitch":
         return Fonts.RubikGlitchRegular;
       case "poppins":
-        return "Poppins, sans-serif";
+        return Fonts.PoppinsRegular;
       default:
         return undefined;
     }
@@ -533,7 +533,7 @@ const SettingsScreen = () => {
           className={`text-center text-sm font-medium`}
           style={{
             color: isSelected ? themeColors.primary : themeColors.textPrimary,
-            fontFamily: isSelected ? Fonts.RubikGlitchRegular : fontStyle,
+            fontFamily: fontStyle,
           }}
           numberOfLines={1}
         >
@@ -732,24 +732,19 @@ const SettingsScreen = () => {
               Font Family
             </Text>
             <View className="flex-row flex-wrap -mx-1">
-              {[
-                "system",
-                "serif",
-                "sans-serif",
-                "oswald",
-                "rubik-glitch",
-                "poppins",
-              ].map((familyStr) => {
-                const family = familyStr as FontFamily;
-                return (
-                  <FontButton
-                    key={familyStr}
-                    font={family}
-                    isSelected={fontFamily === family}
-                    onPress={() => setFontFamily(family)}
-                  />
-                );
-              })}
+              {["system", "oswald", "rubik-glitch", "poppins"].map(
+                (familyStr) => {
+                  const family = familyStr as FontFamily;
+                  return (
+                    <FontButton
+                      key={familyStr}
+                      font={family}
+                      isSelected={fontFamily === family}
+                      onPress={() => setFontFamily(family)}
+                    />
+                  );
+                }
+              )}
             </View>
           </View>
 
