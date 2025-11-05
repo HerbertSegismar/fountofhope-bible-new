@@ -2007,7 +2007,7 @@ export default function ReaderScreen({
             bookId: location.book.book_number,
             bookName:
               bookInfo?.long || location.book.long_name || "Unknown Book",
-            bookColor: bookInfo?.color || location.book.book_color || "#DC2626",
+            bookColor: location.book.book_color || "#DC2626",
             chapter: location.chapter,
             verse: location.verse,
           };

@@ -105,14 +105,11 @@ export const BOOK_ABBREVS: Record<string, string[]> = {
   Psalms: ["Ps.", "Psalm", "Pslm.", "Psa.", "Psm.", "Pss."],
   Proverbs: ["Prov", "Prov.", "Pro.", "Prv.", "Pr."],
   Ecclesiastes: ["Eccles.", "Eccle.", "Ecc.", "Ec.", "Qoh."],
-  "Song of Solomon": [
+  Songs: [
     "Song",
     "Song of Songs",
     "SOS.",
     "So.",
-    "Canticle of Canticles",
-    "Canticles",
-    "Cant.",
   ],
   Isaiah: ["Isa.", "Is."],
   Jeremiah: ["Jer.", "Je.", "Jr."],
