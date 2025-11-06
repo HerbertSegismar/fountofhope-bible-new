@@ -4,7 +4,6 @@ import {
   View,
   TouchableOpacity,
   Linking,
-  Dimensions,
 } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { getThemeColors } from "../utils/themeUtils";

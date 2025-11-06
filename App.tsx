@@ -35,8 +35,8 @@ import { BookmarksProvider } from "./context/BookmarksContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 
-import Oswald_VariableFont from "./assets/Oswald_VariableFont.ttf";
-import RubikGlitch_Regular from "./assets/RubikGlitch_Regular.ttf";
+import Oswald_VariableFont from "./assets/fonts/Oswald_VariableFont.ttf";
+import RubikGlitch_Regular from "./assets/fonts/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 import { getBookInfo } from "./utils/testamentUtils";
 import { ChapterMeasurementsProvider } from "./context/ChapterMeasurementsContext";

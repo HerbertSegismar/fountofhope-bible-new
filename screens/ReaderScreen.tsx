@@ -40,12 +40,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
 import { ReaderContent } from "../content/ReaderContent";
-
 const initialDimensions = Dimensions.get("window");
-
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
-
 interface MenuItem {
   key: string;
   name: string;
@@ -53,9 +50,7 @@ interface MenuItem {
   onPress: () => void;
   color: string;
 }
-
 type MultiViewLayout = "horizontal" | "vertical";
-
 interface Location {
   bookId: number;
   bookName: string;
@@ -63,7 +58,6 @@ interface Location {
   chapter: number;
   verse?: number;
 }
-
 interface DropdownProps {
   visible: boolean;
   onClose: () => void;
@@ -76,8 +70,8 @@ interface DropdownProps {
   headerTotalHeight: number;
   bgImageIndex: number;
   onSetBgImageIndex: (value: number) => void;
+  isLandscape: boolean;
 }
-
 const DropdownMenu: React.FC<DropdownProps> = ({
   visible,
   onClose,
@@ -89,15 +83,13 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   headerTotalHeight,
   bgImageIndex,
   onSetBgImageIndex,
+  isLandscape,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
-
   useEffect(() => {
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
-
   if (!visible) return null;
-
   const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
@@ -105,22 +97,18 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     );
     onClose();
   };
-
   const handleOpacityChange = (text: string) => {
     const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
     const clampedNum = Math.min(100, Math.max(0, num));
     setTempOpacity(clampedNum / 100);
   };
-
   const handleOpacitySubmit = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
       console.error
     );
   };
-
   const maxBgIndex = 33;
-
   const handlePrevTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(maxBgIndex);
@@ -128,7 +116,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex - 1);
     }
   };
-
   const handleNextTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(1);
@@ -138,7 +125,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex + 1);
     }
   };
-
   return (
     <TouchableOpacity
       style={{
@@ -158,7 +144,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
         style={{
           position: "absolute",
           top: headerTotalHeight,
-          right: 16,
+          right: isLandscape ? 60 : 16,
           backgroundColor: colors.primary,
           borderRadius: 8,
           paddingVertical: 8,
@@ -337,7 +323,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     </TouchableOpacity>
   );
 };
-
 export default function ReaderScreen({
   navigation,
   route,
@@ -361,7 +346,6 @@ export default function ReaderScreen({
   } = useHighlights();
   const { bibleDB, currentVersion, availableBibleVersions, switchVersion } =
     useBibleDatabase();
-
   const [primaryMaxChapter, setPrimaryMaxChapter] = useState(0);
   const [secondaryMaxChapter, setSecondaryMaxChapter] = useState(0);
   const [openSelector, setOpenSelector] = useState<SelectorType>(null);
@@ -1521,7 +1505,6 @@ export default function ReaderScreen({
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   const headerContentHeight = 60;
   const headerTotalHeight = insets.top + headerContentHeight;
-
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1539,7 +1522,6 @@ export default function ReaderScreen({
       </SafeAreaView>
     );
   }
-
   const overlaysOpen =
     showDropdown || openSelector !== null || showNavigationModal;
   const contentScrollEnabled = !overlaysOpen;
@@ -1804,7 +1786,6 @@ export default function ReaderScreen({
   const handleSetBgTextureOpacity = useCallback((value: number) => {
     setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
-
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -2096,6 +2077,7 @@ export default function ReaderScreen({
         headerTotalHeight={headerTotalHeight}
         bgImageIndex={bgImageIndex}
         onSetBgImageIndex={setBgImageIndex}
+        isLandscape={isLandscape}
       />
       {openSelector && (
         <TouchableOpacity

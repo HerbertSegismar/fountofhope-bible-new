@@ -1,6 +1,3 @@
-import { getTestament } from "./testamentUtils";
-import { Verse } from "../types";
-
 export const commentaryDBMap: Record<string, string> = {
   AMPC: "ampccom.sqlite3",
   ESVGSB: "esvgsbcom.sqlite3",
