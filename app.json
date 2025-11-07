@@ -4,11 +4,11 @@
     "slug": "fount-of-hope-bible",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/fountofhope-512x512.png",
+    "icon": "./assets/images/fountofhope-512x512.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/fountofhope-512x512.png",
+      "image": "./assets/images/fountofhope-512x512.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -19,7 +19,7 @@
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/fountofhope-512x512.png",
+        "foregroundImage": "./assets/images/fountofhope-512x512.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.fountofhope.fountofhopebible",
@@ -31,7 +31,7 @@
       "backgroundColor": "#1e40af"
     },
     "web": {
-      "favicon": "./assets/fountofhope-512x512.png"
+      "favicon": "./assets/images/fountofhope-512x512.png"
     },
     "plugins": ["expo-sqlite", "expo-asset", "expo-font", "./enableLargeHeap.js"],
     "extra": {
