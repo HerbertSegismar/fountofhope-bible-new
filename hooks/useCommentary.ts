@@ -18,7 +18,7 @@ export const useCommentary = (displayVersion: string | undefined) => {
 
       const versionKey = getVersionKey(displayVersion);
 
-      if (versionKey === "NASB" && /^\d+$/.test(tagContent)) {
+      if (displayVersion?.includes("+") && /^\d+$/.test(tagContent)) {
         return await loadDictionaryDefinition(verse, tagContent);
       }
 

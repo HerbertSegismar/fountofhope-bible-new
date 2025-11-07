@@ -1,27 +1,25 @@
 export const commentaryDBMap: Record<string, string> = {
-  AMPC: "ampccom.sqlite3",
-  ESVGSB: "esvgsbcom.sqlite3",
-  NKJV: "nkjvcom.sqlite3",
-  CSB17: "csb17com.sqlite3",
-  ESV: "esvcom.sqlite3",
-  NIV11: "niv11com.sqlite3",
+  CJB: "cjbcom.sqlite3",
   NLT15: "nlt15com.sqlite3",
   RV1895: "rv1895com.sqlite3",
 } as const;
 
 export const DISPLAY_TO_STEM_MAP: Record<string, string> = {
-  AMPC: "ampc",
-  NIV11: "niv11",
-  CSB17: "csb17",
+  ASV: "asv+",
+  BSB22: "bsb22",
+  CJB: "cjb",
   YLT: "ylt",
   NLT15: "nlt15",
-  NKJV: "nkjv",
-  NASB: "nasb",
+  KJ21: "kj21",
+  KJV1769: "kjv1769+",
   Logos: "logos",
   KJ2: "kj2",
-  ESV: "esv",
-  ESVGSB: "esvgsb",
-  IESV: "iesvth",
+  mkjv: "mkjv",
+  NHEB: "nheb",
+  NIOBE: "niobe",
+  RNKJV: "rnkjv",
+  WEB: "web+",
+  WYC: "wyc",
   RV1895: "rv1895",
   CEBB: "cebB",
   MBB05: "mbb05",
@@ -46,7 +44,7 @@ export const getVersionKey = (
     .trim();
 
   const normalizedToStem: Record<string, string> = {
-    CSB: "csb17",
+    BSB: "bsb22",
     NLT: "nlt15",
     NIV: "niv11",
     RV: "rv1895",

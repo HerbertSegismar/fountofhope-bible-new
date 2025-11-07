@@ -822,48 +822,44 @@ class BibleDatabase {
     switch (this.dbName) {
       case "kj2.sqlite3":
         return require("../assets/databases/kj2.sqlite3");
-      case "ampc.sqlite3":
-        return require("../assets/databases/ampc.sqlite3");
-      case "ampccom.sqlite3":
-        return require("../assets/databases/ampccom.sqlite3");
-      case "niv11.sqlite3":
-        return require("../assets/databases/niv11.sqlite3");
-      case "niv11com.sqlite3":
-        return require("../assets/databases/niv11com.sqlite3");
-      case "csb17.sqlite3":
-        return require("../assets/databases/csb17.sqlite3");
-      case "csb17com.sqlite3":
-        return require("../assets/databases/csb17com.sqlite3");
+      case "asv+.sqlite3":
+        return require("../assets/databases/asv+.sqlite3");
+      case "bsb22.sqlite3":
+        return require("../assets/databases/bsb22.sqlite3");
+      case "cjb.sqlite3":
+        return require("../assets/databases/cjb.sqlite3");
+      case "cjbcom.sqlite3":
+        return require("../assets/databases/cjbcom.sqlite3");
       case "ylt.sqlite3":
         return require("../assets/databases/ylt.sqlite3");
       case "nlt15.sqlite3":
         return require("../assets/databases/nlt15.sqlite3");
       case "nlt15com.sqlite3":
         return require("../assets/databases/nlt15com.sqlite3");
-      case "nkjv.sqlite3":
-        return require("../assets/databases/nkjv.sqlite3");
-      case "nkjvcom.sqlite3":
-        return require("../assets/databases/nkjvcom.sqlite3");
-      case "nasb.sqlite3":
-        return require("../assets/databases/nasb.sqlite3");
+      case "kj21.sqlite3":
+        return require("../assets/databases/kj21.sqlite3");
+      case "kjv1769+.sqlite3":
+        return require("../assets/databases/kjv1769+.sqlite3");
       case "secedictionary.sqlite3":
         return require("../assets/databases/secedictionary.sqlite3");
       case "logos.sqlite3":
         return require("../assets/databases/logos.sqlite3");
-      case "esv.sqlite3":
-        return require("../assets/databases/esv.sqlite3");
-      case "esvcom.sqlite3":
-        return require("../assets/databases/esvcom.sqlite3");
-      case "esvgsb.sqlite3":
-        return require("../assets/databases/esvgsb.sqlite3");
-      case "esvgsbcom.sqlite3":
-        return require("../assets/databases/esvgsbcom.sqlite3");
-      case "iesvth.sqlite3":
-        return require("../assets/databases/iesvth.sqlite3");
+      case "mkjv.sqlite3":
+        return require("../assets/databases/mkjv.sqlite3");
+      case "nheb.sqlite3":
+        return require("../assets/databases/nheb.sqlite3");
+      case "niobe.sqlite3":
+        return require("../assets/databases/niobe.sqlite3");
+      case "rnkjv.sqlite3":
+        return require("../assets/databases/rnkjv.sqlite3");
       case "rv1895.sqlite3":
         return require("../assets/databases/rv1895.sqlite3");
       case "rv1895com.sqlite3":
         return require("../assets/databases/rv1895com.sqlite3");
+      case "web+.sqlite3":
+        return require("../assets/databases/web+.sqlite3");
+      case "wyc.sqlite3":
+        return require("../assets/databases/wyc.sqlite3");
       case "cebB.sqlite3":
         return require("../assets/databases/cebB.sqlite3");
       case "hilab82.sqlite3":

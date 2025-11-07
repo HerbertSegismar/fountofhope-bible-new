@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
-import { useTheme, type FontFamily } from "../context/ThemeContext";
+import { useTheme } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
@@ -1071,8 +1071,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       setCommentaryLoading(false);
       return;
     }
-    const versionKey = getVersionKey(displayVersion);
-    const isDict = versionKey === "NASB" && /^\d+$/.test(tagContent);
+    const isDict = displayVersion?.includes("+") && /^\d+$/.test(tagContent);
     if (
       isDict &&
       currentDictIndex >= 0 &&
@@ -1134,7 +1133,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     dictHistory,
   ]);
   const currentTitle = useMemo(() => {
-    const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
+    const isDictMode =
+      displayVersion?.includes("+") && /^\d+$/.test(tagContent);
     if (!isDictMode) return `Commentary for "${tagContent}"`;
     const prefix = isNewTestament ? "G" : "H";
     const full =
@@ -1415,7 +1415,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     lineHeight: 24,
     fontFamily: actualFontFamily,
   };
-  const isDictMode = displayVersion === "NASB" && /^\d+$/.test(tagContent);
+  const isDictMode = displayVersion?.includes("+") && /^\d+$/.test(tagContent);
   const hasViewBack = modalStack.length > 1;
   const hasDictBack =
     modalView === "commentary" && isDictMode && currentDictIndex > 0;
