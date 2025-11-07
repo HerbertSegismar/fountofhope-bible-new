@@ -1,25 +1,27 @@
 {
   "expo": {
     "name": "Fount of Hope Bible",
-    "slug": "fount-of-hope-bible",
+    "slug": "fount-of-hope-bible-and-devotional",
     "version": "1.0.0",
     "orientation": "default",
-    "icon": "./assets/fountofhope-512x512.png",
+    "icon": "./assets/images/fountofhope-512x512.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/fountofhope-512x512.png",
+      "image": "./assets/images/fountofhope-512x512.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/fountofhope-512x512.png",
+        "foregroundImage": "./assets/images/fountofhope-512x512.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.fountofhope.fountofhopebible",
@@ -31,12 +33,17 @@
       "backgroundColor": "#1e40af"
     },
     "web": {
-      "favicon": "./assets/fountofhope-512x512.png"
+      "favicon": "./assets/images/fountofhope-512x512.png"
     },
-    "plugins": ["expo-sqlite", "expo-asset", "expo-font", "./enableLargeHeap.js"],
+    "plugins": [
+      "expo-sqlite",
+      "expo-asset",
+      "expo-font",
+      "./enableLargeHeap.js"
+    ],
     "extra": {
       "eas": {
-        "projectId": "8655600c-f728-4a18-b204-41aeff1a964c"
+        "projectId": "624d0992-840c-4da4-a055-90480e1612e3"
       }
     },
     "owner": "fount-of-hope"

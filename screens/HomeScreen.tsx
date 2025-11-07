@@ -356,7 +356,7 @@ export default function HomeScreen({ navigation }: Props) {
           Fount of Hope
         </Text>
         <Image
-          source={require("../assets/fohs-512x512.png")}
+          source={require("../assets/images/fohs-512x512.png")}
           style={{ width: 160, height: 160, marginBottom: 16, borderRadius: 8 }}
           resizeMode="contain"
         />

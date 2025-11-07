@@ -1,4 +1,10 @@
-import React, { useCallback, useMemo } from "react";
+import React, {
+  useCallback,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -6,7 +12,9 @@ import {
   ScrollView,
   ActivityIndicator,
   LayoutChangeEvent,
+  Animated,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
 import type { Verse as VerseType } from "../types";
 import { BackgroundTexture } from "../components/BackgroundTexture";
@@ -76,6 +84,16 @@ interface ReaderContentProps {
   bgTextureOpacity: number;
   scrollEnabled: boolean;
   bgImageIndex: number;
+  goToPrimaryPreviousChapter: () => void;
+  goToPrimaryNextChapter: () => void;
+  goToSecondaryPreviousChapter: () => void;
+  goToSecondaryNextChapter: () => void;
+  primaryMaxChapter: number;
+  secondaryMaxChapter: number;
+  isLinked: boolean;
+  buttonOpacity: Animated.Value;
+  resetButtonOpacity: () => void;
+  setUiMode: (value: number) => void;
 }
 
 export const ReaderContent: React.FC<ReaderContentProps> = ({
@@ -129,7 +147,63 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
   bgTextureOpacity,
   scrollEnabled,
   bgImageIndex,
+  goToPrimaryPreviousChapter,
+  goToPrimaryNextChapter,
+  goToSecondaryPreviousChapter,
+  goToSecondaryNextChapter,
+  primaryMaxChapter,
+  secondaryMaxChapter,
+  isLinked,
+  buttonOpacity,
+  resetButtonOpacity,
+  setUiMode,
+  isLandscape,
 }) => {
+  const [secondaryHasStarted, setSecondaryHasStarted] = useState(false);
+  const [hasSecondaryFailed, setHasSecondaryFailed] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setSecondaryHasStarted(false);
+    setHasSecondaryFailed(false);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, [secondaryVersion]);
+
+  useEffect(() => {
+    if (secondaryLoading) {
+      setSecondaryHasStarted(true);
+    }
+  }, [secondaryLoading]);
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+
+    if (
+      !secondaryLoading &&
+      secondaryHasStarted &&
+      secondaryVerses.length === 0
+    ) {
+      timeoutRef.current = setTimeout(() => {
+        setHasSecondaryFailed(true);
+      }, 3000);
+    } else {
+      setHasSecondaryFailed(false);
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, [secondaryLoading, secondaryHasStarted, secondaryVerses.length]);
+
   const bgHook = useBackgroundTexture({
     opacity: bgTextureOpacity,
     index: bgImageIndex,
@@ -246,6 +320,221 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
     scrollEnabled,
   ]);
 
+  const renderChevronButtons = useMemo(() => {
+    const pairGap = isLandscape ? 200 : 48;
+    const buttonSize = 35;
+    const iconSize = 24;
+    if (!showMultiVersion || isLinked) {
+      return (
+        <>
+          <TouchableOpacity
+            onPress={goToPrimaryPreviousChapter}
+            disabled={primaryLocation.chapter <= 1}
+            style={{
+              width: buttonSize,
+              height: buttonSize,
+              backgroundColor: colors.primary,
+              borderRadius: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+              marginLeft: 28,
+              opacity: primaryLocation.chapter <= 1 ? 0.3 : 1,
+            }}
+          >
+            <Ionicons name="chevron-back" size={iconSize} color="white" />
+          </TouchableOpacity>
+          <View style={{ flex: 1, alignItems: "center" }} />
+          <TouchableOpacity
+            onPress={goToPrimaryNextChapter}
+            style={{
+              width: buttonSize,
+              height: buttonSize,
+              backgroundColor: colors.primary,
+              borderRadius: "100%",
+              justifyContent: "center",
+              alignItems: "center",
+              marginRight: 28,
+            }}
+          >
+            <Ionicons name="chevron-forward" size={iconSize} color="white" />
+          </TouchableOpacity>
+        </>
+      );
+    } else {
+      const primaryPrevDisabled = primaryLocation.chapter <= 1;
+      const secondaryPrevDisabled = secondaryLocation.chapter <= 1;
+      const primaryNextDisabled = primaryLocation.chapter >= primaryMaxChapter;
+      const secondaryNextDisabled =
+        secondaryLocation.chapter >= secondaryMaxChapter;
+      return (
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <View
+            style={{ flexDirection: "row", gap: pairGap, alignItems: "center" }}
+          >
+            <TouchableOpacity
+              onPress={goToPrimaryPreviousChapter}
+              disabled={primaryPrevDisabled}
+              style={{
+                width: buttonSize,
+                height: buttonSize,
+                backgroundColor: colors.primary,
+                borderRadius: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: primaryPrevDisabled ? 0.3 : 1,
+              }}
+            >
+              <Ionicons name="chevron-back" size={iconSize} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={goToPrimaryNextChapter}
+              disabled={primaryNextDisabled}
+              style={{
+                width: buttonSize,
+                height: buttonSize,
+                backgroundColor: colors.primary,
+                borderRadius: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: primaryNextDisabled ? 0.3 : 1,
+              }}
+            >
+              <Ionicons name="chevron-forward" size={iconSize} color="white" />
+            </TouchableOpacity>
+          </View>
+          <View
+            style={{ flexDirection: "row", gap: pairGap, alignItems: "center" }}
+          >
+            <TouchableOpacity
+              onPress={goToSecondaryPreviousChapter}
+              disabled={secondaryPrevDisabled}
+              style={{
+                width: buttonSize,
+                height: buttonSize,
+                backgroundColor: colors.primary,
+                borderRadius: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: secondaryPrevDisabled ? 0.3 : 1,
+              }}
+            >
+              <Ionicons name="chevron-back" size={iconSize} color="white" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={goToSecondaryNextChapter}
+              disabled={secondaryNextDisabled}
+              style={{
+                width: buttonSize,
+                height: buttonSize,
+                backgroundColor: colors.primary,
+                borderRadius: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+                opacity: secondaryNextDisabled ? 0.3 : 1,
+              }}
+            >
+              <Ionicons name="chevron-forward" size={iconSize} color="white" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+  }, [
+    isLandscape,
+    showMultiVersion,
+    isLinked,
+    primaryLocation.chapter,
+    secondaryLocation.chapter,
+    primaryMaxChapter,
+    secondaryMaxChapter,
+    goToPrimaryPreviousChapter,
+    goToPrimaryNextChapter,
+    goToSecondaryPreviousChapter,
+    goToSecondaryNextChapter,
+    colors.primary,
+  ]);
+
+  const renderSecondaryLoading = (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <ActivityIndicator size="small" color={colors.primary} />
+      <Text style={{ color: colors.muted, marginTop: 8 }}>Loading</Text>
+    </View>
+  );
+
+  const renderSecondaryError = (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Text style={{ color: colors.muted, textAlign: "center" }}>
+        Unable to load {secondaryDisplay} version
+      </Text>
+      <Text
+        style={{
+          color: colors.muted + "80",
+          fontSize: 12,
+          textAlign: "center",
+          marginTop: 4,
+        }}
+      >
+        This version may not be available
+      </Text>
+    </View>
+  );
+
+  const renderSecondaryContent = (
+    <ScrollView
+      style={{ flex: 1 }}
+      ref={secondaryScrollViewRef}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{
+        paddingBottom: 40,
+        paddingTop: 0,
+      }}
+      onScroll={secondaryHandleScrollCb}
+      scrollEventThrottle={16}
+      onContentSizeChange={handleSecondaryContentSizeChange}
+      onLayout={handleSecondaryScrollViewLayout}
+      scrollEnabled={scrollEnabled}
+    >
+      <ChapterViewEnhanced
+        verses={secondaryVerses}
+        bookName={secondaryLocation.bookName}
+        chapterNumber={secondaryLocation.chapter}
+        bookId={secondaryLocation.bookId}
+        showVerseNumbers
+        fontSize={fontSize}
+        onVersePress={secondaryOnVersePress}
+        onVerseLayout={handleSecondaryVerseLayout}
+        highlightVerse={getHighlightVerse(false)}
+        highlightedVerses={new Set(secondaryHighlightedVerses)}
+        bookmarkedVerses={secondaryBookmarkedVerses}
+        isFullScreen={isFullScreen}
+        displayVersion={secondaryDisplay}
+        colors={colors}
+        bgImageIndex={bgHook.effectiveIndex}
+        bgTextureOpacity={bgHook.effectiveOpacity}
+        noBackground={bgHook.hasSource}
+      />
+    </ScrollView>
+  );
+
   const innerContent = useMemo(() => {
     if (!showMultiVersion) {
       return renderPrimaryContent();
@@ -263,7 +552,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
           >
             <View
               ref={primaryHeaderRef}
-              onLayout={() => {
+              onLayout={(event) => {
                 primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
                   setPrimaryHeaderX(x);
                   setPrimaryHeaderY(y);
@@ -327,7 +616,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
           <View style={{ flex: 1 }}>
             <View
               ref={secondaryHeaderRef}
-              onLayout={() => {
+              onLayout={(event) => {
                 secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
                   setSecondaryHeaderX(x);
                   setSecondaryHeaderY(y);
@@ -386,77 +675,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 </Text>
               </TouchableOpacity>
             </View>
-            {secondaryLoading ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={{ color: colors.muted, marginTop: 8 }}>
-                  Loading
-                </Text>
-              </View>
-            ) : secondaryVerses.length === 0 ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: colors.muted, textAlign: "center" }}>
-                  Unable to load {secondaryDisplay} version
-                </Text>
-                <Text
-                  style={{
-                    color: colors.muted + "80",
-                    fontSize: 12,
-                    textAlign: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  This version may not be available
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={{ flex: 1 }}
-                ref={secondaryScrollViewRef}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: 40,
-                  paddingTop: 0,
-                }}
-                onScroll={secondaryHandleScrollCb}
-                scrollEventThrottle={16}
-                onContentSizeChange={handleSecondaryContentSizeChange}
-                onLayout={handleSecondaryScrollViewLayout}
-                scrollEnabled={scrollEnabled}
-              >
-                <ChapterViewEnhanced
-                  verses={secondaryVerses}
-                  bookName={secondaryLocation.bookName}
-                  chapterNumber={secondaryLocation.chapter}
-                  bookId={secondaryLocation.bookId}
-                  showVerseNumbers
-                  fontSize={fontSize}
-                  onVersePress={secondaryOnVersePress}
-                  onVerseLayout={handleSecondaryVerseLayout}
-                  highlightVerse={getHighlightVerse(false)}
-                  highlightedVerses={new Set(secondaryHighlightedVerses)}
-                  bookmarkedVerses={secondaryBookmarkedVerses}
-                  isFullScreen={isFullScreen}
-                  displayVersion={secondaryDisplay}
-                  colors={colors}
-                  bgImageIndex={bgHook.effectiveIndex}
-                  bgTextureOpacity={bgHook.effectiveOpacity}
-                  noBackground={bgHook.hasSource}
-                />
-              </ScrollView>
-            )}
+            {secondaryLoading
+              ? renderSecondaryLoading
+              : hasSecondaryFailed
+                ? renderSecondaryError
+                : secondaryVerses.length === 0
+                  ? renderSecondaryLoading
+                  : renderSecondaryContent}
           </View>
         </View>
       );
@@ -467,7 +692,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
             {isFullScreen && (
               <View
                 ref={primaryHeaderRef}
-                onLayout={() => {
+                onLayout={(event) => {
                   primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
                     setPrimaryHeaderX(x);
                     setPrimaryHeaderY(y);
@@ -538,7 +763,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
           >
             <View
               ref={secondaryHeaderRef}
-              onLayout={() => {
+              onLayout={(event) => {
                 secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
                   setSecondaryHeaderX(x);
                   setSecondaryHeaderY(y);
@@ -597,77 +822,13 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 </Text>
               </TouchableOpacity>
             </View>
-            {secondaryLoading ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={{ color: colors.muted, marginTop: 8 }}>
-                  Loading
-                </Text>
-              </View>
-            ) : secondaryVerses.length === 0 ? (
-              <View
-                style={{
-                  flex: 1,
-                  justifyContent: "center",
-                  alignItems: "center",
-                }}
-              >
-                <Text style={{ color: colors.muted, textAlign: "center" }}>
-                  Unable to load {secondaryDisplay} version
-                </Text>
-                <Text
-                  style={{
-                    color: colors.muted + "80",
-                    fontSize: 12,
-                    textAlign: "center",
-                    marginTop: 4,
-                  }}
-                >
-                  This version may not be available
-                </Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={{ flex: 1 }}
-                ref={secondaryScrollViewRef}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                  paddingBottom: 40,
-                  paddingTop: 0,
-                }}
-                onScroll={secondaryHandleScrollCb}
-                scrollEventThrottle={16}
-                onContentSizeChange={handleSecondaryContentSizeChange}
-                onLayout={handleSecondaryScrollViewLayout}
-                scrollEnabled={scrollEnabled}
-              >
-                <ChapterViewEnhanced
-                  verses={secondaryVerses}
-                  bookName={secondaryLocation.bookName}
-                  chapterNumber={secondaryLocation.chapter}
-                  bookId={secondaryLocation.bookId}
-                  showVerseNumbers
-                  fontSize={fontSize}
-                  onVersePress={secondaryOnVersePress}
-                  onVerseLayout={handleSecondaryVerseLayout}
-                  highlightVerse={getHighlightVerse(false)}
-                  highlightedVerses={new Set(secondaryHighlightedVerses)}
-                  bookmarkedVerses={secondaryBookmarkedVerses}
-                  isFullScreen={isFullScreen}
-                  displayVersion={secondaryDisplay}
-                  colors={colors}
-                  bgImageIndex={bgHook.effectiveIndex}
-                  bgTextureOpacity={bgHook.effectiveOpacity}
-                  noBackground={bgHook.hasSource}
-                />
-              </ScrollView>
-            )}
+            {secondaryLoading
+              ? renderSecondaryLoading
+              : hasSecondaryFailed
+                ? renderSecondaryError
+                : secondaryVerses.length === 0
+                  ? renderSecondaryLoading
+                  : renderSecondaryContent}
           </View>
         </View>
       );
@@ -677,6 +838,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
     effectiveLayout,
     renderPrimaryContent,
     secondaryLoading,
+    hasSecondaryFailed,
     secondaryVerses,
     secondaryLocation,
     secondaryDisplay,
@@ -719,26 +881,94 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
     headerButtonBg,
   ]);
 
+  const chevronBottom = 20;
+  const toggleBottom = 22;
+  const toggleSize = 48;
+
   return (
-    <BackgroundTexture
-      source={bgHook.source}
-      hasBg={bgHook.hasSource}
-      overlayStyle={bgHook.overlayStyle}
-      overlayKey={bgHook.overlayKey}
-      style={{
-        flex: 1,
-        marginBottom: 5,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        overflow: "hidden",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: hasNoBgTexture? 0: 5,
-      }}
-    >
-      {innerContent}
-    </BackgroundTexture>
+    <View style={{ flex: 1, position: "relative" }}>
+      <BackgroundTexture
+        source={bgHook.source}
+        hasBg={bgHook.hasSource}
+        overlayStyle={bgHook.overlayStyle}
+        overlayKey={bgHook.overlayKey}
+        style={{
+          flex: 1,
+          marginBottom: 5,
+          borderBottomLeftRadius: 20,
+          borderBottomRightRadius: 20,
+          overflow: "hidden",
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.3,
+          shadowRadius: 4,
+          elevation: hasNoBgTexture ? 0 : 5,
+        }}
+      >
+        {innerContent}
+      </BackgroundTexture>
+      <Animated.View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 80,
+          opacity: buttonOpacity,
+        }}
+      >
+        <View
+          style={{
+            position: "absolute",
+            bottom: chevronBottom,
+            left: 0,
+            right: 0,
+            height: 20,
+            flexDirection: "row",
+            justifyContent: "space-between",
+            alignItems: "center",
+            paddingHorizontal: 16,
+          }}
+        >
+          {renderChevronButtons}
+        </View>
+        <View
+          style={{
+            position: "absolute",
+            bottom: toggleBottom,
+            left: "50%",
+            marginLeft: -toggleSize / 2,
+            alignItems: "center",
+            justifyContent: "center",
+            height: 20,
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => {
+              setUiMode(isFullScreen ? 0 : 1);
+              resetButtonOpacity();
+            }}
+            style={{
+              width: toggleSize,
+              height: toggleSize,
+              borderRadius: toggleSize / 2,
+              backgroundColor: colors.primary,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: isLandscape ? 20 : 24,
+                fontWeight: "bold",
+              }}
+            >
+              {isFullScreen ? "◱" : "◲"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </View>
   );
 };

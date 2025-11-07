@@ -1525,28 +1525,20 @@ export default function ReaderScreen({
   const overlaysOpen =
     showDropdown || openSelector !== null || showNavigationModal;
   const contentScrollEnabled = !overlaysOpen;
-  const chevronBottom = 20;
-  const toggleBottom = 22;
-  const buttonSize = 35;
-  const iconSize = 24;
-  const toggleSize = 48;
-  const selectorWidth = 200;
   let selectorTop = headerTotalHeight;
-  let selectorLeft = (screenWidth - selectorWidth) / 2;
+  let selectorLeft = (screenWidth - 200) / 2;
   if (openSelector === "primary") {
     if (primaryHeaderY > 0 && primaryHeaderHeight > 0) {
       selectorTop = primaryHeaderY + primaryHeaderHeight;
-      selectorLeft =
-        primaryHeaderX + primaryHeaderWidth / 2 - selectorWidth / 2;
+      selectorLeft = primaryHeaderX + primaryHeaderWidth / 2 - 100;
     }
   } else if (openSelector === "secondary") {
     if (secondaryHeaderY > 0 && secondaryHeaderHeight > 0) {
       selectorTop = secondaryHeaderY + secondaryHeaderHeight;
       if (isLandscape) {
-        selectorLeft =
-          secondaryHeaderX + secondaryHeaderWidth / 2 - selectorWidth / 2;
+        selectorLeft = secondaryHeaderX + secondaryHeaderWidth / 2 - 100;
       } else {
-        selectorLeft = (screenWidth - selectorWidth) / 2;
+        selectorLeft = (screenWidth - 200) / 2;
       }
     }
   }
@@ -1563,137 +1555,6 @@ export default function ReaderScreen({
     currentVersion,
     showMultiVersion,
     secondaryVersion,
-  ]);
-  const renderChevronButtons = useMemo(() => {
-    const pairGap = isLandscape ? 200 : 48;
-    if (!showMultiVersion || isLinked) {
-      return (
-        <>
-          <TouchableOpacity
-            onPress={goToPrimaryPreviousChapter}
-            disabled={primaryLocation.chapter <= 1}
-            style={{
-              width: buttonSize,
-              height: buttonSize,
-              backgroundColor: colors.primary,
-              borderRadius: "100%",
-              justifyContent: "center",
-              alignItems: "center",
-              marginLeft: 28,
-              opacity: primaryLocation.chapter <= 1 ? 0.3 : 1,
-            }}
-          >
-            <Ionicons name="chevron-back" size={iconSize} color="white" />
-          </TouchableOpacity>
-          <View style={{ flex: 1, alignItems: "center" }} />
-          <TouchableOpacity
-            onPress={goToPrimaryNextChapter}
-            style={{
-              width: buttonSize,
-              height: buttonSize,
-              backgroundColor: colors.primary,
-              borderRadius: "100%",
-              justifyContent: "center",
-              alignItems: "center",
-              marginRight: 28,
-            }}
-          >
-            <Ionicons name="chevron-forward" size={iconSize} color="white" />
-          </TouchableOpacity>
-        </>
-      );
-    } else {
-      const primaryPrevDisabled = primaryLocation.chapter <= 1;
-      const secondaryPrevDisabled = secondaryLocation.chapter <= 1;
-      return (
-        <View
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <View
-            style={{ flexDirection: "row", gap: pairGap, alignItems: "center" }}
-          >
-            <TouchableOpacity
-              onPress={goToPrimaryPreviousChapter}
-              disabled={primaryPrevDisabled}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: primaryPrevDisabled ? 0.3 : 1,
-              }}
-            >
-              <Ionicons name="chevron-back" size={iconSize} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={goToPrimaryNextChapter}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons name="chevron-forward" size={iconSize} color="white" />
-            </TouchableOpacity>
-          </View>
-          <View
-            style={{ flexDirection: "row", gap: pairGap, alignItems: "center" }}
-          >
-            <TouchableOpacity
-              onPress={goToSecondaryPreviousChapter}
-              disabled={secondaryPrevDisabled}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: secondaryPrevDisabled ? 0.3 : 1,
-              }}
-            >
-              <Ionicons name="chevron-back" size={iconSize} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={goToSecondaryNextChapter}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-              }}
-            >
-              <Ionicons name="chevron-forward" size={iconSize} color="white" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
-    }
-  }, [
-    isLandscape,
-    showMultiVersion,
-    isLinked,
-    primaryLocation.chapter,
-    secondaryLocation.chapter,
-    goToPrimaryPreviousChapter,
-    goToPrimaryNextChapter,
-    goToSecondaryPreviousChapter,
-    goToSecondaryNextChapter,
-    colors.primary,
-    buttonSize,
-    iconSize,
   ]);
   const renderProgressBar = useCallback(() => {
     if (!showMultiVersion || isLinked) {
@@ -1747,7 +1608,7 @@ export default function ReaderScreen({
             left: 0,
             top: 0,
             height: 6,
-            backgroundColor: "#00000080",
+            backgroundColor: "#31134480",
             borderRadius: 3,
             width: secondaryProgress.interpolate({
               inputRange: [0, 1],
@@ -1779,7 +1640,6 @@ export default function ReaderScreen({
     isLinked,
     screenWidth,
     colors.primary,
-    colors.secondary,
     primaryProgress,
     secondaryProgress,
   ]);
@@ -2063,6 +1923,16 @@ export default function ReaderScreen({
           bgTextureOpacity={bgTextureOpacity}
           bgImageIndex={bgImageIndex}
           scrollEnabled={contentScrollEnabled}
+          goToPrimaryPreviousChapter={goToPrimaryPreviousChapter}
+          goToPrimaryNextChapter={goToPrimaryNextChapter}
+          goToSecondaryPreviousChapter={goToSecondaryPreviousChapter}
+          goToSecondaryNextChapter={goToSecondaryNextChapter}
+          primaryMaxChapter={primaryMaxChapter}
+          secondaryMaxChapter={secondaryMaxChapter}
+          isLinked={isLinked}
+          buttonOpacity={buttonOpacity}
+          resetButtonOpacity={resetButtonOpacity}
+          setUiMode={setUiMode}
         />
       </View>
       <DropdownMenu
@@ -2097,7 +1967,7 @@ export default function ReaderScreen({
               position: "absolute",
               top: selectorTop,
               left: selectorLeft,
-              width: selectorWidth,
+              width: 200,
               backgroundColor: colors.primary,
               borderRadius: 8,
               paddingVertical: 8,
@@ -2179,65 +2049,6 @@ export default function ReaderScreen({
           </View>
         </TouchableOpacity>
       )}
-      <Animated.View
-        style={{
-          position: "relative",
-          height: 0,
-          opacity: buttonOpacity,
-        }}
-      >
-        <View
-          style={{
-            position: "absolute",
-            bottom: chevronBottom,
-            left: 0,
-            right: 0,
-            height: 20,
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingHorizontal: 16,
-          }}
-        >
-          {renderChevronButtons}
-        </View>
-        <View
-          style={{
-            position: "absolute",
-            bottom: toggleBottom,
-            left: "50%",
-            marginLeft: -toggleSize / 2,
-            alignItems: "center",
-            justifyContent: "center",
-            height: 20,
-          }}
-        >
-          <TouchableOpacity
-            onPress={() => {
-              setUiMode((prev) => (prev + 1) % 2);
-              resetButtonOpacity();
-            }}
-            style={{
-              width: toggleSize,
-              height: toggleSize,
-              borderRadius: toggleSize / 2,
-              backgroundColor: colors.primary,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Text
-              style={{
-                color: "white",
-                fontSize: isLandscape ? 20 : 24,
-                fontWeight: "bold",
-              }}
-            >
-              {isFullScreen ? "◱" : "◲"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
     </SafeAreaView>
   );
 }
