@@ -107,7 +107,7 @@ class BibleDatabase {
     },
   ];
 
-  constructor(dbName: string = "esv.sqlite3") {
+  constructor(dbName: string = "kj2.sqlite3") {
     this.dbName = dbName;
     this.dbPath = `${this.sqliteDirectory}/${this.dbName}`;
   }
