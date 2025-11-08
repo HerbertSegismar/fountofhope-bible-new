@@ -1,4 +1,3 @@
-// file: src/hooks/useCommentary.ts
 import { useCallback } from "react";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
@@ -18,7 +17,7 @@ export const useCommentary = (displayVersion: string | undefined) => {
 
       const versionKey = getVersionKey(displayVersion);
 
-      if (versionKey === "NASB" && /^\d+$/.test(tagContent)) {
+      if (displayVersion?.includes("+") && /^\d+$/.test(tagContent)) {
         return await loadDictionaryDefinition(verse, tagContent);
       }
 

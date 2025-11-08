@@ -39,13 +39,8 @@ interface BibleDatabaseProviderProps {
 
 const STORAGE_KEY = "selected_bible_version";
 const BIBLE_TO_COMMENTARY_MAP: Record<string, string> = {
-  "ampc.sqlite3": "ampccom.sqlite3",
-  "niv11.sqlite3": "niv11com.sqlite3",
-  "csb17.sqlite3": "csb17com.sqlite3",
+  "cjb.sqlite3": "cjbcom.sqlite3",
   "nlt15.sqlite3": "nlt15com.sqlite3",
-  "nkjv.sqlite3": "nkjvcom.sqlite3",
-  "esv.sqlite3": "esvcom.sqlite3",
-  "esvgsb.sqlite3": "esvgsbcom.sqlite3",
   "rv1895.sqlite3": "rv1895com.sqlite3",
 };
 
@@ -53,47 +48,48 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   children,
 }) => {
   const [bibleDB, setBibleDB] = useState<BibleDatabase | null>(null);
-  const [currentVersion, setCurrentVersion] = useState("esv.sqlite3");
+  const [currentVersion, setCurrentVersion] = useState("kj2.sqlite3");
   const [isInitializing, setIsInitializing] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(
     null
   );
   const availableBibleVersions = [
     "ampc.sqlite3",
-    "niv11.sqlite3",
+    "cebB.sqlite3",
     "csb17.sqlite3",
-    "ylt.sqlite3",
-    "nlt15.sqlite3",
-    "nkjv.sqlite3",
-    "nasb.sqlite3",
-    "logos.sqlite3",
-    "kj2.sqlite3",
     "esv.sqlite3",
     "esvgsb.sqlite3",
-    "iesvth.sqlite3",
-    "rv1895.sqlite3",
-    "cebB.sqlite3",
     "hilab82.sqlite3",
+    "iesvth.sqlite3",
+    "kj2.sqlite3",
+    "kjv1769+.sqlite3",
+    "logos.sqlite3",
     "mbb05.sqlite3",
+    "nasb+.sqlite3",
+    "niv11.sqlite3",
+    "nkjv.sqlite3",
+    "nlt15.sqlite3",
+    "rv1895.sqlite3",
     "tagab01.sqlite3",
     "tagmb12.sqlite3",
+    "ylt.sqlite3",
   ];
 
   const availableCommentaryVersions = [
     "ampccom.sqlite3",
-    "niv11com.sqlite3",
     "csb17com.sqlite3",
-    "nlt15com.sqlite3",
-    "nkjvcom.sqlite3",
     "esvcom.sqlite3",
     "esvgsbcom.sqlite3",
+    "niv11com.sqlite3",
+    "nkjvcom.sqlite3",
+    "nlt15com.sqlite3",
     "rv1895com.sqlite3",
   ];
 
   const availableVersions = [
     ...availableBibleVersions,
     ...availableCommentaryVersions,
-  ];
+  ].sort();
 
   const openDatabases = React.useRef<Map<string, BibleDatabase>>(new Map());
   const pendingInits = React.useRef<Map<string, Promise<BibleDatabase>>>(
@@ -212,7 +208,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       console.log(`No commentary available for ${version}`);
     }
 
-    if (version === "nasb.sqlite3") {
+    if (version.includes("+")) {
       const dictionaryVersion = "secedictionary.sqlite3";
       if (!openDatabases.current.has(dictionaryVersion)) {
         try {
@@ -289,7 +285,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         setCurrentVersion(versionToLoad);
         setBibleDB(db);
 
-        if (versionToLoad === "nasb.sqlite3") {
+        if (versionToLoad.includes("+")) {
           await preloadCurrentCommentary(versionToLoad);
         } else {
           setTimeout(() => {
@@ -331,10 +327,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         ) {
           keepVersions.push(currentCommentaryVersion);
         }
-        if (
-          currentVersion === "nasb.sqlite3" ||
-          newVersion === "nasb.sqlite3"
-        ) {
+        if (currentVersion.includes("+") || newVersion.includes("+")) {
           keepVersions.push("secedictionary.sqlite3");
         }
         await closeSecondaryDatabases(keepVersions);
@@ -347,7 +340,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
           newCommentaryVersion &&
           !openDatabases.current.has(newCommentaryVersion)
         ) {
-          if (newVersion === "nasb.sqlite3") {
+          if (newVersion.includes("+")) {
             await preloadCurrentCommentary(newVersion);
           } else {
             setTimeout(() => {

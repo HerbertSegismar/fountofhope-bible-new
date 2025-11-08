@@ -13,9 +13,8 @@ export const useDictionary = (displayVersion: string | undefined) => {
         return `Strong's: "${tagContent}"`;
       }
 
-      const versionKey = getVersionKey(displayVersion);
-      if (versionKey !== "NASB") {
-        return `Strong's: "${tagContent}" (Dictionary only available for NASB)`;
+      if (!displayVersion?.includes("+")) {
+        return `Strong's: "${tagContent}" (Dictionary only available for Strong's enabled versions)`;
       }
 
       if (!/^\d+$/.test(tagContent)) {
@@ -45,7 +44,7 @@ export const useDictionary = (displayVersion: string | undefined) => {
 
         if (definition) {
           let cleanedDefinition = stripTags(definition)
-            .replace(/\u200e/g, "") 
+            .replace(/\u200e/g, "")
             .replace(/&#x200e;/gi, "")
             .replace(/\.\s+/g, ".\n\n")
             .trim();
