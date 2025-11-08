@@ -192,11 +192,11 @@ const SettingsScreen = () => {
   );
 
   const increaseFontSize = useCallback(
-    () => setFontSize((prev) => Math.min(prev + 1, 24)),
+    () => setFontSize((prev) => Math.min(prev + 1, 50)),
     []
   );
   const decreaseFontSize = useCallback(
-    () => setFontSize((prev) => Math.max(prev - 1, 12)),
+    () => setFontSize((prev) => Math.max(prev - 1, 8)),
     []
   );
 

@@ -7,7 +7,7 @@ export const VERSION_DISPLAY_NAMES: Record<string, string> = {
   "hilab82.sqlite3": "HILAB82",
   "iesvth.sqlite3": "IESV",
   "kj2.sqlite3": "KJ2",
-  "kjv1769+.sqlite3": "KJV1769+",
+  "kjv1769+.sqlite3": "KJV+",
   "logos.sqlite3": "Logos",
   "mbb05.sqlite3": "MBB05",
   "nasb+.sqlite3": "NASB+",
