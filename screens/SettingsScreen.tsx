@@ -17,6 +17,8 @@ import {
   Modal,
   FlatList,
   Image,
+  TextInput,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -53,10 +55,17 @@ const SettingsScreen = () => {
   const [isSwitching, setIsSwitching] = useState(false);
   const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
   const [fontSize, setFontSize] = useState(16);
+  const [tempFontInput, setTempFontInput] = useState("16");
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
   const [bgImageIndex, setBgImageIndex] = useState(0);
   const [showBgModal, setShowBgModal] = useState(false);
+  const [showFontModal, setShowFontModal] = useState(false);
+  const tempFontInputRef = useRef(tempFontInput);
+
+  useEffect(() => {
+    tempFontInputRef.current = tempFontInput;
+  }, [tempFontInput]);
 
   const themeColors = getThemeColors(theme, colorScheme, customColor);
 
@@ -81,7 +90,11 @@ const SettingsScreen = () => {
           AsyncStorage.getItem("secondaryVersion"),
           AsyncStorage.getItem("bgImageIndex"),
         ]);
-        if (fontStr) setFontSize(parseInt(fontStr, 10));
+        if (fontStr) {
+          const fs = Math.max(8, Math.min(50, parseInt(fontStr, 10) || 16));
+          setFontSize(fs);
+          setTempFontInput(fs.toString());
+        }
         if (multiStr === "true") setShowMultiVersion(true);
         if (secVer) setSecondaryVersion(secVer);
         if (bgStr) setBgImageIndex(parseInt(bgStr, 10) || 0);
@@ -137,6 +150,10 @@ const SettingsScreen = () => {
     availableBibleVersions,
   ]);
 
+  useEffect(() => {
+    setTempFontInput(fontSize.toString());
+  }, [fontSize]);
+
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion || isSwitching) return;
@@ -191,14 +208,47 @@ const SettingsScreen = () => {
     [currentVersion]
   );
 
-  const increaseFontSize = useCallback(
-    () => setFontSize((prev) => Math.min(prev + 1, 50)),
-    []
-  );
-  const decreaseFontSize = useCallback(
-    () => setFontSize((prev) => Math.max(prev - 1, 8)),
-    []
-  );
+  const commitFontSize = useCallback(() => {
+    const text = tempFontInputRef.current;
+    let num = parseInt(text, 10);
+    if (isNaN(num)) num = fontSize;
+    num = Math.max(8, Math.min(50, num));
+    setFontSize(num);
+    setTempFontInput(num.toString());
+    setShowFontModal(false);
+  }, [fontSize]);
+
+  const handleFontInputChange = useCallback((text: string) => {
+    const filtered = text.replace(/\D/g, "");
+    setTempFontInput(filtered);
+  }, []);
+
+  const handleFontEndEditing = useCallback(() => {
+    commitFontSize();
+  }, [commitFontSize]);
+
+  const handleFontSubmitEditing = useCallback(() => {
+    commitFontSize();
+  }, [commitFontSize]);
+
+  const increaseFontSize = useCallback(() => {
+    const current = parseInt(tempFontInputRef.current, 10) || fontSize;
+    const newSize = Math.min(current + 1, 50);
+    setTempFontInput(newSize.toString());
+    setFontSize(newSize);
+  }, [fontSize]);
+
+  const decreaseFontSize = useCallback(() => {
+    const current = parseInt(tempFontInputRef.current, 10) || fontSize;
+    const newSize = Math.max(current - 1, 8);
+    setTempFontInput(newSize.toString());
+    setFontSize(newSize);
+  }, [fontSize]);
+
+  const openFontModal = useCallback(() => {
+    setTempFontInput(fontSize.toString());
+    setShowFontModal(true);
+  }, [fontSize]);
 
   const selectBgImage = useCallback((index: number) => {
     setBgImageIndex(index);
@@ -566,6 +616,8 @@ const SettingsScreen = () => {
     [availableBibleVersions, currentVersion]
   );
 
+  const contactEmail = "fountofhopedevotionals@gmail.com";
+
   return (
     <>
       <ScrollView
@@ -573,6 +625,8 @@ const SettingsScreen = () => {
         style={{ backgroundColor: themeColors.background }}
         contentContainerStyle={{ paddingVertical: 16 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
       >
         <View className="px-4 mb-6">
           <Text
@@ -594,85 +648,9 @@ const SettingsScreen = () => {
         </View>
 
         <SettingSection
-          title="Bible Version"
-          subtitle="Choose your preferred translation"
-          icon="book-outline"
-        >
-          {isLoading && (
-            <View
-              className="mb-4 p-3 rounded-lg"
-              style={{ backgroundColor: themeColors.primary + "20" }}
-            >
-              <View className="flex-row items-center">
-                <ActivityIndicator size="small" color={themeColors.primary} />
-                <Text
-                  className="text-sm ml-3"
-                  style={{ color: themeColors.primary }}
-                >
-                  Switching version... Please wait
-                </Text>
-              </View>
-            </View>
-          )}
-
-          <VersionSelector
-            currentVersion={currentVersion}
-            selectedVersion={selectedVersion}
-            availableVersions={primaryAvailableVersions}
-            onVersionSelect={handleVersionSelect}
-            title=""
-            description=""
-            showCurrentVersion={false}
-            showActiveIndicator={true}
-            disabled={isLoading}
-          />
-
-          <View
-            className={`mt-4 p-3 rounded-lg ${showMultiVersion ? "mb-4" : ""}`}
-            style={{ backgroundColor: themeColors.border }}
-          >
-            <Text
-              className="text-sm font-medium"
-              style={{ color: themeColors.textMuted }}
-            >
-              Current Version
-            </Text>
-            <Text
-              className="text-lg font-bold mt-1"
-              style={{
-                color: themeColors.textPrimary,
-                fontFamily: Fonts.OswaldVariable,
-              }}
-            >
-              {getVersionDisplayName(currentVersion)}
-            </Text>
-          </View>
-
-          {showMultiVersion && (
-            <VersionSelector
-              currentVersion={secondaryVersion || ""}
-              selectedVersion={secondaryVersion || ""}
-              availableVersions={secondaryAvailableVersions}
-              onVersionSelect={handleSecondaryVersionSelect}
-              title="Secondary Bible Version"
-              description="Choose a different translation for comparison"
-              showCurrentVersion={true}
-              colors={{
-                primary: themeColors.primary,
-                background: themeColors.background,
-                text: themeColors.textPrimary,
-                muted: themeColors.textMuted,
-                card: themeColors.card,
-                border: themeColors.border,
-              }}
-            />
-          )}
-        </SettingSection>
-
-        <SettingSection
-          title="Appearance"
-          subtitle="Customize look and feel"
-          icon="color-palette-outline"
+          title="Reader Settings"
+          subtitle="Customize reading experience"
+          icon="reader-outline"
         >
           <SettingItem
             title="Dark Mode"
@@ -771,13 +749,12 @@ const SettingsScreen = () => {
               color={themeColors.textMuted}
             />
           </SettingItem>
-        </SettingSection>
 
-        <SettingSection
-          title="Reader Settings"
-          subtitle="Customize reading experience"
-          icon="reader-outline"
-        >
+          <View
+            className="border-t my-3"
+            style={{ borderColor: themeColors.border }}
+          />
+
           <View
             className="flex-row justify-between items-center py-3"
             style={{
@@ -794,7 +771,7 @@ const SettingsScreen = () => {
             <View className="flex-row items-center">
               <TouchableOpacity
                 onPress={decreaseFontSize}
-                className="size-8 rounded-full items-center justify-center mr-3"
+                className="size-8 rounded-full items-center justify-center mr-4"
                 style={{ backgroundColor: themeColors.card }}
               >
                 <Text
@@ -804,15 +781,43 @@ const SettingsScreen = () => {
                   A-
                 </Text>
               </TouchableOpacity>
-              <Text
-                className="text-base font-medium mx-4"
-                style={{ color: themeColors.textPrimary }}
+              <TouchableOpacity
+                onPress={openFontModal}
+                style={{
+                  width: 70,
+                  paddingHorizontal: 8,
+                  borderWidth: 1,
+                  borderColor: themeColors.border,
+                  borderRadius: 4,
+                  backgroundColor: themeColors.card,
+                  minHeight: 40,
+                  justifyContent: "center",
+                  alignItems: "center",
+                }}
               >
-                {fontSize}px
+                <Text
+                  style={{
+                    color: themeColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: "500",
+                  }}
+                >
+                  {fontSize}
+                </Text>
+              </TouchableOpacity>
+              <Text
+                style={{
+                  color: themeColors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: "500",
+                  marginLeft: 4,
+                }}
+              >
+                px
               </Text>
               <TouchableOpacity
                 onPress={increaseFontSize}
-                className="size-8 rounded-full items-center justify-center ml-3"
+                className="size-8 rounded-full items-center justify-center ml-4"
                 style={{ backgroundColor: themeColors.card }}
               >
                 <Text
@@ -843,6 +848,82 @@ const SettingsScreen = () => {
         </SettingSection>
 
         <SettingSection
+          title="Bible Version"
+          subtitle="Choose your preferred translation"
+          icon="book-outline"
+        >
+          {isLoading && (
+            <View
+              className="mb-4 p-3 rounded-lg"
+              style={{ backgroundColor: themeColors.primary + "20" }}
+            >
+              <View className="flex-row items-center">
+                <ActivityIndicator size="small" color={themeColors.primary} />
+                <Text
+                  className="text-sm ml-3"
+                  style={{ color: themeColors.primary }}
+                >
+                  Switching version... Please wait
+                </Text>
+              </View>
+            </View>
+          )}
+
+          <VersionSelector
+            currentVersion={currentVersion}
+            selectedVersion={selectedVersion}
+            availableVersions={primaryAvailableVersions}
+            onVersionSelect={handleVersionSelect}
+            title=""
+            description=""
+            showCurrentVersion={false}
+            showActiveIndicator={true}
+            disabled={isLoading}
+          />
+
+          <View
+            className={`mt-4 p-3 rounded-lg ${showMultiVersion ? "mb-4" : ""}`}
+            style={{ backgroundColor: themeColors.border }}
+          >
+            <Text
+              className="text-sm font-medium"
+              style={{ color: themeColors.textMuted }}
+            >
+              Current Version
+            </Text>
+            <Text
+              className="text-lg font-bold mt-1"
+              style={{
+                color: themeColors.textPrimary,
+                fontFamily: Fonts.OswaldVariable,
+              }}
+            >
+              {getVersionDisplayName(currentVersion)}
+            </Text>
+          </View>
+
+          {showMultiVersion && (
+            <VersionSelector
+              currentVersion={secondaryVersion || ""}
+              selectedVersion={secondaryVersion || ""}
+              availableVersions={secondaryAvailableVersions}
+              onVersionSelect={handleSecondaryVersionSelect}
+              title="Secondary Bible Version"
+              description="Choose a different translation for comparison"
+              showCurrentVersion={true}
+              colors={{
+                primary: themeColors.primary,
+                background: themeColors.background,
+                text: themeColors.textPrimary,
+                muted: themeColors.textMuted,
+                card: themeColors.card,
+                border: themeColors.border,
+              }}
+            />
+          )}
+        </SettingSection>
+
+        <SettingSection
           title="More Options"
           subtitle="Additional preferences"
           icon="settings-outline"
@@ -854,7 +935,7 @@ const SettingsScreen = () => {
             onPress={() =>
               Alert.alert(
                 "Coming Soon",
-                "Data management features will be available in the next update."
+                "Data management features will be available in future updates."
               )
             }
           >
@@ -921,7 +1002,9 @@ const SettingsScreen = () => {
                 backgroundColor: themeColors.primary + "10",
               }}
               onPress={() =>
-                Alert.alert("Feedback", "Share your feedback with us.")
+                Linking.openURL(
+                  `mailto:${contactEmail}?subject=Bible App Feedback&body=Hi, I'd like to share some feedback about the Bible App:%0A%0APlease type your message here...`
+                )
               }
             >
               <Ionicons
@@ -990,6 +1073,146 @@ const SettingsScreen = () => {
             maxToRenderPerBatch={5}
             windowSize={10}
           />
+        </View>
+      </Modal>
+
+      <Modal visible={showFontModal} transparent animationType="slide">
+        <View
+          style={{
+            flex: 1,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#00000080",
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: themeColors.background,
+              borderRadius: 12,
+              padding: 20,
+              width: "80%",
+              maxWidth: 300,
+            }}
+          >
+            <View
+              style={{
+                backgroundColor: themeColors.primary,
+                marginBottom: 20,
+                paddingTop: 12,
+                borderRadius: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 18,
+                  fontWeight: "bold",
+                  color: "white",
+                  marginBottom: 16,
+                  textAlign: "center",
+                  fontFamily: Fonts.OswaldVariable,
+                }}
+              >
+                Edit Font Size
+              </Text>
+            </View>
+            <View className="flex-row items-center justify-center mb-4">
+              <TouchableOpacity
+                onPress={decreaseFontSize}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.card,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: 16,
+                }}
+              >
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: themeColors.primary }}
+                >
+                  A-
+                </Text>
+              </TouchableOpacity>
+              <TextInput
+                style={{
+                  color: themeColors.textPrimary,
+                  fontSize: 24,
+                  fontWeight: "bold",
+                  textAlign: "center",
+                  width: 80,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderColor: themeColors.border,
+                  borderRadius: 8,
+                  backgroundColor: themeColors.background,
+                }}
+                value={tempFontInput}
+                onChangeText={handleFontInputChange}
+                onEndEditing={handleFontEndEditing}
+                onSubmitEditing={handleFontSubmitEditing}
+                keyboardType="numeric"
+                returnKeyType="done"
+                maxLength={2}
+              />
+              <Text
+                style={{
+                  color: themeColors.textPrimary,
+                  fontSize: 24,
+                  fontWeight: "bold",
+                  marginLeft: 8,
+                  marginBottom: 6,
+                }}
+              >
+                px
+              </Text>
+              <TouchableOpacity
+                onPress={increaseFontSize}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: themeColors.card,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginLeft: 16,
+                }}
+              >
+                <Text
+                  className="font-bold text-lg"
+                  style={{ color: themeColors.primary }}
+                >
+                  A+
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <View className="flex-row justify-center">
+              <TouchableOpacity
+                onPress={() => setShowFontModal(false)}
+                style={{
+                  backgroundColor: themeColors.textMuted + "20",
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                  marginRight: 10,
+                }}
+              >
+                <Text style={{ color: themeColors.textMuted }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={commitFontSize}
+                style={{
+                  backgroundColor: themeColors.primary,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ color: "white" }}>Apply</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </>

@@ -207,7 +207,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
               marginVertical: 8,
             }}
           >
-            BG Image & Opacity
+            BG & Overlay Opacity
           </Text>
           <View
             style={{
