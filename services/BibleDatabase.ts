@@ -802,6 +802,41 @@ class BibleDatabase {
     }
     if (!this.isInitialized) await this.init();
   }
+
+  async topicExists(word: string): Promise<boolean> {
+    return this.withRetry(async () => {
+      await this.ensureInitialized();
+
+      if (!(await this.tableExists("dictionary"))) {
+        return false;
+      }
+
+      const result = await this.db!.getFirstAsync<{ count: number }>(
+        `SELECT COUNT(*) as count FROM dictionary WHERE LOWER(topic) = LOWER(?)`,
+        [word]
+      );
+
+      return (result?.count || 0) > 0;
+    }, `topicExists(${word})`);
+  }
+
+  async getDefinitionFromTopic(topic: string): Promise<string | null> {
+    return this.withRetry(async () => {
+      await this.ensureInitialized();
+
+      if (!(await this.tableExists("dictionary"))) {
+        return null;
+      }
+
+      const result = await this.db!.getFirstAsync<{ definition: string }>(
+        `SELECT definition FROM dictionary WHERE LOWER(topic) = LOWER(?)`,
+        [topic]
+      );
+
+      return result?.definition || null;
+    }, `getDefinitionFromTopic(${topic})`);
+  }
+
   async getDictionaryDefinition(strongNumber: string): Promise<string | null> {
     return this.withRetry(async () => {
       await this.ensureInitialized();
@@ -818,6 +853,7 @@ class BibleDatabase {
       return result?.definition || null;
     }, `getDictionaryDefinition(${strongNumber})`);
   }
+
   private getDatabaseAsset(): number {
     switch (this.dbName) {
       case "ampc.sqlite3":
@@ -870,6 +906,8 @@ class BibleDatabase {
         return require("../assets/databases/rv1895com.sqlite3");
       case "secedictionary.sqlite3":
         return require("../assets/databases/secedictionary.sqlite3");
+      case "atbsd.dictionary.sqlite3":
+        return require("../assets/dictionary/atbsd.dictionary.sqlite3");
       case "tagab01.sqlite3":
         return require("../assets/databases/tagab01.sqlite3");
       case "tagmb12.sqlite3":

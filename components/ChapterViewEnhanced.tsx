@@ -23,6 +23,7 @@ import { getDatabaseFilename } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
 import { useCommentary } from "../hooks/useCommentary";
+import { useWordDictionary } from "../hooks/useWordDictionary";
 import { BackgroundTexture } from "../components/BackgroundTexture";
 import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 import { Fonts } from "../utils/fonts";
@@ -112,13 +113,15 @@ const renderTree = (
   highlight?: string,
   fontFamily?: string,
   onTagPress?: (content: string) => void,
-  textColor?: string
+  textColor?: string,
+  onWordPress?: (word: string) => void
 ): RenderResult => {
   const result: RenderResult = { header: [], body: [] };
   let key = 0;
   const renderNode = (
     node: TreeNode,
-    overrideTextColor?: string
+    overrideTextColor?: string,
+    nodeOnWordPress?: (word: string) => void
   ): RenderResult => {
     key++;
     if (node.type === "text") {
@@ -131,7 +134,8 @@ const renderTree = (
             highlight,
             `text-${key}`,
             fontFamily,
-            overrideTextColor || textColor
+            overrideTextColor || textColor,
+            nodeOnWordPress
           ),
         ],
       };
@@ -173,8 +177,9 @@ const renderTree = (
       const overrideTextColorForChildren = isTextContainer
         ? textColor
         : themeColors.tagColor;
+      const childOnWordPress = isTextContainer ? onWordPress : undefined;
       const childResults = ch.map((child: TreeNode) =>
-        renderNode(child, overrideTextColorForChildren)
+        renderNode(child, overrideTextColorForChildren, childOnWordPress)
       );
       let allHeaders: React.ReactNode[] = [];
       let allBodies: React.ReactNode[] = [];
@@ -216,7 +221,7 @@ const renderTree = (
     return { header: [], body: [] };
   };
   for (const node of tree) {
-    const res = renderNode(node);
+    const res = renderNode(node, undefined, onWordPress);
     result.header.push(...res.header);
     result.body.push(...res.body);
   }
@@ -232,43 +237,154 @@ const renderTextWithHighlight = (
   highlight?: string,
   keyPrefix?: string,
   fontFamily?: string,
-  textColor?: string
+  textColor?: string,
+  onWordPress?: (word: string) => void
 ): React.ReactNode => {
   const innerStyle = { fontFamily, color: textColor };
-  if (!highlight || !text)
+  const highlightStyle = {
+    ...innerStyle,
+    backgroundColor: themeColors.searchHighlightBg,
+  };
+  if (!onWordPress && (!highlight || !text)) {
     return (
       <Text key={keyPrefix} style={innerStyle}>
         {text}
       </Text>
     );
-  const cleanText = text.replace(/<[^>]+>/g, "");
-  if (!cleanText)
+  }
+  if (!onWordPress) {
+    // Original highlight logic
+    const regex = new RegExp(`(${escapeRegex(highlight!)})`, "gi");
+    const parts = text.split(regex);
     return (
       <Text key={keyPrefix} style={innerStyle}>
-        {text}
+        {parts.map((part, i) =>
+          part.toLowerCase() === highlight!.toLowerCase() ? (
+            <Text key={`${keyPrefix}-${i}`} style={highlightStyle}>
+              {part}
+            </Text>
+          ) : (
+            <Text key={`${keyPrefix}-${i}`} style={innerStyle}>
+              {part}
+            </Text>
+          )
+        )}
       </Text>
     );
-  const regex = new RegExp(`(${escapeRegex(highlight)})`, "gi");
-  const parts = cleanText.split(regex);
+  }
+  // Word-level splitting with optional inner highlight
+  const parts: React.ReactNode[] = [];
+  let i = 0;
+  let localKey = 0;
+  const isAlpha = (char: string) => /[a-zA-Z\u00C0-\u00FF]/.test(char);
+  while (i < text.length) {
+    const char = text[i];
+    if (isAlpha(char)) {
+      let word = char;
+      i++;
+      while (i < text.length && isAlpha(text[i])) {
+        word += text[i];
+        i++;
+      }
+      let wordNode: React.ReactNode;
+      const isClickable = /^[a-zA-Z\u00C0-\u00FF]{2,}$/.test(word);
+      if (highlight && word.toLowerCase().includes(highlight.toLowerCase())) {
+        const regex = new RegExp(`(${escapeRegex(highlight)})`, "gi");
+        const wordParts = word.split(regex);
+        const wordInner = wordParts.map((part, j) => {
+          const isMatch = part.toLowerCase() === highlight.toLowerCase();
+          return (
+            <Text
+              key={`${keyPrefix}-wordpart-${localKey++}-${j}`}
+              style={isMatch ? highlightStyle : innerStyle}
+            >
+              {part}
+            </Text>
+          );
+        });
+        if (isClickable) {
+          wordNode = (
+            <Text
+              key={`${keyPrefix}-word-${localKey++}`}
+              onPress={() => onWordPress(word)}
+              style={innerStyle}
+            >
+              {wordInner}
+            </Text>
+          );
+        } else {
+          wordNode = (
+            <Text key={`${keyPrefix}-word-${localKey++}`} style={innerStyle}>
+              {wordInner}
+            </Text>
+          );
+        }
+      } else {
+        if (isClickable) {
+          wordNode = (
+            <Text
+              key={`${keyPrefix}-word-${localKey++}`}
+              onPress={() => onWordPress(word)}
+              style={innerStyle}
+            >
+              {word}
+            </Text>
+          );
+        } else {
+          wordNode = (
+            <Text key={`${keyPrefix}-word-${localKey++}`} style={innerStyle}>
+              {word}
+            </Text>
+          );
+        }
+      }
+      parts.push(wordNode);
+    } else if (/\d/.test(char)) {
+      let num = char;
+      i++;
+      while (i < text.length && /\d/.test(text[i])) {
+        num += text[i];
+        i++;
+      }
+      parts.push(
+        <Text key={`${keyPrefix}-num-${localKey++}`} style={innerStyle}>
+          {num}
+        </Text>
+      );
+    } else if (/[^\s]/.test(char)) {
+      let punct = char;
+      i++;
+      while (
+        i < text.length &&
+        /[^\s]/.test(text[i]) &&
+        !isAlpha(text[i]) &&
+        !/\d/.test(text[i])
+      ) {
+        punct += text[i];
+        i++;
+      }
+      parts.push(
+        <Text key={`${keyPrefix}-punct-${localKey++}`} style={innerStyle}>
+          {punct}
+        </Text>
+      );
+    } else {
+      let ws = char;
+      i++;
+      while (i < text.length && /[\s\n\r]/.test(text[i])) {
+        ws += text[i];
+        i++;
+      }
+      parts.push(
+        <Text key={`${keyPrefix}-ws-${localKey++}`} style={innerStyle}>
+          {ws}
+        </Text>
+      );
+    }
+  }
   return (
     <Text key={keyPrefix} style={innerStyle}>
-      {parts.map((part, i) =>
-        part.toLowerCase() === highlight.toLowerCase() ? (
-          <Text
-            key={`${keyPrefix}-${i}`}
-            style={{
-              ...innerStyle,
-              backgroundColor: themeColors.searchHighlightBg,
-            }}
-          >
-            {part}
-          </Text>
-        ) : (
-          <Text key={`${keyPrefix}-${i}`} style={innerStyle}>
-            {part}
-          </Text>
-        )
-      )}
+      {parts}
     </Text>
   );
 };
@@ -282,7 +398,8 @@ const renderVerseTextWithXmlHighlight = (
   highlight?: string,
   fontFamily?: string,
   onTagPress?: (content: string) => void,
-  textColor?: string
+  textColor?: string,
+  onWordPress?: (word: string) => void
 ): RenderResult => {
   if (!text) return { header: [], body: [] };
   try {
@@ -295,7 +412,8 @@ const renderVerseTextWithXmlHighlight = (
       highlight,
       fontFamily,
       onTagPress,
-      textColor
+      textColor,
+      onWordPress
     );
   } catch (error) {
     console.error("Error parsing XML tags:", error);
@@ -308,7 +426,8 @@ const renderVerseTextWithXmlHighlight = (
           highlight,
           "fallback",
           fontFamily,
-          textColor
+          textColor,
+          onWordPress
         ),
       ],
     };
@@ -970,13 +1089,20 @@ type VerseState = {
   currentVerseRef: VerseRef;
   verseVerses: Verse[];
 };
-type ModalState = CommentaryState | VerseState;
+type WordState = {
+  view: "word";
+  word: string;
+  definition: string;
+  loading: boolean;
+};
+type ModalState = CommentaryState | VerseState | WordState;
 type VerseDisplayProps = {
   verse: Verse;
   fontSize: number;
   themeColors: ThemeColors;
   fontFamily?: string;
   onTagPress?: (content: string, verse: Verse) => void;
+  onWordPress?: (word: string) => void;
   textColor?: string;
   showVerseNumbers?: boolean;
   prefix?: string;
@@ -989,6 +1115,7 @@ const VerseDisplay: React.FC<VerseDisplayProps> = ({
   themeColors,
   fontFamily,
   onTagPress,
+  onWordPress,
   textColor,
   showVerseNumbers = true,
   prefix,
@@ -1004,7 +1131,8 @@ const VerseDisplay: React.FC<VerseDisplayProps> = ({
         undefined,
         fontFamily,
         (content) => onTagPress?.(content, verse),
-        textColor
+        textColor,
+        onWordPress
       ),
     [
       verse.text,
@@ -1014,6 +1142,7 @@ const VerseDisplay: React.FC<VerseDisplayProps> = ({
       fontFamily,
       onTagPress,
       textColor,
+      onWordPress,
     ]
   );
   const { header, body } = rendered;
@@ -1107,6 +1236,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     }
   }, [fontFamily]);
   const { loadCommentaryForVerse } = useCommentary(displayVersion);
+  const { loadWordDefinition } = useWordDictionary(displayVersion);
   const { bibleDB, getDatabase } = useBibleDatabase();
   const effectiveNoBg = noBackground ?? false;
   const bgHook = useBackgroundTexture({
@@ -1117,7 +1247,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const hasBg = !effectiveNoBg && bgHook.hasSource;
   const [showTagModal, setShowTagModal] = useState(false);
   const [modalStack, setModalStack] = useState<ModalState[]>([]);
-  const [modalView, setModalView] = useState<"commentary" | "verse">(
+  const [modalView, setModalView] = useState<"commentary" | "verse" | "word">(
     "commentary"
   );
   const [tagContent, setTagContent] = useState("");
@@ -1129,6 +1259,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   const [verseVerses, setVerseVerses] = useState<Verse[]>([]);
   const [dictHistory, setDictHistory] = useState<DictHistoryEntry[]>([]);
   const [currentDictIndex, setCurrentDictIndex] = useState<number>(-1);
+  const [selectedWord, setSelectedWord] = useState("");
+  const [wordDefinition, setWordDefinition] = useState("");
+  const [wordLoading, setWordLoading] = useState(false);
   useEffect(() => {
     if (modalStack.length === 0) {
       setShowTagModal(false);
@@ -1143,12 +1276,29 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       setDictHistory(top.dictHistory);
       setCurrentDictIndex(top.dictIndex);
       setCommentaryText(top.commentaryText);
+      setSelectedWord("");
+      setWordDefinition("");
+      setWordLoading(false);
       setVerseVerses([]);
-    } else {
+    } else if (top.view === "verse") {
       setCurrentVerseRef(top.currentVerseRef);
       setVerseVerses(top.verseVerses);
       setTagContent("");
       setSelectedVerse(null);
+      setSelectedWord("");
+      setWordDefinition("");
+      setWordLoading(false);
+    } else if (top.view === "word") {
+      setSelectedWord(top.word);
+      setWordDefinition(top.definition);
+      setWordLoading(top.loading);
+      setTagContent("");
+      setSelectedVerse(null);
+      setCurrentVerseRef(null);
+      setDictHistory([]);
+      setCurrentDictIndex(-1);
+      setCommentaryText("");
+      setVerseVerses([]);
     }
   }, [modalStack]);
   const getStrongPrefix = useCallback((verse: Verse): string => {
@@ -1232,6 +1382,46 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     dictHistory,
     updateDictEntry,
   ]);
+  useEffect(() => {
+    if (!showTagModal || modalView !== "word") return;
+    if (!selectedWord || !wordLoading) return;
+    const loadAsync = async () => {
+      try {
+        const text = await loadWordDefinition(selectedWord);
+        setWordDefinition(text);
+        setWordLoading(false);
+        setModalStack((prev) => {
+          if (prev.length === 0 || prev[prev.length - 1].view !== "word") {
+            return prev;
+          }
+          const last = prev[prev.length - 1] as WordState;
+          const newTop: WordState = {
+            ...last,
+            definition: text,
+            loading: false,
+          };
+          return [...prev.slice(0, -1), newTop];
+        });
+      } catch (error) {
+        const errorText = `Error loading definition for "${selectedWord}"`;
+        setWordDefinition(errorText);
+        setWordLoading(false);
+        setModalStack((prev) => {
+          if (prev.length === 0 || prev[prev.length - 1].view !== "word") {
+            return prev;
+          }
+          const last = prev[prev.length - 1] as WordState;
+          const newTop: WordState = {
+            ...last,
+            definition: errorText,
+            loading: false,
+          };
+          return [...prev.slice(0, -1), newTop];
+        });
+      }
+    };
+    loadAsync();
+  }, [showTagModal, modalView, selectedWord, wordLoading, loadWordDefinition]);
   const currentTitle = useMemo(() => {
     const isDictMode =
       displayVersion?.includes("+") && /^\d+$/.test(tagContent);
@@ -1260,6 +1450,16 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       commentaryText: "",
     };
     setModalStack([initialState]);
+    setShowTagModal(true);
+  }, []);
+  const handleWordPress = useCallback((word: string) => {
+    const newState: WordState = {
+      view: "word",
+      word,
+      definition: "",
+      loading: true,
+    };
+    setModalStack((prev) => [...prev, newState]);
     setShowTagModal(true);
   }, []);
   const handleTagPressFromModal = useCallback(
@@ -1529,6 +1729,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       },
       [handleTagPress, verse]
     );
+    const localOnWordPress = useCallback(
+      (word: string) => {
+        handleWordPress(word);
+      },
+      [handleWordPress]
+    );
     const indicatorSize = isFullScreen ? fontSize * 0.7 : fontSize * 0.8;
     const starStyle = {
       fontSize: indicatorSize * 0.9,
@@ -1567,6 +1773,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
               themeColors={themeColors}
               fontFamily={actualFontFamily}
               onTagPress={localOnTagPress}
+              onWordPress={localOnWordPress}
               textColor={verseTextColor}
               showVerseNumbers={showVerseNumbers}
               showHeader={true}
@@ -1784,6 +1991,73 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                         />
                       </View>
                     ))}
+                  </ScrollView>
+                )}
+                <TouchableOpacity
+                  onPress={handleCloseModal}
+                  style={{
+                    backgroundColor: themeColors.primary,
+                    paddingHorizontal: 20,
+                    paddingVertical: 10,
+                    borderRadius: 5,
+                    marginTop: 10,
+                    alignSelf: "center",
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={{
+                      color: "white",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Close
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : modalView === "word" ? (
+              <>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  }}
+                >
+                  <View style={{ width: 30 }} />
+                  <Text
+                    style={{
+                      flex: 1,
+                      textAlign: "center",
+                      fontSize: 18,
+                      fontWeight: "bold",
+                      color: themeColors.textPrimary,
+                      fontFamily: actualFontFamily,
+                    }}
+                  >
+                    Definition for "{selectedWord}"
+                  </Text>
+                  <View style={{ width: 30 }} />
+                </View>
+                {wordLoading ? (
+                  <ActivityIndicator size="small" color={themeColors.primary} />
+                ) : (
+                  <ScrollView
+                    style={{ maxHeight: 400 }}
+                    contentContainerStyle={{ paddingHorizontal: 8 }}
+                  >
+                    <Text style={commentaryModalStyle}>
+                      {renderCommentaryWithVerseLinks(
+                        wordDefinition,
+                        themeColors,
+                        actualFontFamily,
+                        bookToNumber,
+                        handleVerseLinkPress,
+                        undefined,
+                        undefined
+                      )}
+                    </Text>
                   </ScrollView>
                 )}
                 <TouchableOpacity
