@@ -99,7 +99,7 @@ export const BOOK_ABBREVS: Record<string, string[]> = {
     "Second Chron.",
   ],
   Ezra: ["Ezra", "Ezr.", "Ez."],
-  Nehemiah: ["Neh.", "Ne."],
+  Nehemiah: ["Neh.", "Ne.", "Ne"],
   Esther: ["Est.", "Esth.", "Es."],
   Job: ["Job", "Jb."],
   Psalms: ["Ps.", "Psalm", "Pslm.", "Psa.", "Psm.", "Pss."],

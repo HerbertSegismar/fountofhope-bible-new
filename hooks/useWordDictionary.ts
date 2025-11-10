@@ -38,7 +38,22 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
             .replace(/&#x200e;/gi, "")
             .trim();
 
-          return `Word "${word}":\n\n${cleanedDefinition}`;
+          // Remove the leading word if it matches the topic
+          const lowerWord = word.toLowerCase();
+          const firstSpaceIndex = cleanedDefinition.indexOf(" ");
+          if (firstSpaceIndex !== -1) {
+            const leadingWord = cleanedDefinition
+              .substring(0, firstSpaceIndex)
+              .toLowerCase()
+              .trim();
+            if (leadingWord === lowerWord) {
+              cleanedDefinition = cleanedDefinition
+                .substring(firstSpaceIndex)
+                .trim();
+            }
+          }
+
+          return `\n\n${word} - ${cleanedDefinition}`;
         } else {
           console.log(`No definition found for word ${word}`);
           return `No definition found for word "${word}"`;
