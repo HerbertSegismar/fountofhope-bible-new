@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
-import { getVersionKey, stripTags } from "../utils/bibleDatabaseUtils";
+import { stripTags } from "../utils/bibleDatabaseUtils";
 import { getTestament } from "../utils/testamentUtils";
 
 export const useDictionary = (displayVersion: string | undefined) => {
@@ -11,14 +11,6 @@ export const useDictionary = (displayVersion: string | undefined) => {
     async (verse: Verse | null, tagContent: string): Promise<string> => {
       if (!verse || !tagContent) {
         return `Strong's: "${tagContent}"`;
-      }
-
-      if (!displayVersion?.includes("+")) {
-        return `Strong's: "${tagContent}" (Dictionary only available for Strong's enabled versions)`;
-      }
-
-      if (!/^\d+$/.test(tagContent)) {
-        return `Strong's: "${tagContent}" (Not a valid Strong's number)`;
       }
 
       try {
@@ -34,10 +26,6 @@ export const useDictionary = (displayVersion: string | undefined) => {
         const isNewTestament = testament === "NT";
         const prefix = isNewTestament ? "G" : "H";
         const strongNumber = `${prefix}${tagContent}`;
-
-        console.log(
-          `Looking up Strong's number in dictionary: ${strongNumber} for ${verse.book_name} (${testament})`
-        );
 
         const definition =
           await dictionaryDB.getDictionaryDefinition(strongNumber);

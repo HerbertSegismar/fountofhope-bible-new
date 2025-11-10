@@ -27,6 +27,7 @@ import { useWordDictionary } from "../hooks/useWordDictionary";
 import { BackgroundTexture } from "../components/BackgroundTexture";
 import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 import { Fonts } from "../utils/fonts";
+
 type ParsedNode = {
   type: "text" | "opening-tag" | "closing-tag" | "self-closing-tag";
   content?: string;
@@ -253,7 +254,6 @@ const renderTextWithHighlight = (
     );
   }
   if (!onWordPress) {
-    // Original highlight logic
     const regex = new RegExp(`(${escapeRegex(highlight!)})`, "gi");
     const parts = text.split(regex);
     return (
@@ -272,7 +272,6 @@ const renderTextWithHighlight = (
       </Text>
     );
   }
-  // Word-level splitting with optional inner highlight
   const parts: React.ReactNode[] = [];
   let i = 0;
   let localKey = 0;

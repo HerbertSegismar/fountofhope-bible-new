@@ -38,22 +38,25 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
             .replace(/&#x200e;/gi, "")
             .trim();
 
-          // Remove the leading word if it matches the topic
+          // Remove the leading word if it matches the topic (case-insensitive)
           const lowerWord = word.toLowerCase();
-          const firstSpaceIndex = cleanedDefinition.indexOf(" ");
-          if (firstSpaceIndex !== -1) {
-            const leadingWord = cleanedDefinition
-              .substring(0, firstSpaceIndex)
-              .toLowerCase()
+          if (cleanedDefinition.toLowerCase().startsWith(lowerWord)) {
+            const actualLength = lowerWord.length;
+            cleanedDefinition = cleanedDefinition
+              .substring(actualLength)
               .trim();
-            if (leadingWord === lowerWord) {
-              cleanedDefinition = cleanedDefinition
-                .substring(firstSpaceIndex)
-                .trim();
+
+            // Capitalize the first letter if it's a lowercase letter
+            if (cleanedDefinition.length > 0) {
+              const firstChar = cleanedDefinition.charAt(0);
+              if (/[a-z]/.test(firstChar)) {
+                cleanedDefinition =
+                  firstChar.toUpperCase() + cleanedDefinition.substring(1);
+              }
             }
           }
 
-          return `\n\n${word} - ${cleanedDefinition}`;
+          return `\n\n${word.toUpperCase()} - ${cleanedDefinition}`;
         } else {
           console.log(`No definition found for word ${word}`);
           return `No definition found for word "${word}"`;
