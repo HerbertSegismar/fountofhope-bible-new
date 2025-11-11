@@ -5,6 +5,56 @@ import { commentaryDBMap } from "../utils/bibleDatabaseUtils";
 import { getVersionKey, stripTags } from "../utils/bibleDatabaseUtils";
 import { useDictionary } from "./useDictionary";
 
+const levenshteinDistance = (str1: string, str2: string): number => {
+  const matrix: number[][] = [];
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1,
+          matrix[i][j - 1] + 1,
+          matrix[i - 1][j] + 1
+        );
+      }
+    }
+  }
+  return matrix[str2.length][str1.length];
+};
+
+const getSimilarity = (str1: string, str2: string): number => {
+  const distance = levenshteinDistance(str1.toLowerCase(), str2.toLowerCase());
+  const maxLength = Math.max(str1.length, str2.length);
+  return maxLength === 0 ? 1 : 1 - distance / maxLength;
+};
+
+const findBestMatch = (
+  query: string,
+  candidates: string[],
+  minSimilarity: number = 0.5
+): string | null => {
+  let bestMatch: string | null = null;
+  let bestSimilarity = 0;
+  const lowerQuery = query.toLowerCase();
+
+  for (const candidate of candidates) {
+    const similarity = getSimilarity(query, candidate);
+    if (similarity > bestSimilarity && similarity >= minSimilarity) {
+      bestSimilarity = similarity;
+      bestMatch = candidate;
+    }
+  }
+
+  return bestMatch;
+};
+
 export const useWordDictionary = (displayVersion: string | undefined) => {
   const { getDatabase } = useBibleDatabase();
 
@@ -15,22 +65,46 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
       }
 
       try {
-        const dictionaryDB = await getDatabase("atbsd.dictionary.sqlite3");
+        const dictionaryDB = await getDatabase("atsbd.dictionary.sqlite3");
         if (!dictionaryDB) {
           return `Word: "${word}" (Dictionary database not loaded)`;
         }
 
         console.log(`Looking up word in dictionary: ${word}`);
 
-        // Verify if word exists in topic column
+        let searchTopic = word;
+        let isExactMatch = false;
+
+        // Verify if word exists exactly in topic column
         const topicExists = await dictionaryDB.topicExists(word);
-        if (!topicExists) {
-          console.log(`No entry found for topic ${word}`);
-          return `No definition found for word "${word}"`;
+        if (topicExists) {
+          isExactMatch = true;
+        } else {
+          console.log(
+            `No exact entry found for topic ${word}, searching for similar...`
+          );
+          // Assuming dictionaryDB has a getAllTopics() method that returns string[] of all topics
+          // Implement as: await dictionaryDB.executeSql("SELECT DISTINCT topic FROM topics") and map to topics
+          const allTopics: string[] = await dictionaryDB.getAllTopics();
+          if (!allTopics || allTopics.length === 0) {
+            return `No definition found for word "${word}"`;
+          }
+
+          const bestMatch = findBestMatch(word, allTopics);
+          if (bestMatch) {
+            console.log(
+              `Found best match: ${bestMatch} with similarity ${(getSimilarity(word, bestMatch) * 100).toFixed(1)}%`
+            );
+            searchTopic = bestMatch;
+          } else {
+            console.log(`No similar entry found for topic ${word}`);
+            return `No definition found for word "${word}"`;
+          }
         }
 
-        // Fetch definition from definition column
-        const definition = await dictionaryDB.getDefinitionFromTopic(word);
+        // Fetch definition from definition column using the search topic (exact or best match)
+        const definition =
+          await dictionaryDB.getDefinitionFromTopic(searchTopic);
 
         if (definition) {
           let cleanedDefinition = stripTags(definition)
@@ -38,10 +112,10 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
             .replace(/&#x200e;/gi, "")
             .trim();
 
-          // Remove the leading word if it matches the topic (case-insensitive)
-          const lowerWord = word.toLowerCase();
-          if (cleanedDefinition.toLowerCase().startsWith(lowerWord)) {
-            const actualLength = lowerWord.length;
+          // Remove the leading word if it matches the search topic (case-insensitive)
+          const lowerSearchTopic = searchTopic.toLowerCase();
+          if (cleanedDefinition.toLowerCase().startsWith(lowerSearchTopic)) {
+            const actualLength = lowerSearchTopic.length;
             cleanedDefinition = cleanedDefinition
               .substring(actualLength)
               .trim();
@@ -56,9 +130,16 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
             }
           }
 
-          return `\n\n${word.toUpperCase()} - ${cleanedDefinition}`;
+          // If not exact, indicate the match used
+          const header = isExactMatch
+            ? `${searchTopic.toUpperCase()} - `
+            : `${word.toUpperCase()} (matched to ${searchTopic.toUpperCase()}) - `;
+
+          return `\n${header}${cleanedDefinition}`;
         } else {
-          console.log(`No definition found for word ${word}`);
+          console.log(
+            `No definition found for ${isExactMatch ? "topic" : "matched topic"} ${searchTopic}`
+          );
           return `No definition found for word "${word}"`;
         }
       } catch (error) {
@@ -141,11 +222,45 @@ export const useCommentary = (displayVersion: string | undefined) => {
             );
 
           if (availableMarkers.length > 0) {
-            let msg = `No commentary found for marker "${tagContent}" in ${displayVersion}. Available markers: ${availableMarkers.join(", ")}`;
-            if (isWordCandidate && !availableMarkers.includes(tagContent)) {
+            let searchMarker = tagContent;
+            let isExactMatch = availableMarkers.includes(tagContent);
+            let fallbackToWord = true;
+
+            if (!isExactMatch && isWordCandidate) {
+              // Attempt fuzzy matching on available markers
+              const bestMatch = findBestMatch(tagContent, availableMarkers);
+              if (bestMatch) {
+                console.log(
+                  `Found best commentary marker match: ${bestMatch} with similarity ${(getSimilarity(tagContent, bestMatch) * 100).toFixed(1)}%`
+                );
+                searchMarker = bestMatch;
+                isExactMatch = false; // Still mark as non-exact for potential logging
+                // Fetch commentary for the best match
+                const bestCommentaryText = await commentaryDB.getCommentary(
+                  verse.book_number,
+                  verse.chapter,
+                  verse.verse,
+                  searchMarker
+                );
+                if (bestCommentaryText) {
+                  const header = isExactMatch
+                    ? ""
+                    : `\n\n${tagContent} (matched marker: ${searchMarker})`;
+                  fallbackToWord = false;
+                  return {
+                    text: `${header}\n\n${stripTags(bestCommentaryText)}`,
+                    isWord: false,
+                  };
+                }
+              }
+            }
+
+            if (fallbackToWord && isWordCandidate) {
               const wordText = await loadWordDefinition(tagContent);
               return { text: wordText, isWord: true };
             }
+
+            let msg = `No commentary found for marker "${tagContent}" in ${displayVersion}. Available markers: ${availableMarkers.join(", ")}`;
             return { text: msg, isWord: false };
           } else {
             if (isWordCandidate) {

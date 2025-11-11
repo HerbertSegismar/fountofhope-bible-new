@@ -854,6 +854,28 @@ class BibleDatabase {
     }, `getDictionaryDefinition(${strongNumber})`);
   }
 
+  async getAllTopics(): Promise<string[]> {
+    const cacheKey = "getAllTopics";
+    const cached = this.cache.getQuery<string[]>(cacheKey);
+    if (cached) return cached;
+
+    return this.withRetry(async () => {
+      await this.ensureInitialized();
+
+      if (!(await this.tableExists("dictionary"))) {
+        return [];
+      }
+
+      const results = await this.db!.getAllAsync<{ topic: string }>(
+        `SELECT DISTINCT topic FROM dictionary ORDER BY LOWER(topic)`
+      );
+
+      const topics = results.map((r) => r.topic);
+      this.cache.setQuery(cacheKey, topics);
+      return topics;
+    }, "getAllTopics");
+  }
+
   private getDatabaseAsset(): number {
     switch (this.dbName) {
       case "ampc.sqlite3":
@@ -906,8 +928,8 @@ class BibleDatabase {
         return require("../assets/databases/rv1895com.sqlite3");
       case "secedictionary.sqlite3":
         return require("../assets/databases/secedictionary.sqlite3");
-      case "atbsd.dictionary.sqlite3":
-        return require("../assets/dictionary/atbsd.dictionary.sqlite3");
+      case "atsbd.dictionary.sqlite3":
+        return require("../assets/dictionary/atsbd.dictionary.sqlite3");
       case "tagab01.sqlite3":
         return require("../assets/databases/tagab01.sqlite3");
       case "tagmb12.sqlite3":
