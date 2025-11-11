@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
   useEffect,
+  Fragment,
 } from "react";
 import {
   View,
@@ -1704,7 +1705,11 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
                             .substring(contentStart, contentEnd)
                             .trim();
                           if (content) {
-                            seeContents.push(content);
+                            const words = content
+                              .split(/,\s*/)
+                              .map((w) => w.trim())
+                              .filter(Boolean);
+                            seeContents.push(...words);
                           }
                           lastEnd = contentEnd;
                           if (nextSeeIndex === -1) break;
@@ -1735,15 +1740,21 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
                                   flexWrap: "wrap",
                                 }}
                               >
-                                {seeContents.map((content, idx) => (
-                                  <>
+                                {seeContents.map((word, idx) => (
+                                  <Fragment key={idx}>
                                     {idx > 0 && (
                                       <Text style={commentaryModalStyle}>
                                         ,{" "}
                                       </Text>
                                     )}
                                     <Text
-                                      onPress={() => handleWordPress(content)}
+                                      onPress={() => {
+                                        if (/^[HG]\d+$/i.test(word)) {
+                                          handleStrongPress(word.substring(1));
+                                        } else {
+                                          handleWordPress(word);
+                                        }
+                                      }}
                                       style={[
                                         commentaryModalStyle,
                                         {
@@ -1753,9 +1764,9 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
                                         },
                                       ]}
                                     >
-                                      {content}
+                                      {word}
                                     </Text>
-                                  </>
+                                  </Fragment>
                                 ))}
                               </View>
                             </View>
