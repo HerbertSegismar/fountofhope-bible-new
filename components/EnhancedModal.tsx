@@ -18,15 +18,13 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
-import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
-import { useTheme } from "../context/ThemeContext";
+import { type ThemeColors } from "../utils/themeUtils";
 import { useCommentary } from "../hooks/useCommentary";
 import { useWordDictionary } from "../hooks/useWordDictionary";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { getDatabaseFilename } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
 import { BIBLE_BOOKS_MAP, getTestament } from "../utils/testamentUtils";
-import { Fonts } from "../utils/fonts";
 import { VerseDisplay } from "./ChapterViewEnhanced";
 
 type DictHistoryEntry = {

@@ -38,11 +38,10 @@ const getSimilarity = (str1: string, str2: string): number => {
 const findBestMatch = (
   query: string,
   candidates: string[],
-  minSimilarity: number = 0.5
+  minSimilarity: number = 0.8
 ): string | null => {
   let bestMatch: string | null = null;
   let bestSimilarity = 0;
-  const lowerQuery = query.toLowerCase();
 
   for (const candidate of candidates) {
     const similarity = getSimilarity(query, candidate);
@@ -75,7 +74,6 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
         let searchTopic = word;
         let isExactMatch = false;
 
-        // Verify if word exists exactly in topic column
         const topicExists = await dictionaryDB.topicExists(word);
         if (topicExists) {
           isExactMatch = true;
@@ -83,8 +81,7 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
           console.log(
             `No exact entry found for topic ${word}, searching for similar...`
           );
-          // Assuming dictionaryDB has a getAllTopics() method that returns string[] of all topics
-          // Implement as: await dictionaryDB.executeSql("SELECT DISTINCT topic FROM topics") and map to topics
+
           const allTopics: string[] = await dictionaryDB.getAllTopics();
           if (!allTopics || allTopics.length === 0) {
             return `No definition found for word "${word}"`;
@@ -102,7 +99,6 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
           }
         }
 
-        // Fetch definition from definition column using the search topic (exact or best match)
         const definition =
           await dictionaryDB.getDefinitionFromTopic(searchTopic);
 
@@ -112,7 +108,6 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
             .replace(/&#x200e;/gi, "")
             .trim();
 
-          // Remove the leading word if it matches the search topic (case-insensitive)
           const lowerSearchTopic = searchTopic.toLowerCase();
           if (cleanedDefinition.toLowerCase().startsWith(lowerSearchTopic)) {
             const actualLength = lowerSearchTopic.length;
@@ -120,7 +115,6 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
               .substring(actualLength)
               .trim();
 
-            // Capitalize the first letter if it's a lowercase letter
             if (cleanedDefinition.length > 0) {
               const firstChar = cleanedDefinition.charAt(0);
               if (/[a-z]/.test(firstChar)) {
@@ -130,7 +124,6 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
             }
           }
 
-          // If not exact, indicate the match used
           const header = isExactMatch
             ? `${searchTopic.toUpperCase()} - `
             : `${word.toUpperCase()} (matched to ${searchTopic.toUpperCase()}) - `;
@@ -227,15 +220,13 @@ export const useCommentary = (displayVersion: string | undefined) => {
             let fallbackToWord = true;
 
             if (!isExactMatch && isWordCandidate) {
-              // Attempt fuzzy matching on available markers
               const bestMatch = findBestMatch(tagContent, availableMarkers);
               if (bestMatch) {
                 console.log(
                   `Found best commentary marker match: ${bestMatch} with similarity ${(getSimilarity(tagContent, bestMatch) * 100).toFixed(1)}%`
                 );
                 searchMarker = bestMatch;
-                isExactMatch = false; // Still mark as non-exact for potential logging
-                // Fetch commentary for the best match
+                isExactMatch = false; 
                 const bestCommentaryText = await commentaryDB.getCommentary(
                   verse.book_number,
                   verse.chapter,

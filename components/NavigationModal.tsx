@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Modal,
   View,
@@ -52,8 +52,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   const [newTestament, setNewTestament] = useState<Book[]>([]);
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
-
-  // Internal selection state - reset every time modal opens
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [selectedChapter, setSelectedChapter] = useState(1);
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
@@ -83,12 +81,10 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   const textTertiaryClass =
     theme === "dark" ? "text-gray-300" : "text-gray-600";
 
-  // Reset all internal state when modal opens
   useEffect(() => {
     if (visible) {
       resetInternalState();
       loadBooks();
-      // Scroll to top when opening
       setTimeout(() => {
         modalScrollViewRef.current?.scrollTo({ y: 0, animated: false });
       }, 100);
@@ -108,10 +104,8 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     setIsDataLoaded(false);
   }, []);
 
-  // Scroll to chapters when book is selected and chapters are loaded
   useEffect(() => {
     if (selectedBook && chapters.length > 0 && chaptersY !== null) {
-      // Small delay to ensure layout is updated
       setTimeout(() => {
         modalScrollViewRef.current?.scrollTo({
           y: chaptersY - 100,
@@ -121,7 +115,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     }
   }, [selectedBook, chapters, chaptersY]);
 
-  // Scroll to verses when chapter is selected and verses are loaded
   useEffect(() => {
     if (hasTappedChapter && versesList.length > 0 && versesY !== null) {
       setTimeout(() => {
@@ -133,10 +126,8 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     }
   }, [hasTappedChapter, versesList, versesY]);
 
-  // Auto-navigate when verse is selected
   useEffect(() => {
     if (selectedVerse && selectedBook && selectedChapter) {
-      // Small delay to show the selection feedback
       setTimeout(() => {
         handleNavigateToLocation();
       }, 300);
@@ -162,7 +153,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
 
       setBooks(booksWithTestament);
 
-      // Separate into Old and New Testament
       const ot = booksWithTestament.filter((book) => book.testament === "OT");
       const nt = booksWithTestament.filter((book) => book.testament === "NT");
       setOldTestament(ot);
@@ -257,7 +247,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     onClose();
   }, [resetInternalState, onClose]);
 
-  // BookCard component
   const BookCard = useCallback(
     ({ book, color }: { book: Book; color: string }) => {
       const getButtonStyles = (bookColor: string, currentTheme: string) => {
@@ -302,7 +291,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     [handleBookSelect, theme]
   );
 
-  // Show loading state
   if (isLoadingNavigation) {
     return (
       <Modal
@@ -326,7 +314,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     );
   }
 
-  // Show error state if database not available
   if (!effectiveDB) {
     return (
       <Modal
@@ -353,7 +340,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
     );
   }
 
-  // Show only books when data is fully loaded
   return (
     <Modal
       visible={visible}
@@ -394,7 +380,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
             showsVerticalScrollIndicator
             style={{ backgroundColor: colors.background?.default }}
           >
-            {/* Book Selection Section */}
             <View className="mb-6">
               <Text
                 style={{
@@ -407,7 +392,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                 Select Book
               </Text>
 
-              {/* Old Testament Section */}
               {oldTestament.length > 0 && (
                 <View className="mb-6">
                   <View className="flex-row items-center justify-between mb-3">
@@ -436,7 +420,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                 </View>
               )}
 
-              {/* New Testament Section */}
               {newTestament.length > 0 && (
                 <View className="mb-6">
                   <View className="flex-row items-center justify-between mb-3">
@@ -466,7 +449,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
               )}
             </View>
 
-            {/* Current Selection Display - Only show if a book is selected */}
             {selectedBook && (
               <View
                 style={{
@@ -499,7 +481,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
               </View>
             )}
 
-            {/* Chapter Selection */}
             {selectedBook && chapters.length > 0 && (
               <View
                 onLayout={(event) => {
@@ -570,7 +551,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
               </View>
             )}
 
-            {/* Verse Selection */}
             {!hasTappedChapter && selectedBook && (
               <View className="mb-6">
                 <Text
@@ -649,7 +629,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                 </View>
               )}
 
-            {/* Navigation Button - Only show if no verse is selected and a book is selected */}
             {!selectedVerse && selectedBook && (
               <TouchableOpacity
                 onPress={handleNavigateToLocation}
@@ -684,7 +663,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
             )}
           </ScrollView>
         ) : (
-          // Fallback loading state (shouldn't normally show since we have the main loading state)
           <View className={`flex-1 justify-center items-center ${bgClass}`}>
             <ActivityIndicator size="large" color={primaryColor} />
             <Text className={`text-lg ${textTertiaryClass} mt-4`}>

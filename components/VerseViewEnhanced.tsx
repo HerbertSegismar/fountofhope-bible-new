@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import { View, Text, TouchableOpacity, Platform } from "react-native";
+import { memo, useMemo } from "react";
+import { View, Text, TouchableOpacity } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme, type FontFamily } from "../context/ThemeContext";
@@ -260,7 +260,7 @@ const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   }
 };
 
-const VerseText = React.memo(
+const VerseText = memo(
   ({
     verse,
     fontSize,
@@ -365,7 +365,7 @@ const VerseText = React.memo(
   }
 );
 
-export const VerseViewEnhanced: React.FC<VerseViewProps> = React.memo(
+export const VerseViewEnhanced: React.FC<VerseViewProps> = memo(
   ({
     verses,
     bookName,

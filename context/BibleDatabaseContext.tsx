@@ -1,10 +1,11 @@
-import React, {
+import {
   createContext,
   useContext,
   useState,
   useEffect,
   useCallback,
   ReactNode,
+  useRef,
 } from "react";
 import { DeviceEventEmitter } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -39,9 +40,14 @@ interface BibleDatabaseProviderProps {
 
 const STORAGE_KEY = "selected_bible_version";
 const BIBLE_TO_COMMENTARY_MAP: Record<string, string> = {
-  "cjb.sqlite3": "cjbcom.sqlite3",
+  "csb17.sqlite3": "csb17com.sqlite3",
   "nlt15.sqlite3": "nlt15com.sqlite3",
   "rv1895.sqlite3": "rv1895com.sqlite3",
+  "ampc.sqlite3": "ampccom.sqlite3",
+  "esv.sqlite3": "esvcom.sqlite3",
+  "esvgsb.sqlite3": "esvgsbcom.sqlite3",
+  "niv11.sqlite3": "niv11com.sqlite3",
+  "nkjv.sqlite3": "nkjvcom.sqlite3",
 };
 
 export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
@@ -91,8 +97,8 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     ...availableCommentaryVersions,
   ].sort();
 
-  const openDatabases = React.useRef<Map<string, BibleDatabase>>(new Map());
-  const pendingInits = React.useRef<Map<string, Promise<BibleDatabase>>>(
+  const openDatabases = useRef<Map<string, BibleDatabase>>(new Map());
+  const pendingInits = useRef<Map<string, Promise<BibleDatabase>>>(
     new Map()
   );
 
@@ -111,20 +117,16 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         if (isPrimary) {
           setIsInitializing(false);
         }
-        console.log(`Using existing database: ${version}`);
         return db;
       }
 
       if (pendingInits.current.has(version)) {
-        console.log(`Awaiting pending initialization for: ${version}`);
         const db = await pendingInits.current.get(version)!;
         if (isPrimary) {
           setIsInitializing(false);
         }
         return db;
       }
-
-      console.log(`Starting new initialization for: ${version}`);
 
       const initPromise = (async (): Promise<BibleDatabase> => {
         let db: BibleDatabase | null = null;
@@ -144,13 +146,11 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
           openDatabases.current.set(version, db);
 
-          console.log(`Database initialized successfully: ${version}`);
           return db;
         } catch (error) {
           if (db) {
             openDatabases.current.delete(version);
           }
-          console.error("Failed to initialize database:", error);
           const errorMessage =
             error instanceof Error
               ? error.message
@@ -186,33 +186,22 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     const commentaryVersion = BIBLE_TO_COMMENTARY_MAP[version];
 
     if (commentaryVersion) {
-      if (openDatabases.current.has(commentaryVersion)) {
-        console.log(`Commentary already loaded: ${commentaryVersion}`);
-      } else {
         try {
-          console.log(`Preloading commentary: ${commentaryVersion}`);
           const db = new BibleDatabase(commentaryVersion);
           await db.init();
           openDatabases.current.set(commentaryVersion, db);
-          console.log(
-            `Successfully preloaded commentary: ${commentaryVersion}`
-          );
         } catch (error) {
           console.warn(
             `Failed to preload commentary ${commentaryVersion}:`,
             error
           );
         }
-      }
-    } else {
-      console.log(`No commentary available for ${version}`);
     }
 
     if (version.includes("+")) {
       const dictionaryVersion = "secedictionary.sqlite3";
       if (!openDatabases.current.has(dictionaryVersion)) {
         try {
-          console.log(`Preloading dictionary: ${dictionaryVersion}`);
           const db = new BibleDatabase(dictionaryVersion);
           const initPromise = db.init();
           const timeoutPromise = new Promise((_, reject) =>
@@ -224,9 +213,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
           await Promise.race([initPromise, timeoutPromise]);
           openDatabases.current.set(dictionaryVersion, db);
-          console.log(
-            `Successfully preloaded dictionary: ${dictionaryVersion}`
-          );
         } catch (error) {
           console.warn(
             `Failed to preload dictionary ${dictionaryVersion}:`,
@@ -264,7 +250,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
           if (db) {
             await db.close();
             openDatabases.current.delete(version);
-            console.log(`Closed secondary database: ${version}`);
           }
         } catch (error) {
           console.warn(`Error closing secondary database ${version}:`, error);
@@ -279,8 +264,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
       try {
         const savedVersion = await AsyncStorage.getItem(STORAGE_KEY);
         const versionToLoad = savedVersion || currentVersion;
-        console.log(`Loading version: ${versionToLoad}`);
-
         const db = await initializeDatabase(versionToLoad, true);
         setCurrentVersion(versionToLoad);
         setBibleDB(db);
@@ -310,8 +293,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         console.warn("Cannot switch to commentary database as main Bible");
         return;
       }
-
-      console.log(`Switching to version: ${newVersion}`);
       setIsInitializing(true);
       setInitializationError(null);
 
@@ -335,7 +316,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         const db = await initializeDatabase(newVersion, true);
         setCurrentVersion(newVersion);
         setBibleDB(db);
-        console.log(`Successfully switched to: ${newVersion}`);
         if (
           newCommentaryVersion &&
           !openDatabases.current.has(newCommentaryVersion)
@@ -415,7 +395,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
 
   useEffect(() => {
     const handleMemoryWarning = async () => {
-      console.log("Low memory warning received - closing secondary databases");
       try {
         await closeSecondaryDatabases();
       } catch (error) {
@@ -450,7 +429,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     closeSecondaryDatabases,
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     return () => {
       openDatabases.current.forEach((db) => {
         try {

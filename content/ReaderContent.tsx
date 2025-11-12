@@ -964,7 +964,7 @@ export const ReaderContent: React.FC<ReaderContentProps> = ({
                 fontWeight: "bold",
               }}
             >
-              {isFullScreen ? "◱" : "◲"}
+              {isFullScreen ? "▢" : "⛶"}
             </Text>
           </TouchableOpacity>
         </View>

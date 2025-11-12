@@ -1,4 +1,4 @@
-import React, { JSX, useCallback, useEffect, useRef, useState } from "react";
+import { JSX, useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated, Easing } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 import { Fonts } from "../utils/fonts";

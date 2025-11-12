@@ -1,5 +1,4 @@
-// context/HighlightsContext.tsx
-import React, {
+import {
   createContext,
   useState,
   useContext,

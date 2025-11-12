@@ -1,4 +1,3 @@
-import React from "react";
 import {
   View,
   ImageBackground,
@@ -24,7 +23,7 @@ export const BackgroundTexture: React.FC<BackgroundTextureProps> = ({
   overlayStyle,
   overlayKey,
   style,
-  resizeMode = "repeat",
+  resizeMode = "cover",
 }) => {
   if (!hasBg || !source) {
     return <View style={style}>{children}</View>;

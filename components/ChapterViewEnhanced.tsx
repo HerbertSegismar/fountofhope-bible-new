@@ -1,9 +1,6 @@
-// Updated ChapterViewEnhanced.tsx
 import React, {
   useMemo,
-  useState,
   useCallback,
-  useEffect,
   useRef,
 } from "react";
 import {
@@ -15,7 +12,6 @@ import {
   LayoutChangeEvent,
   DimensionValue,
   ScrollView,
-  ActivityIndicator,
   TextStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,12 +20,7 @@ import { useTheme } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BOOK_ABBREVS } from "../utils/bookAbbrevs";
-import { getTestament } from "../utils/testamentUtils";
-import { getDatabaseFilename } from "../utils/bibleDatabaseUtils";
-import { parseVerseList } from "../utils/verseUtils";
 import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
-import { useCommentary } from "../hooks/useCommentary";
-import { useWordDictionary } from "../hooks/useWordDictionary";
 import { BackgroundTexture } from "../components/BackgroundTexture";
 import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 import { Fonts } from "../utils/fonts";

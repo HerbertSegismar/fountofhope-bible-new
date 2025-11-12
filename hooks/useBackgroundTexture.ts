@@ -30,7 +30,6 @@ export const useBackgroundTexture = (
   const hasIndexOverride = overrideIndex !== undefined;
   const hasOpacityOverride = overrideOpacity !== undefined;
 
-  // Sync overrides to state
   useEffect(() => {
     if (hasIndexOverride) {
       setInternalIndex(overrideIndex);
@@ -43,7 +42,6 @@ export const useBackgroundTexture = (
     }
   }, [overrideOpacity, hasOpacityOverride]);
 
-  // Load from storage if no override
   useEffect(() => {
     if (hasIndexOverride || noBackground) return;
 

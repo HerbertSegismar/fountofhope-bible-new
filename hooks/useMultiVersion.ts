@@ -1,4 +1,3 @@
-// useMultiVersion Hook
 import { useState, useCallback, useRef, useEffect } from "react";
 import { Alert, ScrollView } from "react-native";
 import { Verse } from "../types";
