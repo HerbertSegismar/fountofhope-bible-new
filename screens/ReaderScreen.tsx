@@ -1026,7 +1026,7 @@ export default function ReaderScreen({
     (verse: Verse) => {
       const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
       Alert.alert(
-        `${verse.book_name} ${verse.chapter}:${verse.verse}`,
+        `${bookName} ${verse.chapter}:${verse.verse}`,
         "Options:",
         [
           { text: "Cancel", style: "cancel" },
@@ -1040,10 +1040,6 @@ export default function ReaderScreen({
               addBookmark(verse);
               Alert.alert("Bookmarked!", "Verse added to bookmarks.");
             },
-          },
-          {
-            text: "Center Verse",
-            onPress: () => setPrimaryTargetVerse(verse.verse),
           },
           {
             text: "Share",
@@ -1063,7 +1059,7 @@ export default function ReaderScreen({
     (verse: Verse) => {
       const isHighlighted = secondaryHighlightedVerses.includes(verse.verse);
       Alert.alert(
-        `${verse.book_name} ${verse.chapter}:${verse.verse}`,
+        `${bookName} ${verse.chapter}:${verse.verse}`,
         "Options:",
         [
           { text: "Cancel", style: "cancel" },
@@ -1076,12 +1072,6 @@ export default function ReaderScreen({
             onPress: () => {
               addBookmark(verse);
               Alert.alert("Bookmarked!", "Verse added to bookmarks.");
-            },
-          },
-          {
-            text: "Center Verse",
-            onPress: () => {
-              setSecondaryTargetVerse(verse.verse);
             },
           },
           {

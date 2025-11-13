@@ -25,7 +25,7 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { getDatabaseFilename } from "../utils/bibleDatabaseUtils";
 import { parseVerseList } from "../utils/verseUtils";
 import { BIBLE_BOOKS_MAP, getTestament } from "../utils/testamentUtils";
-import { VerseDisplay } from "./ChapterViewEnhanced";
+import { VerseDisplay } from "./VerseDisplay";
 
 type DictHistoryEntry = {
   digits: string;

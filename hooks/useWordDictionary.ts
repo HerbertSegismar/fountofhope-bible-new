@@ -59,13 +59,34 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
 
   const loadWordDefinition = useCallback(
     async (word: string): Promise<string> => {
-      if (!word || !/^[a-zA-Z\u00C0-\u00FF]{2,}$/.test(word)) {
+      word = word.trim();
+      if (!word || !/^[a-zA-Z\u00C0-\u00FF\s]{2,}$/.test(word)) {
         return `Word: "${word}"`;
       }
+
+      const hasSpace = /\s/.test(word);
+      const lowerWord = word.toLowerCase();
 
       try {
         const dictionaryDB = await getDatabase("atsbd.dictionary.sqlite3");
         if (!dictionaryDB) {
+          // Fallback to parts if phrase and DB not loaded
+          if (hasSpace) {
+            const parts = word.split(/\s+/);
+            const partDefs = await Promise.all(
+              parts
+                .filter((p) => p.length >= 2)
+                .map((part) => loadWordDefinition(part))
+            );
+            const validDefs = partDefs.filter(
+              (def) =>
+                !def.startsWith("No definition found") &&
+                !def.startsWith("Error")
+            );
+            if (validDefs.length > 0) {
+              return validDefs.join("\n\n");
+            }
+          }
           return `Word: "${word}" (Dictionary database not loaded)`;
         }
 
@@ -73,10 +94,12 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
 
         let searchTopic = word;
         let isExactMatch = false;
+        let definition: string | null = null;
 
         const topicExists = await dictionaryDB.topicExists(word);
         if (topicExists) {
           isExactMatch = true;
+          definition = await dictionaryDB.getDefinitionFromTopic(word);
         } else {
           console.log(
             `No exact entry found for topic ${word}, searching for similar...`
@@ -84,23 +107,72 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
 
           const allTopics: string[] = await dictionaryDB.getAllTopics();
           if (!allTopics || allTopics.length === 0) {
+            // Fallback to parts if phrase and no topics
+            if (hasSpace) {
+              const parts = word.split(/\s+/);
+              const partDefs = await Promise.all(
+                parts
+                  .filter((p) => p.length >= 2)
+                  .map((part) => loadWordDefinition(part))
+              );
+              const validDefs = partDefs.filter(
+                (def) =>
+                  !def.startsWith("No definition found") &&
+                  !def.startsWith("Error")
+              );
+              if (validDefs.length > 0) {
+                return validDefs.join("\n\n");
+              }
+            }
             return `No definition found for word "${word}"`;
           }
 
-          const bestMatch = findBestMatch(word, allTopics);
+          let bestMatch = findBestMatch(word, allTopics);
+          if (!bestMatch) {
+            // Try partial prefix match: topics starting with word + space
+            const partialMatches = allTopics.filter((t) =>
+              t.toLowerCase().startsWith(lowerWord + " ")
+            );
+            if (partialMatches.length > 0) {
+              // Pick the one with highest similarity
+              bestMatch = partialMatches.reduce((best, current) =>
+                getSimilarity(word, current) > getSimilarity(word, best)
+                  ? current
+                  : best
+              );
+              console.log(`Found partial prefix match: ${bestMatch}`);
+            }
+          }
+
           if (bestMatch) {
             console.log(
               `Found best match: ${bestMatch} with similarity ${(getSimilarity(word, bestMatch) * 100).toFixed(1)}%`
             );
             searchTopic = bestMatch;
+            definition = await dictionaryDB.getDefinitionFromTopic(bestMatch);
+            isExactMatch = false;
           } else {
+            // Fallback to parts if phrase and no similar match
+            if (hasSpace) {
+              const parts = word.split(/\s+/);
+              const partDefs = await Promise.all(
+                parts
+                  .filter((p) => p.length >= 2)
+                  .map((part) => loadWordDefinition(part))
+              );
+              const validDefs = partDefs.filter(
+                (def) =>
+                  !def.startsWith("No definition found") &&
+                  !def.startsWith("Error")
+              );
+              if (validDefs.length > 0) {
+                return validDefs.join("\n\n");
+              }
+            }
             console.log(`No similar entry found for topic ${word}`);
             return `No definition found for word "${word}"`;
           }
         }
-
-        const definition =
-          await dictionaryDB.getDefinitionFromTopic(searchTopic);
 
         if (definition) {
           let cleanedDefinition = stripTags(definition)
@@ -133,10 +205,43 @@ export const useWordDictionary = (displayVersion: string | undefined) => {
           console.log(
             `No definition found for ${isExactMatch ? "topic" : "matched topic"} ${searchTopic}`
           );
+          // Fallback to parts if phrase and no definition
+          if (hasSpace) {
+            const parts = word.split(/\s+/);
+            const partDefs = await Promise.all(
+              parts
+                .filter((p) => p.length >= 2)
+                .map((part) => loadWordDefinition(part))
+            );
+            const validDefs = partDefs.filter(
+              (def) =>
+                !def.startsWith("No definition found") &&
+                !def.startsWith("Error")
+            );
+            if (validDefs.length > 0) {
+              return validDefs.join("\n\n");
+            }
+          }
           return `No definition found for word "${word}"`;
         }
       } catch (error) {
         console.error(`[Word Dictionary] Error loading definition:`, error);
+        // Fallback to parts if phrase and error
+        if (hasSpace) {
+          const parts = word.split(/\s+/);
+          const partDefs = await Promise.all(
+            parts
+              .filter((p) => p.length >= 2)
+              .map((part) => loadWordDefinition(part))
+          );
+          const validDefs = partDefs.filter(
+            (def) =>
+              !def.startsWith("No definition found") && !def.startsWith("Error")
+          );
+          if (validDefs.length > 0) {
+            return validDefs.join("\n\n");
+          }
+        }
         return `Error loading definition for word "${word}". Please try again.`;
       }
     },
@@ -171,7 +276,7 @@ export const useCommentary = (displayVersion: string | undefined) => {
         ? commentaryDBMap[versionKey as keyof typeof commentaryDBMap]
         : undefined;
 
-      const isWordCandidate = /^[a-zA-Z\u00C0-\u00FF]{2,}$/.test(tagContent);
+      const isWordCandidate = /^[a-zA-Z\u00C0-\u00FF\s]{2,}$/.test(tagContent);
 
       if (!dbName) {
         if (isWordCandidate) {
@@ -226,7 +331,6 @@ export const useCommentary = (displayVersion: string | undefined) => {
                   `Found best commentary marker match: ${bestMatch} with similarity ${(getSimilarity(tagContent, bestMatch) * 100).toFixed(1)}%`
                 );
                 searchMarker = bestMatch;
-                isExactMatch = false; 
                 const bestCommentaryText = await commentaryDB.getCommentary(
                   verse.book_number,
                   verse.chapter,
@@ -234,9 +338,7 @@ export const useCommentary = (displayVersion: string | undefined) => {
                   searchMarker
                 );
                 if (bestCommentaryText) {
-                  const header = isExactMatch
-                    ? ""
-                    : `\n\n${tagContent} (matched marker: ${searchMarker})`;
+                  const header = `\n\n${tagContent} (matched marker: ${searchMarker})`;
                   fallbackToWord = false;
                   return {
                     text: `${header}\n\n${stripTags(bestCommentaryText)}`,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import ColorWheelPicker from "./components/ColorWheelPicker";
 import {
@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   Modal,
   TouchableWithoutFeedback,
+  StyleSheet,
 } from "react-native";
 import * as Font from "expo-font";
 
@@ -54,7 +55,7 @@ export type RootStackParamList = {
 
 function useFonts() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [fontError, setFontError] = useState<string | null>(null);
+  const [, setFontError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -144,66 +145,73 @@ function HeaderActions({ navigation }: { navigation: any }) {
     setShowColorPicker,
   } = useTheme();
 
-  const handleColorSchemePress = () => {
+  const handleColorSchemePress = useCallback(() => {
     const currentIndex = colorSchemes.findIndex((s) => s.name === colorScheme);
     const nextIndex = (currentIndex + 1) % colorSchemes.length;
     setColorScheme(colorSchemes[nextIndex].name);
-  };
+  }, [colorSchemes, colorScheme, setColorScheme]);
 
-  const handleColorSchemeLongPress = () => {
+  const handleColorSchemeLongPress = useCallback(() => {
     setShowColorPicker(true);
-  };
+  }, [setShowColorPicker]);
 
-  const menuItems: MenuItem[] = [
-    {
-      key: "home",
-      name: "Home",
-      icon: "home",
-      onPress: () => navigation.navigate("Home"),
-    },
-    {
-      key: "bible",
-      name: "Bible",
-      icon: "book",
-      onPress: () => navigation.navigate("BookList"),
-    },
-    {
-      key: "search",
-      name: "Search",
-      icon: "search",
-      onPress: () => navigation.navigate("Search"),
-    },
-    {
-      key: "bookmarks",
-      name: "Bookmarks",
-      icon: "bookmark",
-      onPress: () => navigation.navigate("Bookmarks"),
-    },
-    {
-      key: "settings",
-      name: "Settings",
-      icon: "settings",
-      onPress: () => navigation.navigate("Settings"),
-    },
-    {
-      key: "theme",
-      name: theme === "light" ? "Dark Mode" : "Light Mode",
-      icon: theme === "light" ? "moon" : "sunny",
-      onPress: toggleTheme,
-    },
-    {
-      key: "colors",
-      name: "Color Scheme",
-      icon: "color-palette",
-      onPress: handleColorSchemePress,
-    },
-    {
-      key: "close",
-      name: "Close",
-      icon: "close",
-      onPress: () => setShowDropdown(false),
-    },
-  ];
+  const closeDropdown = useCallback(() => {
+    setShowDropdown(false);
+  }, []);
+
+  const menuItems = useMemo<MenuItem[]>(
+    () => [
+      {
+        key: "home",
+        name: "Home",
+        icon: "home",
+        onPress: () => navigation.navigate("Home"),
+      },
+      {
+        key: "bible",
+        name: "Bible",
+        icon: "book",
+        onPress: () => navigation.navigate("BookList"),
+      },
+      {
+        key: "search",
+        name: "Search",
+        icon: "search",
+        onPress: () => navigation.navigate("Search"),
+      },
+      {
+        key: "bookmarks",
+        name: "Bookmarks",
+        icon: "bookmark",
+        onPress: () => navigation.navigate("Bookmarks"),
+      },
+      {
+        key: "settings",
+        name: "Settings",
+        icon: "settings",
+        onPress: () => navigation.navigate("Settings"),
+      },
+      {
+        key: "theme",
+        name: theme === "light" ? "Dark Mode" : "Light Mode",
+        icon: theme === "light" ? "moon" : "sunny",
+        onPress: toggleTheme,
+      },
+      {
+        key: "colors",
+        name: "Color Scheme",
+        icon: "color-palette",
+        onPress: handleColorSchemePress,
+      },
+      {
+        key: "close",
+        name: "Close",
+        icon: "close",
+        onPress: closeDropdown,
+      },
+    ],
+    [navigation, toggleTheme, theme, handleColorSchemePress, closeDropdown]
+  );
 
   const filteredMenuItems = useMemo(
     () =>
@@ -215,6 +223,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
     () => menuItems.find((item) => item.key === "theme"),
     [menuItems]
   );
+
   const colorItem = useMemo(
     () => menuItems.find((item) => item.key === "colors"),
     [menuItems]
@@ -225,10 +234,35 @@ function HeaderActions({ navigation }: { navigation: any }) {
   const borderColor = "rgba(255,255,255,0.3)";
   const iconColor = "#fff";
 
+  const dropdownStyle = useMemo(
+    () => [styles.dropdownStatic, { backgroundColor: dropdownBgColor }],
+    [dropdownBgColor]
+  );
+
+  const textStyle = useMemo(
+    () => [styles.dropdownText, { color: textColor }],
+    [textColor]
+  );
+
+  const borderBottomStyle = useMemo(
+    () => [styles.dropdownBorderBottom, { borderBottomColor: borderColor }],
+    [borderColor]
+  );
+
+  const handleMenuItemPress = useCallback(
+    (item: MenuItem) => {
+      item.onPress();
+      if (item.key !== "close") {
+        closeDropdown();
+      }
+    },
+    [closeDropdown]
+  );
+
   if (!isPortrait) {
     return (
       <View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <View style={styles.landscapeMenuContainer}>
           {menuItems.slice(0, -1).map((item) => (
             <TouchableOpacity
               key={item.key}
@@ -236,11 +270,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
               onLongPress={
                 item.key === "colors" ? handleColorSchemeLongPress : undefined
               }
-              style={{
-                paddingHorizontal: 8,
-                paddingVertical: 8,
-                marginRight: 8,
-              }}
+              style={styles.landscapeMenuItem}
             >
               <Ionicons name={item.icon} size={24} color={iconColor} />
             </TouchableOpacity>
@@ -253,9 +283,12 @@ function HeaderActions({ navigation }: { navigation: any }) {
 
   return (
     <View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+      <View style={styles.portraitHeaderContainer}>
         {themeItem && (
-          <TouchableOpacity onPress={themeItem.onPress} style={{ padding: 8 }}>
+          <TouchableOpacity
+            onPress={themeItem.onPress}
+            style={styles.portraitHeaderButton}
+          >
             <Ionicons name={themeItem.icon} size={24} color={iconColor} />
           </TouchableOpacity>
         )}
@@ -263,14 +296,14 @@ function HeaderActions({ navigation }: { navigation: any }) {
           <TouchableOpacity
             onPress={colorItem.onPress}
             onLongPress={handleColorSchemeLongPress}
-            style={{ padding: 8 }}
+            style={styles.portraitHeaderButton}
           >
             <Ionicons name={colorItem.icon} size={24} color={iconColor} />
           </TouchableOpacity>
         )}
         <TouchableOpacity
           onPress={() => setShowDropdown(true)}
-          style={{ paddingHorizontal: 8, paddingVertical: 8 }}
+          style={styles.portraitHeaderButton}
         >
           <Ionicons name="ellipsis-vertical" size={24} color={iconColor} />
         </TouchableOpacity>
@@ -280,62 +313,30 @@ function HeaderActions({ navigation }: { navigation: any }) {
         visible={showDropdown}
         transparent
         animationType="fade"
-        onRequestClose={() => setShowDropdown(false)}
+        onRequestClose={closeDropdown}
       >
-        <TouchableWithoutFeedback onPress={() => setShowDropdown(false)}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "transparent",
-              justifyContent: "flex-start",
-              alignItems: "flex-end",
-              marginTop: 105,
-            }}
-          >
+        <TouchableWithoutFeedback onPress={closeDropdown}>
+          <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <View
-                style={{
-                  backgroundColor: dropdownBgColor,
-                  borderRadius: 8,
-                  paddingVertical: 8,
-                  minWidth: 160,
-                  marginTop: 0,
-                  marginRight: 16,
-                  shadowColor: "#000",
-                  shadowOffset: { width: 0, height: 2 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 4,
-                  elevation: 5,
-                }}
-              >
+              <View style={dropdownStyle}>
                 {filteredMenuItems.map((item, index) => (
                   <TouchableOpacity
                     key={item.key}
-                    onPress={() => {
-                      item.onPress();
-                      if (item.key !== "close") {
-                        setShowDropdown(false);
-                      }
-                    }}
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      paddingHorizontal: 12,
-                      paddingVertical: 8,
-                      borderBottomWidth:
-                        index === filteredMenuItems.length - 1 ? 0 : 1,
-                      borderBottomColor: borderColor,
-                    }}
+                    onPress={() => handleMenuItemPress(item)}
+                    style={[
+                      styles.dropdownMenuItem,
+                      index === filteredMenuItems.length - 1
+                        ? undefined
+                        : borderBottomStyle,
+                    ]}
                   >
                     <Ionicons
                       name={item.icon}
                       size={20}
                       color={iconColor}
-                      style={{ marginRight: 12 }}
+                      style={styles.dropdownIcon}
                     />
-                    <Text style={{ color: textColor, fontSize: 16 }}>
-                      {item.name}
-                    </Text>
+                    <Text style={textStyle}>{item.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -348,6 +349,61 @@ function HeaderActions({ navigation }: { navigation: any }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  landscapeMenuContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  landscapeMenuItem: {
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    marginRight: 8,
+  },
+  portraitHeaderContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  portraitHeaderButton: {
+    padding: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "transparent",
+    justifyContent: "flex-start",
+    alignItems: "flex-end",
+    marginTop: 105,
+  },
+  dropdownStatic: {
+    borderRadius: 8,
+    paddingVertical: 8,
+    minWidth: 160,
+    marginTop: 0,
+    marginRight: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  dropdownMenuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  dropdownBorderBottom: {
+    borderBottomWidth: 1,
+  },
+  dropdownIcon: {
+    marginRight: 12,
+  },
+  dropdownText: {
+    fontSize: 16,
+  },
+});
 
 const RootStack = createStackNavigator<RootStackParamList>();
 
