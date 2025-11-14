@@ -763,6 +763,20 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
     useEffect(() => {
       if (modalStack.length === 0) {
         setVisible(false);
+        setModalView("commentary");
+        setTagContent("");
+        setSelectedVerse(null);
+        setCommentaryLoading(false);
+        setCommentaryText("");
+        setCurrentVerseRef(null);
+        setVerseLoading(false);
+        setVerseVerses([]);
+        setLoadedUpTo(0);
+        setDictHistory([]);
+        setCurrentDictIndex(-1);
+        setSelectedWord("");
+        setWordDefinition("");
+        setWordLoading(false);
         return;
       }
       const top = modalStack[modalStack.length - 1];

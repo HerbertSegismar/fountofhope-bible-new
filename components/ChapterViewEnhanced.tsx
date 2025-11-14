@@ -155,9 +155,10 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   };
 
   const renderVerseItem = (verse: Verse) => {
-    const isHighlighted =
-      highlightedVerses.has(verse.verse) || verse.verse === highlightVerse;
-    const verseTextColor = isHighlighted
+    const isFullHighlighted = highlightedVerses.has(verse.verse);
+    const isNavigationHighlighted = verse.verse === highlightVerse;
+    const shouldHighlightNumber = isFullHighlighted || isNavigationHighlighted;
+    const verseTextColor = isFullHighlighted
       ? themeColors.highlightText
       : themeColors.textPrimary;
     const localOnTagPress = useCallback(
@@ -170,11 +171,6 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
       modalRef.current?.openWord(word);
     }, []);
     const indicatorSize = isFullScreen ? fontSize * 0.7 : fontSize * 0.8;
-    const starStyle = {
-      fontSize: indicatorSize * 0.9,
-      color: themeColors.highlightIcon,
-      fontFamily: actualFontFamily,
-    };
     return (
       <TouchableOpacity
         key={verse.verse}
@@ -185,15 +181,11 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
           style={[
             STYLES.verse,
             {
-              backgroundColor: isHighlighted
-                ? themeColors.highlightBg
-                : "transparent",
+              backgroundColor: "transparent",
               borderRadius: 6,
-              padding: isHighlighted ? (isFullScreen ? 4 : 8) : 0,
-              borderWidth: isHighlighted ? 1 : 0,
-              borderColor: isHighlighted
-                ? themeColors.highlightBorder
-                : "transparent",
+              padding: 0,
+              borderWidth: 0,
+              borderColor: "transparent",
               marginBottom: isFullScreen ? 2 : 4,
             },
           ]}
@@ -211,7 +203,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
               textColor={verseTextColor}
               showVerseNumbers={showVerseNumbers}
               showHeader={true}
-              isHighlighted={isHighlighted}
+              isHighlighted={shouldHighlightNumber}
             />
             {bookmarkedVerses.has(verse.verse) && (
               <Ionicons
@@ -220,10 +212,9 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
                 color={themeColors.primary}
               />
             )}
-            {isHighlighted && <Text style={starStyle}>★</Text>}
             {(showVerseNumbers ||
               bookmarkedVerses.has(verse.verse) ||
-              isHighlighted) && (
+              shouldHighlightNumber) && (
               <Text style={{ fontSize: indicatorSize * 0.5 }}> </Text>
             )}
           </View>

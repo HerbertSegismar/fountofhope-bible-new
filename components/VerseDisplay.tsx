@@ -497,7 +497,6 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
         fontSize,
         lineHeight: fontSize * 1.4,
         flexShrink: 1,
-        flexWrap: "wrap",
         color: textColor,
         fontFamily,
       }}

@@ -281,23 +281,52 @@ class BibleDatabase {
     bookNumber: number,
     chapter: number,
     verse: number,
-    marker: string
+    marker: string | string[] // Updated to support single or array (prevents binding errors)
   ): Promise<string | null> {
-    return this.withRetry(async () => {
-      await this.ensureInitialized();
+    // Explicitly check if this is a commentary database before proceeding
+    if (!this.isCommentaryDatabase()) {
+      return null;
+    }
 
-      if (!(await this.tableExists("commentaries"))) {
-        return null;
-      }
+    return this.withRetry(
+      async () => {
+        await this.ensureInitialized();
 
-      const result = await this.db!.getFirstAsync<{ text: string }>(
-        `SELECT text FROM commentaries 
-         WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
-        [bookNumber, chapter, verse, marker]
-      );
+        if (!(await this.tableExists("commentaries"))) {
+          return null;
+        }
 
-      return result?.text || null;
-    }, `getCommentary(${bookNumber}, ${chapter}, ${verse}, ${marker})`);
+        // Helper to fetch a single marker
+        const fetchSingle = async (m: string): Promise<string | null> => {
+          const result = await this.db!.getFirstAsync<{ text: string }>(
+            `SELECT text FROM commentaries 
+           WHERE book_number = ? AND chapter_number_from = ? AND verse_number_from = ? AND marker = ?`,
+            [bookNumber, chapter, verse, m]
+          );
+          return result?.text || null;
+        };
+
+        let texts: string[] = [];
+        if (typeof marker === "string") {
+          const singleText = await fetchSingle(marker);
+          if (singleText) texts = [singleText];
+        } else if (Array.isArray(marker)) {
+          const results = await Promise.all(marker.map(fetchSingle));
+          texts = results.filter((t): t is string => t !== null);
+        } else {
+          // Invalid type guard
+          throw new BibleDatabaseError(
+            `Invalid marker type: expected string or string[], got ${typeof marker}`,
+            null,
+            `getCommentary(${bookNumber}, ${chapter}, ${verse}, ${JSON.stringify(marker)})`
+          );
+        }
+
+        // Join multiple texts with a separator (customize as needed)
+        return texts.length > 0 ? texts.join("\n\n---\n\n") : null;
+      },
+      `getCommentary(${bookNumber}, ${chapter}, ${verse}, ${JSON.stringify(marker)})`
+    );
   }
 
   async getAvailableCommentaryMarkers(
@@ -305,6 +334,11 @@ class BibleDatabase {
     chapter: number,
     verse: number
   ): Promise<string[]> {
+    // Explicitly check if this is a commentary database before proceeding
+    if (!this.isCommentaryDatabase()) {
+      return [];
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
 
@@ -403,11 +437,19 @@ class BibleDatabase {
       await this.setupDatabase();
       this.db = await SQLite.openDatabaseAsync(
         this.dbName,
-        undefined,
+        { useNewConnection: true },
         this.sqliteDirectory
       );
-      await this.runMigrations();
-      await this.verifyDatabase();
+      try {
+        await this.runMigrations();
+      } catch (migError) {
+        console.warn(`Skipping migrations for ${this.dbName}:`, migError);
+      }
+      try {
+        await this.verifyDatabase();
+      } catch (verr) {
+        console.warn(`Skipping verification for ${this.dbName}:`, verr);
+      }
       this.isInitialized = true;
       console.log(`Bible database ${this.dbName} initialized ✅`);
     } catch (error) {
@@ -417,6 +459,18 @@ class BibleDatabase {
         operation: "initializeDatabase",
       });
       this.initializationPromise = null;
+      // Ensure cleanup on failure
+      if (this.db) {
+        try {
+          await this.db.closeAsync();
+        } catch (closeError) {
+          console.error(
+            "Failed to close database on init failure:",
+            closeError
+          );
+        }
+        this.db = null;
+      }
       throw new BibleDatabaseError(
         "Failed to initialize database",
         error,
@@ -534,25 +588,41 @@ class BibleDatabase {
       throw new BibleDatabaseError("Database not open", null, "runMigrations");
 
     try {
-      await this.db.execAsync(`
-        CREATE TABLE IF NOT EXISTS schema_version (
-          version INTEGER PRIMARY KEY,
-          applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
+      // Create schema_version table if not exists, with error handling
+      try {
+        await this.db.execAsync(`
+          CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+      } catch (createError) {
+        console.warn(
+          `Failed to create schema_version table (may already exist):`,
+          createError
+        );
+      }
 
       let currentVersion = 0;
+      // Get current version with error handling
       try {
         const versionRow = await this.db.getFirstAsync<{ version: number }>(
           "SELECT MAX(version) as version FROM schema_version"
         );
         currentVersion = versionRow?.version ?? 0;
-      } catch {}
+      } catch (versionError) {
+        console.warn(
+          "Failed to retrieve current schema version, defaulting to 0:",
+          versionError
+        );
+        currentVersion = 0;
+      }
 
       const pendingMigrations = this.migrations.filter(
         (m) => m.version > currentVersion
       );
 
+      // Apply each pending migration individually with error handling
       for (const migration of pendingMigrations) {
         try {
           await this.db.execAsync(migration.sql);
@@ -560,11 +630,15 @@ class BibleDatabase {
             "INSERT INTO schema_version (version) VALUES (?)",
             [migration.version]
           );
+          console.log(
+            `Applied migration: ${migration.name} (v${migration.version})`
+          );
         } catch (mErr) {
           console.warn(`Skipping failed migration ${migration.name}:`, mErr);
         }
       }
     } catch (error) {
+      console.error("Unexpected error in runMigrations:", error);
       throw new BibleDatabaseError("Migration failed", error, "runMigrations");
     }
   }
@@ -785,9 +859,23 @@ class BibleDatabase {
       }
       return result;
     } catch (error) {
-      console.error(
-        `Operation ${operationName} failed after ${Date.now() - startTime}ms`
-      );
+      const duration = Date.now() - startTime;
+      console.error(`Operation ${operationName} failed after ${duration}ms`);
+      if (
+        error instanceof Error &&
+        (error.message.includes("SQLITE_") ||
+          error.message.includes("database is locked")) &&
+        this.db
+      ) {
+        console.warn(`Closing bad connection for ${operationName}`);
+        try {
+          await this.db.closeAsync();
+        } catch (closeError) {
+          console.error("Failed to close bad connection:", closeError);
+        }
+        this.db = null;
+        this.isInitialized = false;
+      }
       throw error;
     }
   }
@@ -803,7 +891,13 @@ class BibleDatabase {
     if (!this.isInitialized) await this.init();
   }
 
+  // Dictionary methods - these do not trigger commentary lookups
   async topicExists(word: string): Promise<boolean> {
+    // Explicitly check if this is a dictionary database before proceeding
+    if (!this.isDictionaryDatabase()) {
+      return false;
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
 
@@ -821,6 +915,11 @@ class BibleDatabase {
   }
 
   async getDefinitionFromTopic(topic: string): Promise<string | null> {
+    // Explicitly check if this is a dictionary database before proceeding
+    if (!this.isDictionaryDatabase()) {
+      return null;
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
 
@@ -838,6 +937,11 @@ class BibleDatabase {
   }
 
   async getDictionaryDefinition(strongNumber: string): Promise<string | null> {
+    // Explicitly check if this is a dictionary database before proceeding
+    if (!this.isDictionaryDatabase()) {
+      return null;
+    }
+
     return this.withRetry(async () => {
       await this.ensureInitialized();
 
@@ -855,6 +959,11 @@ class BibleDatabase {
   }
 
   async getAllTopics(): Promise<string[]> {
+    // Explicitly check if this is a dictionary database before proceeding
+    if (!this.isDictionaryDatabase()) {
+      return [];
+    }
+
     const cacheKey = "getAllTopics";
     const cached = this.cache.getQuery<string[]>(cacheKey);
     if (cached) return cached;
@@ -942,8 +1051,51 @@ class BibleDatabase {
   }
 }
 
+class DatabaseManager {
+  private databases = new Map<string, BibleDatabase>();
+
+  async getDatabase(dbName: string): Promise<BibleDatabase> {
+    if (!this.databases.has(dbName)) {
+      const db = new BibleDatabase(dbName);
+      this.databases.set(dbName, db);
+      await db.init();
+      console.log(`Database manager opened ${dbName}`);
+    }
+    return this.databases.get(dbName)!;
+  }
+
+  async closeDatabase(dbName: string): Promise<void> {
+    const db = this.databases.get(dbName);
+    if (db) {
+      await db.close();
+      this.databases.delete(dbName);
+      console.log(`Database manager closed ${dbName}`);
+    }
+  }
+
+  async closeAll(): Promise<void> {
+    for (const [dbName, db] of this.databases) {
+      await db.close();
+      console.log(`Database manager closed ${dbName}`);
+    }
+    this.databases.clear();
+  }
+
+  getOpenDatabases(): string[] {
+    return Array.from(this.databases.keys());
+  }
+
+  hasDatabase(dbName: string): boolean {
+    return this.databases.has(dbName);
+  }
+}
+
+const databaseManager = new DatabaseManager();
+
 export {
   BibleDatabase,
+  DatabaseManager,
+  databaseManager,
   BibleDatabaseError,
   Verse,
   Book,
