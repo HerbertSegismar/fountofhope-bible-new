@@ -71,7 +71,17 @@ export const stripTags = (text: string): string => {
     /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi,
     ""
   );
-  cleaned = cleaned.replace(/<[^>]*>/g, "");
+ cleaned = cleaned.replace(/<[^>]*>/g, (match, offset, string) => {
+   const nextIndex = offset + match.length;
+   if (
+     nextIndex < string.length &&
+     (string[nextIndex] === "." || string[nextIndex] === ";")
+   ) {
+     return "";
+   } else {
+     return " ";
+   }
+ });
   cleaned = cleaned.replace(
     /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
     ""

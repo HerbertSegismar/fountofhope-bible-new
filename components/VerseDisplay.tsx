@@ -87,7 +87,7 @@ const parseXmlTags = (text: string): ParsedNode[] => {
   return nodes;
 };
 
-let globalKey = 0; // Simple global key counter to avoid key collisions across renders
+let globalKey = 0;
 
 const renderTree = (
   tree: TreeNode[],
