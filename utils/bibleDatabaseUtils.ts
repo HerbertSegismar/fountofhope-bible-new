@@ -80,7 +80,7 @@ export const stripTags = (text: string): string => {
     }
     const nextChar = textAfter[0];
     // Plain number start: add newline
-    return nextChar >= "0" && nextChar <= "9" ? "\n" : "";
+    return nextChar >= "0" && nextChar <= "9" ? " " : "";
   });
   cleaned = cleaned.replace(
     /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
