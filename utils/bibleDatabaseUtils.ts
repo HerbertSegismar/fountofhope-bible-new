@@ -71,21 +71,22 @@ export const stripTags = (text: string): string => {
     /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi,
     ""
   );
- cleaned = cleaned.replace(/<[^>]*>/g, (match, offset, string) => {
-   const nextIndex = offset + match.length;
-   if (
-     nextIndex < string.length &&
-     (string[nextIndex] === "." || string[nextIndex] === ";")
-   ) {
-     return "";
-   } else {
-     return " ";
-   }
- });
+  cleaned = cleaned.replace(/<[^>]*>/g, (match, offset, string) => {
+    const pos = offset + match.length;
+    const textAfter = string.substring(pos);
+    if (/^\d+[a-zA-Z]/.test(textAfter)) {
+      // Verse reference: number followed by letter, do not add newline
+      return "";
+    }
+    const nextChar = textAfter[0];
+    // Plain number start: add newline
+    return nextChar >= "0" && nextChar <= "9" ? "\n" : "";
+  });
   cleaned = cleaned.replace(
     /&(?:larr|rarr|uarr|darr|harr|laquo|raquo|lt|gt);/gi,
     ""
   );
-  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  // Normalize spaces but preserve newlines
+  cleaned = cleaned.replace(/ +/g, " ").replace(/\n+/g, "\n").trim();
   return cleaned;
 };

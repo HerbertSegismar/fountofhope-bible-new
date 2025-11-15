@@ -513,38 +513,47 @@ const renderCommentaryWithVerseLinks = (
       case "see": {
         const refText = theMatch[0];
         const word = theMatch[1];
-        const wordStart = refText.indexOf(word);
-        const prefix = refText.substring(0, wordStart);
-        parts.push(
-          <Text key={parts.length} style={plainStyle}>
-            {prefix}
-          </Text>
-        );
-        parts.push(
-          <Text
-            key={parts.length}
-            onPress={() => onWordPress?.(word)}
-            style={{
-              ...plainStyle,
-              color: themeColors.primary,
-              textDecorationLine: "underline",
-              fontWeight: "600",
-            }}
-          >
-            {word}
-          </Text>
-        );
-        let trailingEnd = matchEnd;
-        while (trailingEnd < text.length && /\s/.test(text[trailingEnd])) {
-          trailingEnd++;
-        }
-        if (matchEnd < trailingEnd) {
+        if (word.toLowerCase() === "the") {
+          // Do not make it clickable; treat as plain text
           parts.push(
             <Text key={parts.length} style={plainStyle}>
-              {text.slice(matchEnd, trailingEnd)}
+              {refText}
             </Text>
           );
-          matchEnd = trailingEnd;
+        } else {
+          const wordStart = refText.indexOf(word);
+          const prefix = refText.substring(0, wordStart);
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {prefix}
+            </Text>
+          );
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={() => onWordPress?.(word)}
+              style={{
+                ...plainStyle,
+                color: themeColors.primary,
+                textDecorationLine: "underline",
+                fontWeight: "600",
+              }}
+            >
+              {word}
+            </Text>
+          );
+          let trailingEnd = matchEnd;
+          while (trailingEnd < text.length && /\s/.test(text[trailingEnd])) {
+            trailingEnd++;
+          }
+          if (matchEnd < trailingEnd) {
+            parts.push(
+              <Text key={parts.length} style={plainStyle}>
+                {text.slice(matchEnd, trailingEnd)}
+              </Text>
+            );
+            matchEnd = trailingEnd;
+          }
         }
         break;
       }
