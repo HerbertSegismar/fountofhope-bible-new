@@ -125,7 +125,7 @@ const renderCommentaryWithVerseLinks = (
   const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\s*\\d+(?::\\d+)?)?`;
   const VERSE_LIST = `(${VERSE_RANGE}(?:\\s*,\\s*${VERSE_RANGE})*)`;
   const fullRefRegex = new RegExp(
-    `(?:(${bookPattern})\\s+)?(\\d+)\\s*:\\s*${VERSE_LIST}\\b`,
+    `(?:(${bookPattern})\\.?\\s+)?(\\d+)\\s*:\\s*${VERSE_LIST}\\b`,
     "gi"
   );
   const continuationRegex = new RegExp(/[,;]\s*(${VERSE_LIST})\\b/gi);
@@ -135,10 +135,10 @@ const renderCommentaryWithVerseLinks = (
     "gi"
   );
   const chapVerseRegex = new RegExp(
-    `(?:(${bookPattern})\\s+)?(\\d+)(?:\\s*${DASH_PATTERN}\\s*(\\d+))?\\b`,
+    `(?:(${bookPattern})\\.?\\s+)?(\\d+)(?:\\s*${DASH_PATTERN}\\s*(\\d+))?\\b`,
     "gi"
   );
-  const seeRegex = /see\s+([A-Z\u00C0-\u00FF]{2,})/gi;
+  const seeRegex = /see\s+([A-Za-z\u00C0-\u00FF]{2,})/gi;
   const plainStyle: TextStyle = {
     color: themeColors.textPrimary,
     fontSize: 16,
@@ -148,7 +148,6 @@ const renderCommentaryWithVerseLinks = (
   const linkStyle: TextStyle = {
     ...plainStyle,
     color: themeColors.primary,
-    textDecorationLine: "underline",
   };
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -171,8 +170,17 @@ const renderCommentaryWithVerseLinks = (
     const chapVerseMatch = chapVerseRegex.exec(text);
     const chapVersePos = chapVerseMatch ? chapVerseMatch.index : Infinity;
     seeRegex.lastIndex = lastIndex;
-    const seeMatch = seeRegex.exec(text);
-    const seePos = seeMatch ? seeMatch.index : Infinity;
+    const seeRawMatch = seeRegex.exec(text);
+    let seePos = Infinity;
+    let seeMatchForUse: RegExpExecArray | null = null;
+    if (seeRawMatch) {
+      const word = seeRawMatch[1];
+      const isAllUpper = word === word.toUpperCase();
+      if (currentBookNum !== undefined ? isAllUpper : true) {
+        seePos = seeRawMatch.index;
+        seeMatchForUse = seeRawMatch;
+      }
+    }
     let minPos = Infinity;
     let selectedType:
       | "full"
@@ -202,7 +210,7 @@ const renderCommentaryWithVerseLinks = (
       minPos = chapVersePos;
       selectedType = "chapVerse";
     }
-    if (seePos < minPos && seeMatch !== null) {
+    if (seePos < minPos && seePos !== Infinity) {
       minPos = seePos;
       selectedType = "see";
     }
@@ -223,7 +231,7 @@ const renderCommentaryWithVerseLinks = (
         case "chapVerse":
           return chapVerseMatch![0];
         case "see":
-          return seeMatch![0];
+          return seeMatchForUse![0];
         default:
           return "";
       }
@@ -241,12 +249,12 @@ const renderCommentaryWithVerseLinks = (
         case "chapVerse":
           return chapVerseMatch!;
         case "see":
-          return seeMatch!;
+          return seeMatchForUse!;
         default:
           return null as never;
       }
     })();
-    const matchEnd = minPos + refText.length;
+    let matchEnd = minPos + refText.length;
     if (lastIndex < matchIndex) {
       parts.push(
         <Text key={parts.length} style={plainStyle}>
@@ -297,7 +305,6 @@ const renderCommentaryWithVerseLinks = (
                 const endV = parseInt(endStr);
                 if (!isNaN(endV) && !isNaN(startV)) {
                   if (endV < startV) {
-                    // Assume cross-chapter range to end of chapter
                     chapterEnd = endV;
                     startVerseForRange = startV;
                   } else {
@@ -468,58 +475,46 @@ const renderCommentaryWithVerseLinks = (
         }
         const num1 = parseInt(`${num1Str}`, 10);
         const num2 = num2Str ? parseInt(`${num2Str}`, 10) : undefined;
-        if (bookNum === undefined) {
+        const hasContext = !!bookStr || !!num2Str;
+        if (bookNum === undefined || !hasContext) {
           parts.push(
             <Text key={parts.length} style={plainStyle}>
               {refText}
             </Text>
           );
-        } else {
-          const isSingleChapterBook = SINGLE_CHAPTER_BOOKS.has(bookNum);
-          let onPressCallback;
-          let tempCurrentChapter: number;
-          if (isSingleChapterBook) {
-            const verseStart = num1;
-            const verseEnd = num2 !== undefined ? num2 : num1;
-            onPressCallback = () =>
-              onNavigate(bookNum, 1, [{ start: verseStart, end: verseEnd }]);
-            tempCurrentChapter = 1;
-          } else {
-            if (num2 !== undefined) {
-              onPressCallback = () =>
-                onNavigate(bookNum, num1, undefined, num2);
-              tempCurrentChapter = num2;
-            } else {
-              onPressCallback = () => onNavigate(bookNum, num1);
-              tempCurrentChapter = num1;
-            }
-          }
-          currentChapter = tempCurrentChapter;
-          parts.push(
-            <Text
-              key={parts.length}
-              onPress={onPressCallback}
-              style={linkStyle}
-            >
-              {refText}
-            </Text>
-          );
+          break;
         }
+        const isSingleChapterBook = SINGLE_CHAPTER_BOOKS.has(bookNum);
+        let onPressCallback;
+        let tempCurrentChapter: number;
+        if (isSingleChapterBook) {
+          const verseStart = num1;
+          const verseEnd = num2 !== undefined ? num2 : num1;
+          onPressCallback = () =>
+            onNavigate(bookNum, 1, [{ start: verseStart, end: verseEnd }]);
+          tempCurrentChapter = 1;
+        } else {
+          if (num2 !== undefined) {
+            onPressCallback = () => onNavigate(bookNum, num1, undefined, num2);
+            tempCurrentChapter = num2;
+          } else {
+            onPressCallback = () => onNavigate(bookNum, num1);
+            tempCurrentChapter = num1;
+          }
+        }
+        currentChapter = tempCurrentChapter;
+        parts.push(
+          <Text key={parts.length} onPress={onPressCallback} style={linkStyle}>
+            {refText}
+          </Text>
+        );
         break;
       }
       case "see": {
         const refText = theMatch[0];
         const word = theMatch[1];
-        const wordStart = refText.search(/[A-Z\u00C0-\u00FF]/);
+        const wordStart = refText.indexOf(word);
         const prefix = refText.substring(0, wordStart);
-        const matchEnd = minPos + refText.length;
-        if (lastIndex < minPos) {
-          parts.push(
-            <Text key={parts.length} style={plainStyle}>
-              {text.slice(lastIndex, minPos)}
-            </Text>
-          );
-        }
         parts.push(
           <Text key={parts.length} style={plainStyle}>
             {prefix}
@@ -539,7 +534,18 @@ const renderCommentaryWithVerseLinks = (
             {word}
           </Text>
         );
-        lastIndex = matchEnd;
+        let trailingEnd = matchEnd;
+        while (trailingEnd < text.length && /\s/.test(text[trailingEnd])) {
+          trailingEnd++;
+        }
+        if (matchEnd < trailingEnd) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {text.slice(matchEnd, trailingEnd)}
+            </Text>
+          );
+          matchEnd = trailingEnd;
+        }
         break;
       }
     }
