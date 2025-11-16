@@ -1,3 +1,4 @@
+// ReaderContent.tsx (Refactored)
 import React, {
   useCallback,
   useMemo,
@@ -9,7 +10,7 @@ import React, {
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   ActivityIndicator,
   LayoutChangeEvent,
@@ -157,7 +158,7 @@ const PrimaryHeader = memo(
         gap: isFullScreen ? 10 : 5,
       }}
     >
-      <TouchableOpacity
+      <Pressable
         onPress={openNavigation}
         style={{
           paddingHorizontal: 5,
@@ -176,8 +177,8 @@ const PrimaryHeader = memo(
         >
           {`${bookName} ${chapter}`}
         </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
+      </Pressable>
+      <Pressable
         onPress={openVersionSelector}
         style={{
           paddingHorizontal: 5,
@@ -196,7 +197,7 @@ const PrimaryHeader = memo(
         >
           {version}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     </View>
   )
 );
@@ -215,6 +216,7 @@ const ChevronButtons = memo(
     goToSecondaryPreviousChapter,
     goToSecondaryNextChapter,
     colors,
+    resetButtonOpacity,
   }: {
     isLandscape: boolean;
     showMultiVersion: boolean;
@@ -228,6 +230,7 @@ const ChevronButtons = memo(
     goToSecondaryPreviousChapter: () => void;
     goToSecondaryNextChapter: () => void;
     colors: any;
+    resetButtonOpacity: () => void;
   }) => {
     const pairGap = isLandscape ? 200 : 48;
     const buttonSize = 35;
@@ -235,37 +238,49 @@ const ChevronButtons = memo(
     if (!showMultiVersion || isLinked) {
       return (
         <>
-          <TouchableOpacity
-            onPress={goToPrimaryPreviousChapter}
-            disabled={primaryChapter <= 1}
-            style={{
-              width: buttonSize,
-              height: buttonSize,
-              backgroundColor: colors.primary,
-              borderRadius: "100%",
-              justifyContent: "center",
-              alignItems: "center",
-              marginLeft: 28,
-              opacity: primaryChapter <= 1 ? 0.3 : 1,
+          <Pressable
+            onPress={() => {
+              goToPrimaryPreviousChapter();
+              resetButtonOpacity();
             }}
+            disabled={primaryChapter <= 1}
+            style={({ pressed }) => [
+              {
+                width: buttonSize,
+                height: buttonSize,
+                backgroundColor: colors.primary,
+                borderRadius: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+                marginLeft: 28,
+                opacity: primaryChapter <= 1 ? 0.3 : 1,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              },
+            ]}
           >
             <Ionicons name="chevron-back" size={iconSize} color="white" />
-          </TouchableOpacity>
+          </Pressable>
           <View style={{ flex: 1, alignItems: "center" }} />
-          <TouchableOpacity
-            onPress={goToPrimaryNextChapter}
-            style={{
-              width: buttonSize,
-              height: buttonSize,
-              backgroundColor: colors.primary,
-              borderRadius: "100%",
-              justifyContent: "center",
-              alignItems: "center",
-              marginRight: 28,
+          <Pressable
+            onPress={() => {
+              goToPrimaryNextChapter();
+              resetButtonOpacity();
             }}
+            style={({ pressed }) => [
+              {
+                width: buttonSize,
+                height: buttonSize,
+                backgroundColor: colors.primary,
+                borderRadius: "100%",
+                justifyContent: "center",
+                alignItems: "center",
+                marginRight: 28,
+                transform: [{ scale: pressed ? 0.95 : 1 }],
+              },
+            ]}
           >
             <Ionicons name="chevron-forward" size={iconSize} color="white" />
-          </TouchableOpacity>
+          </Pressable>
         </>
       );
     } else {
@@ -285,70 +300,94 @@ const ChevronButtons = memo(
           <View
             style={{ flexDirection: "row", gap: pairGap, alignItems: "center" }}
           >
-            <TouchableOpacity
-              onPress={goToPrimaryPreviousChapter}
-              disabled={primaryPrevDisabled}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: primaryPrevDisabled ? 0.3 : 1,
+            <Pressable
+              onPress={() => {
+                goToPrimaryPreviousChapter();
+                resetButtonOpacity();
               }}
+              disabled={primaryPrevDisabled}
+              style={({ pressed }) => [
+                {
+                  width: buttonSize,
+                  height: buttonSize,
+                  backgroundColor: colors.primary,
+                  borderRadius: "100%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  opacity: primaryPrevDisabled ? 0.3 : 1,
+                  transform: [{ scale: pressed ? 0.95 : 1 }],
+                },
+              ]}
             >
               <Ionicons name="chevron-back" size={iconSize} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={goToPrimaryNextChapter}
-              disabled={primaryNextDisabled}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: primaryNextDisabled ? 0.3 : 1,
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                goToPrimaryNextChapter();
+                resetButtonOpacity();
               }}
+              disabled={primaryNextDisabled}
+              style={({ pressed }) => [
+                {
+                  width: buttonSize,
+                  height: buttonSize,
+                  backgroundColor: colors.primary,
+                  borderRadius: "100%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  opacity: primaryNextDisabled ? 0.3 : 1,
+                  transform: [{ scale: pressed ? 0.95 : 1 }],
+                },
+              ]}
             >
               <Ionicons name="chevron-forward" size={iconSize} color="white" />
-            </TouchableOpacity>
+            </Pressable>
           </View>
           <View
             style={{ flexDirection: "row", gap: pairGap, alignItems: "center" }}
           >
-            <TouchableOpacity
-              onPress={goToSecondaryPreviousChapter}
-              disabled={secondaryPrevDisabled}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: secondaryPrevDisabled ? 0.3 : 1,
+            <Pressable
+              onPress={() => {
+                goToSecondaryPreviousChapter();
+                resetButtonOpacity();
               }}
+              disabled={secondaryPrevDisabled}
+              style={({ pressed }) => [
+                {
+                  width: buttonSize,
+                  height: buttonSize,
+                  backgroundColor: colors.primary,
+                  borderRadius: "100%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  opacity: secondaryPrevDisabled ? 0.3 : 1,
+                  transform: [{ scale: pressed ? 0.95 : 1 }],
+                },
+              ]}
             >
               <Ionicons name="chevron-back" size={iconSize} color="white" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={goToSecondaryNextChapter}
-              disabled={secondaryNextDisabled}
-              style={{
-                width: buttonSize,
-                height: buttonSize,
-                backgroundColor: colors.primary,
-                borderRadius: "100%",
-                justifyContent: "center",
-                alignItems: "center",
-                opacity: secondaryNextDisabled ? 0.3 : 1,
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                goToSecondaryNextChapter();
+                resetButtonOpacity();
               }}
+              disabled={secondaryNextDisabled}
+              style={({ pressed }) => [
+                {
+                  width: buttonSize,
+                  height: buttonSize,
+                  backgroundColor: colors.primary,
+                  borderRadius: "100%",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  opacity: secondaryNextDisabled ? 0.3 : 1,
+                  transform: [{ scale: pressed ? 0.95 : 1 }],
+                },
+              ]}
             >
               <Ionicons name="chevron-forward" size={iconSize} color="white" />
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
       );
@@ -370,21 +409,25 @@ const ToggleButton = memo(
     colors: any;
     isLandscape: boolean;
   }) => {
+    const [pressed, setPressed] = useState(false);
     const toggleSize = 48;
     return (
-      <TouchableOpacity
+      <Pressable
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
         onPress={() => {
           onPress();
           resetButtonOpacity();
         }}
-        style={{
+        style={({ pressed: p }) => ({
           width: toggleSize,
           height: toggleSize,
           borderRadius: toggleSize / 2,
-          backgroundColor: colors.primary,
+          backgroundColor: p ? colors.primary + "CC" : colors.primary,
           justifyContent: "center",
           alignItems: "center",
-        }}
+          transform: [{ scale: p || pressed ? 0.95 : 1 }],
+        })}
       >
         <Text
           style={{
@@ -395,7 +438,7 @@ const ToggleButton = memo(
         >
           {isFullScreen ? "▢" : "⛶"}
         </Text>
-      </TouchableOpacity>
+      </Pressable>
     );
   }
 );
@@ -610,26 +653,30 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
   }, [
     props.primaryLoading,
     props.primaryVerses.length,
-    props.primaryLocation,
+    props.primaryLocation.bookId,
+    props.primaryLocation.chapter,
     primaryDisplay,
     props.primaryScrollViewRef,
     props.primaryHandleScroll,
     props.handlePrimaryContentSizeChange,
-    props.primaryProps,
+    props.primaryProps.handleScrollViewLayout,
+    props.primaryProps.chapterContainerRef,
+    props.primaryProps.handleChapterContainerLayout,
+    props.primaryProps.handleVerseLayout,
     props.fontSize,
     props.primaryOnVersePress,
     props.getHighlightVerse,
     primaryHighlightedSet,
     props.primaryBookmarkedVerses,
     props.isFullScreen,
-    props.colors,
+    props.colors.primary,
     bgHook.effectiveIndex,
     bgHook.effectiveOpacity,
     bgHook.hasSource,
     props.scrollEnabled,
   ]);
 
-  const renderSecondaryContent = useMemo(() => {
+  const renderSecondaryContent = useCallback(() => {
     const isPostLoadEmpty =
       !props.secondaryLoading && props.secondaryVerses.length === 0;
     if (props.secondaryLoading || (isPostLoadEmpty && !hasSecondaryFailed)) {
@@ -678,7 +725,8 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     props.secondaryLoading,
     hasSecondaryFailed,
     props.secondaryVerses.length,
-    props.secondaryLocation,
+    props.secondaryLocation.bookId,
+    props.secondaryLocation.chapter,
     secondaryDisplay,
     props.secondaryScrollViewRef,
     props.secondaryHandleScrollCb,
@@ -690,7 +738,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     secondaryHighlightedSet,
     props.secondaryBookmarkedVerses,
     props.isFullScreen,
-    props.colors,
+    props.colors.primary,
     bgHook.effectiveIndex,
     bgHook.effectiveOpacity,
     bgHook.hasSource,
@@ -757,7 +805,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
               colors={props.colors}
               isFullScreen={false}
             />
-            {renderSecondaryContent}
+            {renderSecondaryContent()}
           </View>
         </View>
       );
@@ -814,7 +862,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
               colors={props.colors}
               isFullScreen={true}
             />
-            {renderSecondaryContent}
+            {renderSecondaryContent()}
           </View>
         </View>
       );
@@ -906,6 +954,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
             goToSecondaryPreviousChapter={props.goToSecondaryPreviousChapter}
             goToSecondaryNextChapter={props.goToSecondaryNextChapter}
             colors={props.colors}
+            resetButtonOpacity={props.resetButtonOpacity}
           />
         </View>
         <View

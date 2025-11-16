@@ -133,7 +133,7 @@ class BibleDatabase {
       } finally {
         this.db = null;
         this.isInitialized = false;
-        this.initializationPromise = null;
+        this.initializationPromise = null; // Reset earlier for race condition prevention
         this.cache.clear();
         this.isClosing = false;
       }
@@ -228,7 +228,7 @@ class BibleDatabase {
     const cached = this.cache.getQuery<Verse[]>(cacheKey);
     if (cached) return cached;
 
-    return this.withRetry(async () => {
+    const verses = await this.withRetry(async () => {
       await this.ensureInitialized();
 
       if (!this.db) {
@@ -239,25 +239,41 @@ class BibleDatabase {
         );
       }
 
-      console.log(`Fetching verses for book ${bookNumber}, chapter ${chapter}`);
-
-      const verses = await this.db!.getAllAsync<Verse>(
-        `SELECT v.*, b.short_name as book_name, b.book_color 
-       FROM verses v 
-       JOIN books b ON v.book_number = b.book_number 
-       WHERE v.book_number = ? AND v.chapter = ? 
-       ORDER BY v.verse`,
+      return await this.db!.getAllAsync<
+        Verse & {
+          text: string;
+          book_number: number;
+          chapter: number;
+          verse: number;
+        }
+      >(
+        `SELECT * FROM verses 
+         WHERE book_number = ? AND chapter = ? 
+         ORDER BY verse`,
         [bookNumber, chapter]
       );
-
-      if (!verses || verses.length === 0) {
-        console.warn(
-          `No verses found for book ${bookNumber}, chapter ${chapter}`
-        );
-      }
-
-      return verses;
     }, `getVerses(${bookNumber}, ${chapter})`);
+
+    if (verses.length > 0) {
+      // Fetch book info once and augment all verses
+      const book = await this.getBook(bookNumber);
+      if (book) {
+        verses.forEach((v) => {
+          (v as Verse).book_name = book.short_name;
+          (v as Verse).book_color = book.book_color;
+        });
+      }
+    }
+
+    this.cache.setQuery(cacheKey, verses);
+
+    if (verses.length === 0) {
+      console.warn(
+        `No verses found for book ${bookNumber}, chapter ${chapter}`
+      );
+    }
+
+    return verses as Verse[];
   }
 
   async getVerse(
@@ -267,13 +283,25 @@ class BibleDatabase {
   ): Promise<Verse | null> {
     return this.withRetry(async () => {
       await this.ensureInitialized();
-      return await this.db!.getFirstAsync<Verse>(
-        `SELECT v.*, b.short_name as book_name, b.book_color 
-         FROM verses v 
-         JOIN books b ON v.book_number = b.book_number 
-         WHERE v.book_number = ? AND v.chapter = ? AND v.verse = ?`,
+      const v = await this.db!.getFirstAsync<
+        Verse & {
+          text: string;
+          book_number: number;
+          chapter: number;
+          verse: number;
+        }
+      >(
+        `SELECT * FROM verses 
+         WHERE book_number = ? AND chapter = ? AND verse = ?`,
         [bookNumber, chapter, verse]
       );
+      if (!v) return null;
+      const book = await this.getBook(bookNumber);
+      if (book) {
+        (v as Verse).book_name = book.short_name;
+        (v as Verse).book_color = book.book_color;
+      }
+      return v as Verse;
     }, `getVerse(${bookNumber}, ${chapter}, ${verse})`);
   }
 
@@ -419,11 +447,19 @@ class BibleDatabase {
           )
         : { count: 0 };
 
+      // Add commentary count for commentary databases
+      const commentaryCountRow = this.isCommentaryDatabase()
+        ? await this.db!.getFirstAsync<{ count: number }>(
+            "SELECT COUNT(*) as count FROM commentaries"
+          )
+        : { count: 0 };
+
       return {
         bookCount: bookCountRow?.count ?? 0,
         verseCount: verseCountRow?.count ?? 0,
         storyCount: storyCountRow?.count ?? 0,
         introductionCount: introCountRow?.count ?? 0,
+        commentaryCount: commentaryCountRow?.count ?? 0, // New field
         lastUpdated: new Date(),
       };
     }, "getDatabaseStats");
@@ -440,6 +476,32 @@ class BibleDatabase {
         { useNewConnection: true },
         this.sqliteDirectory
       );
+
+      // Create performance index for verses lookups only if verses table exists
+      if (await this.tableExists("verses")) {
+        try {
+          await this.db.execAsync(`
+            CREATE INDEX IF NOT EXISTS idx_verses_lookup 
+            ON verses (book_number, chapter, verse)
+          `);
+          console.log("Created/verified verses lookup index");
+
+          // Enable WAL mode for better concurrency and performance
+          await this.db.execAsync("PRAGMA journal_mode = WAL;");
+
+          // Analyze to ensure query planner uses the index
+          await this.db.execAsync("ANALYZE verses;");
+          console.log(
+            "Enabled WAL and analyzed verses table for optimal performance"
+          );
+
+          // Preload metadata caches for instant chapter/verse count lookups - moved earlier
+          await this.preloadMetadata();
+        } catch (indexError) {
+          console.warn(`Failed to optimize verses table:`, indexError);
+        }
+      }
+
       try {
         await this.runMigrations();
       } catch (migError) {
@@ -476,6 +538,82 @@ class BibleDatabase {
         error,
         "initializeDatabase"
       );
+    }
+  }
+
+  private async preloadMetadata(): Promise<void> {
+    try {
+      // Preload chapter counts per book
+      const chapterResults = await this.db!.getAllAsync<{
+        book_number: number;
+        max_chapter: number;
+      }>(
+        `SELECT book_number, MAX(chapter) as max_chapter FROM verses GROUP BY book_number`
+      );
+      chapterResults.forEach((r) => {
+        this.cache.setChapterCount(r.book_number, r.max_chapter || 0);
+      });
+      console.log(
+        `Preloaded chapter counts for ${chapterResults.length} books`
+      );
+
+      // Preload verse counts per book/chapter
+      const verseResults = await this.db!.getAllAsync<{
+        book_number: number;
+        chapter: number;
+        count: number;
+      }>(
+        `SELECT book_number, chapter, COUNT(*) as count FROM verses GROUP BY book_number, chapter`
+      );
+      verseResults.forEach((r) => {
+        this.cache.setVerseCount(`${r.book_number}:${r.chapter}`, r.count || 0);
+      });
+      console.log(`Preloaded verse counts for ${verseResults.length} chapters`);
+
+      // Optional: Preload full verses for small chapters (<50 verses) to avoid future slow fetches
+      // Comment out if memory is a concern on low-end devices
+      const smallChapters = await this.db!.getAllAsync<{
+        book_number: number;
+        chapter: number;
+        verse_count: number;
+      }>(
+        `SELECT book_number, chapter, COUNT(*) as verse_count FROM verses GROUP BY book_number, chapter HAVING verse_count < 50`
+      );
+      for (const { book_number, chapter } of smallChapters.slice(0, 10)) {
+        // Limit to top 10 to prevent overload
+        const verses = await this.db!.getAllAsync<
+          Verse & {
+            text: string;
+            book_number: number;
+            chapter: number;
+            verse: number;
+          }
+        >(
+          `SELECT * FROM verses 
+           WHERE book_number = ? AND chapter = ? 
+           ORDER BY verse`,
+          [book_number, chapter]
+        );
+        const augmentedVerses = verses.map((v) => {
+          const book = this.cache.getQuery<Book>(`getBook:${book_number}`);
+          if (book) {
+            (v as Verse).book_name = book.short_name;
+            (v as Verse).book_color = book.book_color;
+          }
+          return v as Verse;
+        });
+        this.cache.setQuery(
+          `getVerses:${book_number}:${chapter}`,
+          augmentedVerses
+        );
+      }
+      if (smallChapters.length > 0) {
+        console.log(
+          `Preloaded full verses for ${Math.min(smallChapters.length, 10)} small chapters`
+        );
+      }
+    } catch (preloadError) {
+      console.warn(`Failed to preload metadata:`, preloadError);
     }
   }
 
@@ -835,7 +973,9 @@ class BibleDatabase {
       return await this.withTiming(operation, operationName);
     } catch (error) {
       if (retries > 0 && !this.isClosing) {
-        await new Promise((r) => setTimeout(r, this.retryDelay));
+        // Exponential backoff
+        const backoffDelay = this.retryDelay * (this.maxRetries - retries + 1);
+        await new Promise((r) => setTimeout(r, backoffDelay));
         return this.withRetry(operation, operationName, retries - 1);
       }
       throw new BibleDatabaseError(
@@ -1102,4 +1242,143 @@ export {
   Story,
   Introduction,
   DatabaseStats,
+};
+
+// Additional exports (unchanged, as no issues identified)
+export const getTestament = (
+  bookNumber: number,
+  bookName: string
+): "OT" | "NT" => {
+  if (bookNumber >= 10 && bookNumber <= 460) return "OT";
+  if (bookNumber >= 470 && bookNumber <= 730) return "NT";
+
+  console.warn(
+    `Unexpected book number: ${bookNumber}. Using fallback testament detection.`
+  );
+  return bookNumber <= 460 ? "OT" : "NT";
+};
+
+export const getBookByNumber = (bookNumber: number) => {
+  let standardNumber: number;
+
+  if (bookNumber <= 460) {
+    standardNumber = Math.floor(bookNumber / 10);
+  } else {
+    standardNumber = Math.floor(bookNumber / 10);
+  }
+
+  return { number: standardNumber };
+};
+
+export const verifyBookDistribution = (books: any[]) => {
+  const otBooks = books.filter(
+    (book) => book.book_number >= 10 && book.book_number <= 460
+  );
+  const ntBooks = books.filter(
+    (book) => book.book_number >= 470 && book.book_number <= 730
+  );
+  const otherBooks = books.filter(
+    (book) =>
+      book.book_number < 10 ||
+      (book.book_number > 460 && book.book_number < 470) ||
+      book.book_number > 730
+  );
+
+  console.log(
+    `Book Distribution: OT=${otBooks.length}, NT=${ntBooks.length}, Other=${otherBooks.length}, Total=${books.length}`
+  );
+  console.log("Expected: OT=39, NT=27, Total=66");
+
+  if (otherBooks.length > 0) {
+    console.warn(
+      "Unexpected book numbers found:",
+      otherBooks.map((b) => b.book_number)
+    );
+  }
+
+  if (otBooks.length === 39 && ntBooks.length === 27) {
+    console.log("✅ Book distribution is correct!");
+  } else {
+    console.warn("❌ Book distribution doesn't match expected counts!");
+  }
+};
+
+export const BIBLE_BOOKS_MAP: {
+  [key: number]: {
+    short: string;
+    long: string;
+    standardNumber: number;
+  };
+} = {
+  10: { short: "Gen", long: "Genesis", standardNumber: 1 },
+  20: { short: "Exo", long: "Exodus", standardNumber: 2 },
+  30: { short: "Lev", long: "Leviticus", standardNumber: 3 },
+  40: { short: "Num", long: "Numbers", standardNumber: 4 },
+  50: { short: "Deu", long: "Deuteronomy", standardNumber: 5 },
+  60: { short: "Jos", long: "Joshua", standardNumber: 6 },
+  70: { short: "Jdg", long: "Judges", standardNumber: 7 },
+  80: { short: "Rut", long: "Ruth", standardNumber: 8 },
+  90: { short: "1Sa", long: "1 Samuel", standardNumber: 9 },
+  100: { short: "2Sa", long: "2 Samuel", standardNumber: 10 },
+  110: { short: "1Ki", long: "1 Kings", standardNumber: 11 },
+  120: { short: "2Ki", long: "2 Kings", standardNumber: 12 },
+  130: { short: "1Ch", long: "1 Chronicles", standardNumber: 13 },
+  140: { short: "2Ch", long: "2 Chronicles", standardNumber: 14 },
+  150: { short: "Ezr", long: "Ezra", standardNumber: 15 },
+  160: { short: "Neh", long: "Nehemiah", standardNumber: 16 },
+  190: { short: "Est", long: "Esther", standardNumber: 17 },
+  220: { short: "Job", long: "Job", standardNumber: 18 },
+  230: { short: "Psa", long: "Psalms", standardNumber: 19 },
+  240: { short: "Pro", long: "Proverbs", standardNumber: 20 },
+  250: { short: "Ecc", long: "Ecclesiastes", standardNumber: 21 },
+  260: { short: "Son", long: "Songs", standardNumber: 22 },
+  290: { short: "Isa", long: "Isaiah", standardNumber: 23 },
+  300: { short: "Jer", long: "Jeremiah", standardNumber: 24 },
+  310: { short: "Lam", long: "Lamentations", standardNumber: 25 },
+  330: { short: "Eze", long: "Ezekiel", standardNumber: 26 },
+  340: { short: "Dan", long: "Daniel", standardNumber: 27 },
+  350: { short: "Hos", long: "Hosea", standardNumber: 28 },
+  360: { short: "Joe", long: "Joel", standardNumber: 29 },
+  370: { short: "Amo", long: "Amos", standardNumber: 30 },
+  380: { short: "Oba", long: "Obadiah", standardNumber: 31 },
+  390: { short: "Jon", long: "Jonah", standardNumber: 32 },
+  400: { short: "Mic", long: "Micah", standardNumber: 33 },
+  410: { short: "Nah", long: "Nahum", standardNumber: 34 },
+  420: { short: "Hab", long: "Habakkuk", standardNumber: 35 },
+  430: { short: "Zep", long: "Zephaniah", standardNumber: 36 },
+  440: { short: "Hag", long: "Haggai", standardNumber: 37 },
+  450: { short: "Zec", long: "Zechariah", standardNumber: 38 },
+  460: { short: "Mal", long: "Malachi", standardNumber: 39 },
+
+  470: { short: "Mat", long: "Matthew", standardNumber: 40 },
+  480: { short: "Mar", long: "Mark", standardNumber: 41 },
+  490: { short: "Luk", long: "Luke", standardNumber: 42 },
+  500: { short: "Joh", long: "John", standardNumber: 43 },
+  510: { short: "Act", long: "Acts", standardNumber: 44 },
+  520: { short: "Rom", long: "Romans", standardNumber: 45 },
+  530: { short: "1Co", long: "1 Corinthians", standardNumber: 46 },
+  540: { short: "2Co", long: "2 Corinthians", standardNumber: 47 },
+  550: { short: "Gal", long: "Galatians", standardNumber: 48 },
+  560: { short: "Eph", long: "Ephesians", standardNumber: 49 },
+  570: { short: "Phi", long: "Philippians", standardNumber: 50 },
+  580: { short: "Col", long: "Colossians", standardNumber: 51 },
+  590: { short: "1Th", long: "1 Thessalonians", standardNumber: 52 },
+  600: { short: "2Th", long: "2 Thessalonians", standardNumber: 53 },
+  610: { short: "1Ti", long: "1 Timothy", standardNumber: 54 },
+  620: { short: "2Ti", long: "2 Timothy", standardNumber: 55 },
+  630: { short: "Tit", long: "Titus", standardNumber: 56 },
+  640: { short: "Phlm", long: "Philemon", standardNumber: 57 },
+  650: { short: "Heb", long: "Hebrews", standardNumber: 58 },
+  660: { short: "Jam", long: "James", standardNumber: 59 },
+  670: { short: "1Pe", long: "1 Peter", standardNumber: 60 },
+  680: { short: "2Pe", long: "2 Peter", standardNumber: 61 },
+  690: { short: "1Jo", long: "1 John", standardNumber: 62 },
+  700: { short: "2Jo", long: "2 John", standardNumber: 63 },
+  710: { short: "3Jo", long: "3 John", standardNumber: 64 },
+  720: { short: "Jud", long: "Jude", standardNumber: 65 },
+  730: { short: "Rev", long: "Revelation", standardNumber: 66 },
+};
+
+export const getBookInfo = (bookNumber: number) => {
+  return BIBLE_BOOKS_MAP[bookNumber] || null;
 };

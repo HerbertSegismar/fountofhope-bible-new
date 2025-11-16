@@ -182,12 +182,7 @@ export default function VerseListScreen({ navigation, route }: Props) {
   };
 
   const getTextColorValue = () => {
-    if (book.book_color) {
-      return book.book_color;
-    } else {
-      const baseColor = book.testament === "OT" ? "#DC2626" : "#059669";
-      return baseColor;
-    }
+    return primaryColor;
   };
 
   const isFirstChapter = chapter <= 1;

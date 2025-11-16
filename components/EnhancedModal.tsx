@@ -513,7 +513,11 @@ const renderCommentaryWithVerseLinks = (
       case "see": {
         const refText = theMatch[0];
         const word = theMatch[1];
-        if (word.toLowerCase() === "the" || word.toLowerCase() === "further") {
+        if (
+          word.toLowerCase() === "the" ||
+          word.toLowerCase() === "further" ||
+          word.toLowerCase() === "under"
+        ) {
           // Do not make it clickable; treat as plain text
           parts.push(
             <Text key={parts.length} style={plainStyle}>
