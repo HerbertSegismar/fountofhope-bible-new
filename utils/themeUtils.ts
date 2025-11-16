@@ -59,6 +59,7 @@ export const BASE_LIGHT_THEME_COLORS = {
   tagBg: "rgba(0,255,0,0.1)",
   searchHighlightBg: "#FFFF99",
   border: "#E9ECEF",
+  wordsOfJesus: "#de4924ff",
 } as const;
 
 export const BASE_DARK_THEME_COLORS = {
@@ -73,8 +74,9 @@ export const BASE_DARK_THEME_COLORS = {
   highlightText: "#FECACA",
   highlightIcon: "#FCD34D",
   tagBg: "rgba(255,255,0.1)",
-  searchHighlightBg: "#374151",
+  searchHighlightBg: "#c7a44cff",
   border: "#374151",
+  wordsOfJesus: "#d5520bff"
 } as const;
 
 type BaseThemeColors =

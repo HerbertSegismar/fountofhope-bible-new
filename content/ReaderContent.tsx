@@ -441,7 +441,6 @@ const ErrorView = memo(
 
 // Memoize sets to avoid recreation on every render
 const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
-  const [secondaryHasStarted, setSecondaryHasStarted] = useState(false);
   const [hasSecondaryFailed, setHasSecondaryFailed] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -456,7 +455,6 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
   );
 
   useEffect(() => {
-    setSecondaryHasStarted(false);
     setHasSecondaryFailed(false);
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -465,25 +463,15 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
   }, [props.secondaryVersion]);
 
   useEffect(() => {
-    if (props.secondaryLoading) {
-      setSecondaryHasStarted(true);
-    }
-  }, [props.secondaryLoading]);
-
-  useEffect(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
 
-    if (
-      !props.secondaryLoading &&
-      secondaryHasStarted &&
-      props.secondaryVerses.length === 0
-    ) {
+    if (!props.secondaryLoading && props.secondaryVerses.length === 0) {
       timeoutRef.current = setTimeout(() => {
         setHasSecondaryFailed(true);
-      }, 3000);
+      }, 10000);
     } else {
       setHasSecondaryFailed(false);
     }
@@ -494,11 +482,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
         timeoutRef.current = null;
       }
     };
-  }, [
-    props.secondaryLoading,
-    secondaryHasStarted,
-    props.secondaryVerses.length,
-  ]);
+  }, [props.secondaryLoading, props.secondaryVerses.length]);
 
   const bgHook = useBackgroundTexture({
     opacity: props.bgTextureOpacity,
@@ -646,10 +630,12 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
   ]);
 
   const renderSecondaryContent = useMemo(() => {
-    if (props.secondaryLoading) {
+    const isPostLoadEmpty =
+      !props.secondaryLoading && props.secondaryVerses.length === 0;
+    if (props.secondaryLoading || (isPostLoadEmpty && !hasSecondaryFailed)) {
       return <LoadingView colors={props.colors} />;
     }
-    if (hasSecondaryFailed || props.secondaryVerses.length === 0) {
+    if (hasSecondaryFailed) {
       return <ErrorView display={secondaryDisplay} colors={props.colors} />;
     }
     return (

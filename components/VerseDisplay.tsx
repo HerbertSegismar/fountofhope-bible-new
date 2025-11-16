@@ -40,6 +40,17 @@ const buildTree = (nodes: ParsedNode[]): TreeNode[] => {
       current = element.children!;
     } else if (node.type === "closing-tag") {
       if (stack.length > 0) {
+        const parent = stack[stack.length - 1];
+        const lastElement = parent[parent.length - 1];
+        if (
+          lastElement &&
+          lastElement.type === "element" &&
+          lastElement.tag !== node.tag
+        ) {
+          console.warn(
+            `Mismatched closing tag: expected ${lastElement.tag}, got ${node.tag}`
+          );
+        }
         current = stack.pop()!;
       }
     } else if (node.type === "self-closing-tag" || node.type === "text") {
@@ -67,9 +78,10 @@ const parseXmlTags = (text: string): ParsedNode[] => {
       }
       const fullTag = text.substring(i, tagEnd + 1);
       if (fullTag.startsWith("</")) {
-        nodes.push({ type: "closing-tag", tag: fullTag });
+        const tagName = fullTag.slice(2, -1).trim().split(" ")[0];
+        nodes.push({ type: "closing-tag", tag: tagName });
       } else if (fullTag.endsWith("/>")) {
-        const tagName = fullTag.slice(1, -2).trim();
+        const tagName = fullTag.slice(1, -2).trim().split(" ")[0];
         nodes.push({ type: "self-closing-tag", tag: tagName, fullTag });
       } else {
         const tagName = fullTag.slice(1, -1).trim().split(" ")[0];
@@ -144,7 +156,7 @@ const renderTree = (
       };
     } else if (node.type === "element") {
       const ch = node.children || [];
-      const isTextContainer = node.tag === "t";
+      const isTextContainer = node.tag === "t" || node.tag === "J";
       const isNumber =
         node.tag === "S" &&
         ch.length === 1 &&
@@ -156,8 +168,12 @@ const renderTree = (
         )
         .join("")
         .trim();
+      let childTextColor: string | undefined = overrideTextColor || textColor;
+      if (node.tag === "J") {
+        childTextColor = themeColors.wordsOfJesus;
+      }
       const overrideTextColorForChildren = isTextContainer
-        ? textColor
+        ? childTextColor
         : themeColors.tagColor;
       const childOnWordPress = isTextContainer ? onWordPress : undefined;
       const childResults = ch.map((child: TreeNode) =>

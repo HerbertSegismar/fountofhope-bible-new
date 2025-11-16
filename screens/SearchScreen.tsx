@@ -510,7 +510,7 @@ const ScopeDropdown = React.memo(
 
 export default function SearchScreen({ navigation }: Props) {
   const { searchVerses, bibleDB } = useBibleDatabase();
-  const { theme, colorScheme, navTheme } = useTheme();
+  const { theme, navTheme } = useTheme();
   const isDark = theme === "dark";
   const primaryColor = navTheme.colors.primary;
 

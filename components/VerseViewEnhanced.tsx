@@ -4,8 +4,11 @@ import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme, type FontFamily } from "../context/ThemeContext";
 import { getBookInfo } from "../utils/testamentUtils";
-import { getThemeColors, type ThemeColors } from "../utils/themeUtils";
-import { getAccessibleTextColor } from "../utils/themeUtils";
+import {
+  getThemeColors,
+  getAccessibleTextColor,
+  type ThemeColors,
+} from "../utils/themeUtils";
 import { Fonts } from "../utils/fonts";
 
 interface VerseViewProps {
@@ -143,15 +146,23 @@ const renderTree = (
         node.children[0].type === "text" &&
         /^\d+$/.test(node.children[0].content.trim());
 
+      const isTextContainer = node.tag === "t";
+      let elemStyle: any = {
+        fontSize: baseFontSize * 0.95,
+        fontFamily,
+      };
+
+      if (node.tag === "J") {
+        elemStyle.color = themeColors.wordsOfJesus;
+      } else if (!isTextContainer) {
+        elemStyle.color = themeColors.tagColor;
+        if (isNumber) {
+          elemStyle.fontSize = baseFontSize * 0.5;
+        }
+      }
+
       return (
-        <Text
-          key={`elem-${key}`}
-          style={{
-            fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
-            color: themeColors.tagColor,
-            fontFamily,
-          }}
-        >
+        <Text key={`elem-${key}`} style={elemStyle}>
           {children}
         </Text>
       );

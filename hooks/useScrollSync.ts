@@ -35,6 +35,22 @@ export const useScrollSync = (
   const lastScrollYMutableRef = useRef(lastScrollYRef.current || 0);
   const syncEnabled = useRef(true);
 
+  const findVerseAtPosition = useCallback(
+    (measurements: Record<number, number>, scrollY: number) => {
+      let currentVerseNum = 1; // fallback to first verse
+      let maxOffset = -Infinity;
+      for (const [verseNum, offset] of Object.entries(measurements)) {
+        const num = parseInt(verseNum, 10);
+        if (offset <= scrollY && offset > maxOffset) {
+          maxOffset = offset;
+          currentVerseNum = num;
+        }
+      }
+      return currentVerseNum;
+    },
+    []
+  );
+
   const syncToSecondary = useCallback(() => {
     if (!showMultiVersion || !syncEnabled.current || isSyncing.current) return;
     isSyncing.current = true;
@@ -65,15 +81,31 @@ export const useScrollSync = (
     }
 
     try {
-      const maxPrimary = Math.max(contentHeight - viewHeight, 1);
-      const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
-      const progress = Math.max(0, Math.min(1, primaryOffset / maxPrimary));
-      let targetY = progress * maxSecondary;
+      let targetY = 0;
+      if (
+        Object.keys(chapterMeasurements).length > 0 &&
+        Object.keys(secondaryChapterMeasurements).length > 0
+      ) {
+        // Verse-level sync
+        const currentVerseNum = findVerseAtPosition(
+          chapterMeasurements,
+          primaryOffset
+        );
+        targetY = secondaryChapterMeasurements[currentVerseNum] || 0;
+      } else {
+        // Fallback to progress-based sync
+        const maxPrimary = Math.max(contentHeight - viewHeight, 1);
+        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
+        const progress = Math.max(0, Math.min(1, primaryOffset / maxPrimary));
+        targetY = progress * maxSecondary;
+      }
 
-      targetY = Math.max(0, Math.min(targetY, maxSecondary));
+      targetY = Math.max(
+        0,
+        Math.min(targetY, secondaryContentHeight - viewHeight)
+      );
 
       if (secondaryScrollViewRef.current && targetY >= 0) {
-
         secondaryScrollViewRef.current.scrollTo({
           y: targetY,
           animated: true,
@@ -93,8 +125,11 @@ export const useScrollSync = (
     secondaryContentHeight,
     verses,
     secondaryVerses,
+    chapterMeasurements,
+    secondaryChapterMeasurements,
     secondaryScrollViewRef,
     primaryScrollViewRef,
+    findVerseAtPosition,
   ]);
 
   const syncToPrimary = useCallback(() => {
@@ -119,23 +154,38 @@ export const useScrollSync = (
     }
 
     try {
-      const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
-      const maxPrimary = Math.max(contentHeight - viewHeight, 1);
+      let targetY = 0;
+      if (
+        Object.keys(secondaryChapterMeasurements).length > 0 &&
+        Object.keys(chapterMeasurements).length > 0
+      ) {
+        // Verse-level sync
+        const currentVerseNum = findVerseAtPosition(
+          secondaryChapterMeasurements,
+          secondaryOffset
+        );
+        targetY = chapterMeasurements[currentVerseNum] || 0;
+      } else {
+        // Fallback to progress-based sync
+        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
+        const maxPrimary = Math.max(contentHeight - viewHeight, 1);
+        const progress = Math.max(
+          0,
+          Math.min(1, secondaryOffset / maxSecondary)
+        );
+        targetY = progress * maxPrimary;
+      }
 
-      const progress = Math.max(0, Math.min(1, secondaryOffset / maxSecondary));
-      let targetY = progress * maxPrimary;
-
-      targetY = Math.max(0, Math.min(targetY, maxPrimary));
+      targetY = Math.max(0, Math.min(targetY, contentHeight - viewHeight));
 
       if (primaryScrollViewRef.current && targetY >= 0) {
-
         primaryScrollViewRef.current.scrollTo({
           y: targetY,
           animated: true,
         });
         Animated.timing(scrollY, {
           toValue: targetY,
-          duration: 250, 
+          duration: 250,
           useNativeDriver: false,
         }).start();
       }
@@ -153,9 +203,12 @@ export const useScrollSync = (
     secondaryContentHeight,
     verses,
     secondaryVerses,
+    chapterMeasurements,
+    secondaryChapterMeasurements,
     scrollY,
     primaryScrollViewRef,
     secondaryScrollViewRef,
+    findVerseAtPosition,
   ]);
 
   const updatePrimaryOffset = useCallback(
