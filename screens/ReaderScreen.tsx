@@ -1,4 +1,3 @@
-// ReaderScreen.tsx (Refactored)
 import React, {
   useState,
   useRef,
@@ -41,12 +40,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
 import { ReaderContent } from "../content/ReaderContent";
-
 const initialDimensions = Dimensions.get("window");
-
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
-
 interface MenuItem {
   key: string;
   name: string;
@@ -54,9 +50,7 @@ interface MenuItem {
   onPress: () => void;
   color: string;
 }
-
 type MultiViewLayout = "horizontal" | "vertical";
-
 interface Location {
   bookId: number;
   bookName: string;
@@ -64,7 +58,6 @@ interface Location {
   chapter: number;
   verse?: number;
 }
-
 interface DropdownProps {
   visible: boolean;
   onClose: () => void;
@@ -78,9 +71,7 @@ interface DropdownProps {
   bgImageIndex: number;
   onSetBgImageIndex: (value: number) => void;
   isLandscape: boolean;
-  debouncedSave: (key: string, value: string) => void;
 }
-
 const DropdownMenu: React.FC<DropdownProps> = ({
   visible,
   onClose,
@@ -93,35 +84,31 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   bgImageIndex,
   onSetBgImageIndex,
   isLandscape,
-  debouncedSave,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
-
   useEffect(() => {
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
-
   if (!visible) return null;
-
   const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
-    debouncedSave("bgTextureOpacity", tempOpacity.toString());
+    AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
+      console.error
+    );
     onClose();
   };
-
   const handleOpacityChange = (text: string) => {
     const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
     const clampedNum = Math.min(100, Math.max(0, num));
     setTempOpacity(clampedNum / 100);
   };
-
   const handleOpacitySubmit = () => {
     onSetBgTextureOpacity(tempOpacity);
-    debouncedSave("bgTextureOpacity", tempOpacity.toString());
+    AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
+      console.error
+    );
   };
-
   const maxBgIndex = 33;
-
   const handlePrevTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(maxBgIndex);
@@ -129,7 +116,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex - 1);
     }
   };
-
   const handleNextTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(1);
@@ -139,7 +125,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex + 1);
     }
   };
-
   return (
     <TouchableOpacity
       style={{
@@ -338,24 +323,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     </TouchableOpacity>
   );
 };
-
-// Simple debounce implementation
-function useDebounce<T extends (...args: any[]) => any>(
-  callback: T,
-  delay: number
-) {
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  return useCallback(
-    (...args: Parameters<T>) => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-      timeoutRef.current = setTimeout(() => callback(...args), delay);
-    },
-    [callback, delay]
-  );
-}
-
 export default function ReaderScreen({
   navigation,
   route,
@@ -421,35 +388,13 @@ export default function ReaderScreen({
     primaryLocation.chapter,
     primaryTargetVerse
   );
-
-  // Stabilize primaryProps to prevent unnecessary re-renders
-  const stablePrimaryProps = useMemo(() => {
-    const {
-      verses: _,
-      loading: __,
-      scrollViewRef: ___,
-      ...rest
-    } = primaryLoader;
-    return {
-      ...rest,
-      verses: primaryLoader.verses,
-      loading: primaryLoader.loading,
-      scrollViewRef: primaryLoader.scrollViewRef,
-    };
-  }, [
-    primaryLoader.verses.length,
-    primaryLoader.loading,
-    primaryLoader.scrollViewRef,
-  ]);
-
   const {
     verses: primaryVerses,
     book: primaryBook,
     loading: primaryLoading,
     scrollViewRef: primaryScrollViewRef,
     ...primaryProps
-  } = stablePrimaryProps;
-
+  } = primaryLoader;
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
   const [secondaryReady, setSecondaryReady] = useState(false);
@@ -574,12 +519,6 @@ export default function ReaderScreen({
     },
     [secondaryVersion]
   );
-
-  // Debounced save function
-  const debouncedSave = useDebounce((key: string, value: string) => {
-    AsyncStorage.setItem(key, value).catch(console.error);
-  }, 500);
-
   useEffect(() => {
     if (!showMultiVersion || !secondaryVersion) {
       setSecondaryReady(false);
@@ -611,23 +550,18 @@ export default function ReaderScreen({
       setSecondaryReady(false);
     };
   }, [showMultiVersion, secondaryVersion, reloadSecondaryDB]);
-
   useEffect(() => {
     showMultiVersionRef.current = showMultiVersion;
   }, [showMultiVersion]);
-
   useEffect(() => {
     isLinkedRef.current = isLinked;
   }, [isLinked]);
-
   useEffect(() => {
     handleScrollRef.current = handleScroll;
   }, [handleScroll]);
-
   useEffect(() => {
     handleSecondaryScrollRef.current = handleSecondaryScroll;
   }, [handleSecondaryScroll]);
-
   const getHighlightVerse = useCallback(
     (isPrimary: boolean): number | undefined => {
       if (isLinked || !showMultiVersion) {
@@ -637,7 +571,6 @@ export default function ReaderScreen({
     },
     [showMultiVersion, isLinked, primaryTargetVerse, secondaryTargetVerse]
   );
-
   const resetButtonOpacity = useCallback(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
@@ -655,7 +588,6 @@ export default function ReaderScreen({
       }).start();
     }, 5000);
   }, [buttonOpacity]);
-
   const resetPrimaryScroll = useCallback(() => {
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
@@ -664,7 +596,6 @@ export default function ReaderScreen({
       updatePrimaryOffset(0);
     }
   }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
-
   const resetSecondaryScroll = useCallback(() => {
     secondaryScrollY.setValue(0);
     if (secondaryScrollViewRef.current) {
@@ -672,7 +603,6 @@ export default function ReaderScreen({
       updateSecondaryOffset(0);
     }
   }, [secondaryScrollViewRef, updateSecondaryOffset, secondaryScrollY]);
-
   useEffect(() => {
     resetButtonOpacity();
     return () => {
@@ -684,7 +614,6 @@ export default function ReaderScreen({
       }
     };
   }, [resetButtonOpacity]);
-
   useEffect(() => {
     const load = async () => {
       if (bibleDB) {
@@ -723,7 +652,6 @@ export default function ReaderScreen({
     switchVersion,
     setIsSwitchingVersion,
   ]);
-
   useEffect(() => {
     const load = async () => {
       if (
@@ -767,7 +695,6 @@ export default function ReaderScreen({
     secondaryDB,
     reloadSecondaryDB,
   ]);
-
   const loadPreferences = useCallback(async () => {
     try {
       const [savedLayout, savedFontSize] = await Promise.all([
@@ -784,7 +711,6 @@ export default function ReaderScreen({
       console.error("Failed to load preferences:", error);
     }
   }, []);
-
   const loadReaderSettings = useCallback(async () => {
     try {
       const [showMultiStr, secVer, linkedStr] = await Promise.all([
@@ -812,7 +738,6 @@ export default function ReaderScreen({
       console.error("Failed to load reader settings", e);
     }
   }, [availableBibleVersions, currentVersion]);
-
   const loadBackgroundSettings = useCallback(async () => {
     try {
       const [savedOpacity, savedIndex] = await Promise.all([
@@ -829,7 +754,6 @@ export default function ReaderScreen({
       console.error("Failed to load background settings:", error);
     }
   }, []);
-
   useFocusEffect(
     useCallback(() => {
       loadPreferences();
@@ -842,40 +766,32 @@ export default function ReaderScreen({
       setIsLandscape(currentIsLandscape);
     }, [loadPreferences, loadReaderSettings, loadBackgroundSettings])
   );
-
-  // Debounced saves for preferences
   useEffect(() => {
-    debouncedSave("multiViewLayout", multiViewLayout);
-  }, [multiViewLayout, debouncedSave]);
-
+    AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
+      console.error("Failed to save layout preference", e)
+    );
+  }, [multiViewLayout]);
   useEffect(() => {
-    debouncedSave("isLinked", isLinked.toString());
-  }, [isLinked, debouncedSave]);
-
+    AsyncStorage.setItem("isLinked", isLinked.toString()).catch((e) =>
+      console.error("Failed to save isLinked", e)
+    );
+  }, [isLinked]);
   useEffect(() => {
-    debouncedSave("fontSize", fontSize.toString());
-  }, [fontSize, debouncedSave]);
-
+    AsyncStorage.setItem("fontSize", fontSize.toString()).catch((e) =>
+      console.error("Failed to save fontSize", e)
+    );
+  }, [fontSize]);
   useEffect(() => {
-    debouncedSave("bgTextureOpacity", bgTextureOpacity.toString());
-  }, [bgTextureOpacity, debouncedSave]);
-
+    AsyncStorage.setItem("bgTextureOpacity", bgTextureOpacity.toString()).catch(
+      (e) => console.error("Failed to save bgTextureOpacity", e)
+    );
+  }, [bgTextureOpacity]);
   useEffect(() => {
-    debouncedSave("bgImageIndex", bgImageIndex.toString());
-  }, [bgImageIndex, debouncedSave]);
-
-  useEffect(() => {
-    debouncedSave("showMultiVersion", showMultiVersion ? "true" : "false");
-  }, [showMultiVersion, debouncedSave]);
-
-  useEffect(() => {
-    if (secondaryVersion) {
-      debouncedSave("secondaryVersion", secondaryVersion);
-    }
-  }, [secondaryVersion, debouncedSave]);
-
+    AsyncStorage.setItem("bgImageIndex", bgImageIndex.toString()).catch((e) =>
+      console.error("Failed to save bgImageIndex", e)
+    );
+  }, [bgImageIndex]);
   const closeSelector = useCallback(() => setOpenSelector(null), []);
-
   const openPrimaryNavigation = useCallback(() => {
     if (showMultiVersion && !isLinked) {
       setNavigationTarget("primary");
@@ -887,7 +803,6 @@ export default function ReaderScreen({
       });
     }
   }, [showMultiVersion, isLinked, navigation, secondaryVersion]);
-
   const openSecondaryNavigation = useCallback(() => {
     if (showMultiVersion && !isLinked) {
       setNavigationTarget("secondary");
@@ -899,17 +814,14 @@ export default function ReaderScreen({
       });
     }
   }, [showMultiVersion, isLinked, navigation, secondaryVersion]);
-
   const openPrimaryVersionSelector = useCallback(
     () => setOpenSelector("primary"),
     []
   );
-
   const openSecondaryVersionSelector = useCallback(
     () => setOpenSelector("secondary"),
     []
   );
-
   const selectorTitle = useMemo(() => {
     switch (openSelector) {
       case "primary":
@@ -920,7 +832,6 @@ export default function ReaderScreen({
         return "";
     }
   }, [openSelector]);
-
   const handleVersionSelect = useCallback(
     async (version: string) => {
       if (version === currentVersion) return;
@@ -952,7 +863,6 @@ export default function ReaderScreen({
     },
     [currentVersion, switchVersion]
   );
-
   useEffect(() => {
     if (showMultiVersion && secondaryVersion === currentVersion) {
       const avail = availableBibleVersions.filter((v) => v !== currentVersion);
@@ -969,19 +879,16 @@ export default function ReaderScreen({
     showMultiVersion,
     availableBibleVersions,
   ]);
-
   const toggleMultiVersion = useCallback(() => {
     setShowMultiVersion((prev) => !prev);
     resetButtonOpacity();
   }, [resetButtonOpacity]);
-
   const handleToggleLongPress = useCallback(() => {
     setMultiViewLayout((prev) =>
       prev === "horizontal" ? "vertical" : "horizontal"
     );
     resetButtonOpacity();
   }, [resetButtonOpacity]);
-
   const primaryBookmarkedVerses = useMemo(() => {
     const chapterBookmarks = bookmarks.filter(
       (b) =>
@@ -990,7 +897,6 @@ export default function ReaderScreen({
     );
     return new Set(chapterBookmarks.map((b) => b.verse));
   }, [bookmarks, primaryLocation.bookId, primaryLocation.chapter]);
-
   const secondaryBookmarkedVerses = useMemo(() => {
     const chapterBookmarks = bookmarks.filter(
       (b) =>
@@ -999,18 +905,15 @@ export default function ReaderScreen({
     );
     return new Set(chapterBookmarks.map((b) => b.verse));
   }, [bookmarks, secondaryLocation.bookId, secondaryLocation.chapter]);
-
   const primaryHighlightedVerses = useMemo(
     () => getChapterHighlights(primaryLocation.bookId, primaryLocation.chapter),
     [primaryLocation.bookId, primaryLocation.chapter, getChapterHighlights]
   );
-
   const secondaryHighlightedVerses = useMemo(
     () =>
       getChapterHighlights(secondaryLocation.bookId, secondaryLocation.chapter),
     [secondaryLocation.bookId, secondaryLocation.chapter, getChapterHighlights]
   );
-
   const linkItem: MenuItem = useMemo(
     () => ({
       key: "link",
@@ -1024,7 +927,6 @@ export default function ReaderScreen({
     }),
     [isLinked, primaryTextColor]
   );
-
   const menuItems: MenuItem[] = useMemo(
     () => [
       {
@@ -1104,7 +1006,6 @@ export default function ReaderScreen({
       linkItem,
     ]
   );
-
   const filteredMenuItems = useMemo(
     () =>
       menuItems.filter(
@@ -1113,43 +1014,14 @@ export default function ReaderScreen({
       ),
     [menuItems]
   );
-
   const themeItem = useMemo(
     () => menuItems.find((item) => item.key === "theme"),
     [menuItems]
   );
-
   const colorItem = useMemo(
     () => menuItems.find((item) => item.key === "color"),
     [menuItems]
   );
-
-  // Memoized rendered menu buttons for landscape
-  const renderedMenuButtons = useMemo(
-    () =>
-      menuItems.slice(0, -1).map((item) => (
-        <TouchableOpacity
-          key={item.key}
-          onPress={() => {
-            item.onPress();
-            if (item.key !== "close") setShowDropdown(false);
-          }}
-          activeOpacity={0.7}
-          style={{ padding: 8 }}
-          onLongPress={
-            item.key === "color" ? () => setShowColorPicker(true) : undefined
-          }
-        >
-          <Ionicons
-            name={item.icon}
-            size={isLandscape ? 20 : 24}
-            color={item.color}
-          />
-        </TouchableOpacity>
-      )),
-    [menuItems, isLandscape, setShowColorPicker]
-  );
-
   const handleVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
@@ -1172,9 +1044,13 @@ export default function ReaderScreen({
         },
       ]);
     },
-    [primaryHighlightedVerses, toggleVerseHighlight, addBookmark, bookName]
+    [
+      primaryHighlightedVerses,
+      toggleVerseHighlight,
+      addBookmark,
+      setPrimaryTargetVerse,
+    ]
   );
-
   const handleSecondaryVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = secondaryHighlightedVerses.includes(verse.verse);
@@ -1197,15 +1073,13 @@ export default function ReaderScreen({
         },
       ]);
     },
-    [secondaryHighlightedVerses, toggleVerseHighlight, addBookmark, bookName]
+    [secondaryHighlightedVerses, toggleVerseHighlight, addBookmark]
   );
-
   const primaryOnVersePress = handleVersePress;
   const secondaryOnVersePress =
     showMultiVersion && !isLinked
       ? handleSecondaryVersePress
       : handleVersePress;
-
   const goToPrimaryPreviousChapter = useCallback(() => {
     if (primaryLocation.chapter > 1) {
       resetPrimaryScroll();
@@ -1234,7 +1108,6 @@ export default function ReaderScreen({
     isLinked,
     resetButtonOpacity,
   ]);
-
   const goToPrimaryNextChapter = useCallback(() => {
     if (primaryLocation.chapter < primaryMaxChapter) {
       resetPrimaryScroll();
@@ -1266,7 +1139,6 @@ export default function ReaderScreen({
     isLinked,
     resetButtonOpacity,
   ]);
-
   const goToSecondaryPreviousChapter = useCallback(() => {
     if (secondaryLocation.chapter > 1) {
       resetSecondaryScroll();
@@ -1295,7 +1167,6 @@ export default function ReaderScreen({
     isLinked,
     resetButtonOpacity,
   ]);
-
   const goToSecondaryNextChapter = useCallback(() => {
     if (secondaryLocation.chapter < secondaryMaxChapter) {
       resetSecondaryScroll();
@@ -1327,7 +1198,6 @@ export default function ReaderScreen({
     isLinked,
     resetButtonOpacity,
   ]);
-
   const primaryHandleScroll = useCallback(
     (event: any) => {
       const y = event.nativeEvent.contentOffset.y;
@@ -1339,7 +1209,6 @@ export default function ReaderScreen({
     },
     [scrollY]
   );
-
   const secondaryHandleScrollCb = useCallback(
     (event: any) => {
       if (showMultiVersionRef.current && isLinkedRef.current) {
@@ -1351,7 +1220,6 @@ export default function ReaderScreen({
     },
     [secondaryScrollY]
   );
-
   useEffect(() => {
     const updateLayout = () => {
       const newDimensions = Dimensions.get("window");
@@ -1363,12 +1231,10 @@ export default function ReaderScreen({
     updateLayout();
     const subscription = Dimensions.addEventListener("change", updateLayout);
     return () => subscription?.remove();
-  }, [setShowDropdown, setDimensions, setIsLandscape]);
-
+  }, []);
   useEffect(() => {
     setPrimaryTargetVerse(targetVerse);
   }, [targetVerse]);
-
   useEffect(() => {
     if (showMultiVersion && isLinked) {
       setSecondaryLocation(primaryLocation);
@@ -1377,7 +1243,6 @@ export default function ReaderScreen({
       setSecondaryTargetVerse(undefined);
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
-
   useEffect(() => {
     if (!primaryLoading && primaryScrollViewRef.current) {
       const verseNum = primaryTargetVerse;
@@ -1403,16 +1268,13 @@ export default function ReaderScreen({
     updatePrimaryOffset,
     primaryProps.verseMeasurements,
   ]);
-
   const [secondaryMeasuredVerses, setSecondaryMeasuredVerses] = useState<
     Set<number>
   >(new Set());
-
   useEffect(() => {
     secondaryVerseMeasurementsRef.current = {};
     setSecondaryMeasuredVerses(new Set());
   }, [secondaryVerses]);
-
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -1443,7 +1305,6 @@ export default function ReaderScreen({
     getHighlightVerse,
     secondaryScrollViewHeight,
   ]);
-
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -1491,7 +1352,6 @@ export default function ReaderScreen({
     currentVersion,
     updateSecondaryOffset,
   ]);
-
   useEffect(() => {
     if (secondaryContentHeight > 0 && showMultiVersion && secondaryVersion) {
       const version = secondaryVersion;
@@ -1511,25 +1371,21 @@ export default function ReaderScreen({
     fontSize,
     storeChapterMeasurement,
   ]);
-
   const handlePrimaryContentSizeChange = useCallback(
     (width: number, height: number) => {
       primaryProps.handleContentSizeChange(width, height);
     },
     [primaryProps.handleContentSizeChange]
   );
-
   const handleSecondaryContentSizeChange = useCallback(
     (width: number, height: number) => {
       setSecondaryContentHeight(height);
     },
     []
   );
-
   const handleSecondaryScrollViewLayout = useCallback((event: any) => {
     setSecondaryScrollViewHeight(event.nativeEvent.layout.height);
   }, []);
-
   const handleSecondaryVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
       const { y } = event.nativeEvent.layout;
@@ -1544,7 +1400,19 @@ export default function ReaderScreen({
     },
     []
   );
-
+  useEffect(() => {
+    AsyncStorage.setItem(
+      "showMultiVersion",
+      showMultiVersion ? "true" : "false"
+    ).catch((e) => console.error("Failed to save showMultiVersion", e));
+  }, [showMultiVersion]);
+  useEffect(() => {
+    if (secondaryVersion) {
+      AsyncStorage.setItem("secondaryVersion", secondaryVersion).catch((e) =>
+        console.error("Failed to save secondaryVersion", e)
+      );
+    }
+  }, [secondaryVersion]);
   const loadSecondaryVerses = useCallback(async () => {
     if (
       !showMultiVersion ||
@@ -1593,29 +1461,22 @@ export default function ReaderScreen({
     secondaryDB,
     reloadSecondaryDB,
   ]);
-
   useEffect(() => {
     loadSecondaryVerses();
   }, [loadSecondaryVerses]);
-
   const primaryBookInfo = useMemo(
     () => getBookInfo(primaryLocation.bookId),
     [primaryLocation.bookId]
   );
-
   const primaryDisplayBookName =
     primaryBookInfo?.long || primaryLocation.bookName;
-
   const secondaryBookInfo = useMemo(
     () => getBookInfo(secondaryLocation.bookId),
     [secondaryLocation.bookId]
   );
-
   const secondaryDisplayBookName =
     secondaryBookInfo?.long || secondaryLocation.bookName;
-
   const versionName = getVersionDisplayName(currentVersion);
-
   const handleSecondaryVersionSelect = useCallback(
     (version: string) => {
       if (version === currentVersion) return;
@@ -1623,11 +1484,9 @@ export default function ReaderScreen({
     },
     [currentVersion]
   );
-
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   const headerContentHeight = 60;
   const headerTotalHeight = insets.top + headerContentHeight;
-
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1645,14 +1504,11 @@ export default function ReaderScreen({
       </SafeAreaView>
     );
   }
-
   const overlaysOpen =
     showDropdown || openSelector !== null || showNavigationModal;
   const contentScrollEnabled = !overlaysOpen;
-
   let selectorTop = headerTotalHeight;
   let selectorLeft = (screenWidth - 200) / 2;
-
   if (openSelector === "primary") {
     if (primaryHeaderY > 0 && primaryHeaderHeight > 0) {
       selectorTop = primaryHeaderY + primaryHeaderHeight;
@@ -1668,7 +1524,6 @@ export default function ReaderScreen({
       }
     }
   }
-
   const versionsToShow = useMemo(() => {
     if (openSelector === "primary" && showMultiVersion && secondaryVersion) {
       return availableBibleVersions.filter((v) => v !== secondaryVersion);
@@ -1683,7 +1538,6 @@ export default function ReaderScreen({
     showMultiVersion,
     secondaryVersion,
   ]);
-
   const renderProgressBar = useCallback(() => {
     if (!showMultiVersion || isLinked) {
       return (
@@ -1771,11 +1625,9 @@ export default function ReaderScreen({
     primaryProgress,
     secondaryProgress,
   ]);
-
   const handleSetBgTextureOpacity = useCallback((value: number) => {
     setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
-
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -1877,7 +1729,22 @@ export default function ReaderScreen({
                     marginRight: isLandscape ? 40 : 0,
                   }}
                 >
-                  {renderedMenuButtons}
+                  {menuItems.slice(0, -1).map((item) => (
+                    <TouchableOpacity
+                      key={item.key}
+                      onPress={item.onPress}
+                      {...(item.key === "color" && {
+                        onLongPress: () => setShowColorPicker(true),
+                      })}
+                      style={{ padding: 8 }}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={isLandscape ? 20 : 24}
+                        color={item.color}
+                      />
+                    </TouchableOpacity>
+                  ))}
                   <TouchableOpacity
                     onPress={() => setShowDropdown(true)}
                     style={{ padding: 8 }}
@@ -2063,7 +1930,6 @@ export default function ReaderScreen({
         bgImageIndex={bgImageIndex}
         onSetBgImageIndex={setBgImageIndex}
         isLandscape={isLandscape}
-        debouncedSave={debouncedSave}
       />
       {openSelector && (
         <TouchableOpacity
