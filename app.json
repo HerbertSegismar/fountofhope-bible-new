@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Fount of Hope Bible",
-    "slug": "fount-of-hope-bible",
+    "slug": "wave-treader-bible",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/fountofhope-512x512.png",
@@ -12,7 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -33,12 +35,17 @@
     "web": {
       "favicon": "./assets/images/fountofhope-512x512.png"
     },
-    "plugins": ["expo-sqlite", "expo-asset", "expo-font", "./enableLargeHeap.js"],
+    "plugins": [
+      "expo-sqlite",
+      "expo-asset",
+      "expo-font",
+      "./enableLargeHeap.js"
+    ],
     "extra": {
       "eas": {
-        "projectId": "8655600c-f728-4a18-b204-41aeff1a964c"
+        "projectId": "46e92e02-4821-46a2-a319-1cdeaee78ad6"
       }
     },
-    "owner": "fount-of-hope"
+    "owner": "wavetreader"
   }
 }
