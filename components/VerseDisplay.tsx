@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { View, Text, TextStyle } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
 import { type ThemeColors } from "../utils/themeUtils";
 
@@ -446,6 +447,7 @@ type VerseDisplayProps = {
   prefix?: string;
   showHeader?: boolean;
   isHighlighted?: boolean;
+  bookmarked?: boolean;
 };
 
 export const VerseDisplay: React.FC<VerseDisplayProps> = ({
@@ -460,6 +462,7 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
   prefix,
   showHeader = true,
   isHighlighted = false,
+  bookmarked = false,
 }) => {
   const rendered = useMemo(
     () =>
@@ -507,6 +510,35 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
     }),
     [fontSize, textColor, fontFamily]
   );
+
+  const indicatorPart = (() => {
+    if (prefix || showVerseNumbers) {
+      return (
+        <>
+          <Text style={numberStyle}>{prefix || verse.verse}</Text>
+          {bookmarked && (
+            <Ionicons
+              name="bookmark-sharp"
+              size={fontSize}
+              color={themeColors.primary}
+            />
+          )}{" "}
+        </>
+      );
+    } else if (bookmarked) {
+      return (
+        <>
+          <Ionicons
+            name="bookmark-sharp"
+            size={fontSize}
+            color={themeColors.primary}
+          />{" "}
+        </>
+      );
+    }
+    return null;
+  })();
+
   const mainContent = (
     <Text
       style={{
@@ -518,9 +550,7 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
       }}
       numberOfLines={0}
     >
-      {prefix || showVerseNumbers ? (
-        <Text style={numberStyle}>{prefix || verse.verse} </Text>
-      ) : null}
+      {indicatorPart}
       {body}
     </Text>
   );

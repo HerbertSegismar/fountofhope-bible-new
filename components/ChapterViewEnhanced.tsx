@@ -9,7 +9,6 @@ import {
   DimensionValue,
   ScrollView,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
 import { Verse } from "../types";
 import { useTheme } from "../context/ThemeContext";
 import { BIBLE_BOOKS_MAP } from "../utils/testamentUtils";
@@ -19,7 +18,7 @@ import { BackgroundTexture } from "../components/BackgroundTexture";
 import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 import { Fonts } from "../utils/fonts";
 import { EnhancedModal, type EnhancedModalRef } from "./EnhancedModal";
-import { VerseDisplay } from "./VerseDisplay";
+import { VerseItem } from "./VerseItem";
 
 const STYLES = {
   container: {
@@ -154,82 +153,72 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
     onVersePress?.(verse);
   };
 
-  const renderVerseItem = (verse: Verse) => {
-    const isFullHighlighted = highlightedVerses.has(verse.verse);
-    const isNavigationHighlighted = verse.verse === highlightVerse;
-    const shouldHighlightNumber = isFullHighlighted || isNavigationHighlighted;
-    const verseTextColor = isFullHighlighted
-      ? themeColors.highlightText
-      : themeColors.textPrimary;
-    const localOnTagPress = useCallback(
-      (content: string) => {
-        modalRef.current?.openCommentary(content, verse);
-      },
-      [verse]
-    );
-    const localOnWordPress = useCallback((word: string) => {
+  const handleTagPress = useCallback(
+    (content: string, verse: Verse) => {
+      modalRef.current?.openCommentary(content, verse);
+    },
+    []
+  );
+
+  const handleWordPress = useCallback(
+    (word: string) => {
       modalRef.current?.openWord(word);
-    }, []);
-    const indicatorSize = isFullScreen ? fontSize * 0.7 : fontSize * 0.8;
-    return (
-      <TouchableOpacity
-        key={verse.verse}
-        activeOpacity={1}
-        onLongPress={() => handleVersePress(verse)}
-      >
-        <View
-          style={[
-            STYLES.verse,
-            {
-              backgroundColor: "transparent",
-              borderRadius: 6,
-              padding: 0,
-              borderWidth: 0,
-              borderColor: "transparent",
-              marginBottom: isFullScreen ? 2 : 4,
-            },
-          ]}
-          onLayout={(event) => handleVerseLayout(verse.verse, event)}
-          ref={(ref) => handleVerseRef(verse.verse, ref)}
-        >
-          <View style={{ ...STYLES.verseText }}>
-            <VerseDisplay
+    },
+    []
+  );
+
+  const renderVerses = useMemo(
+    () => (
+      <View style={{ gap: isFullScreen ? 2 : 6 }}>
+        {sortedVerses.map((verse) => {
+          const isFullHighlighted = highlightedVerses.has(verse.verse);
+          const isNavigationHighlighted = verse.verse === highlightVerse;
+          const shouldHighlightNumber =
+            isFullHighlighted || isNavigationHighlighted;
+          const isBookmarked = bookmarkedVerses.has(verse.verse);
+          const verseTextColor = isFullHighlighted
+            ? themeColors.highlightText
+            : themeColors.textPrimary;
+          return (
+            <VerseItem
+              key={verse.verse}
               verse={verse}
               fontSize={fontSize}
               themeColors={themeColors}
               fontFamily={actualFontFamily}
-              onTagPress={localOnTagPress}
-              onWordPress={localOnWordPress}
+              onTagPress={handleTagPress}
+              onWordPress={handleWordPress}
               textColor={verseTextColor}
               showVerseNumbers={showVerseNumbers}
               showHeader={true}
               isHighlighted={shouldHighlightNumber}
+              bookmarked={isBookmarked}
+              onVerseLayout={handleVerseLayout}
+              onVerseRef={handleVerseRef}
+              onLongPress={handleVersePress}
+              isFullScreen={isFullScreen}
             />
-            {bookmarkedVerses.has(verse.verse) && (
-              <Ionicons
-                name="bookmark-sharp"
-                size={20}
-                color={themeColors.primary}
-              />
-            )}
-            {(showVerseNumbers ||
-              bookmarkedVerses.has(verse.verse) ||
-              shouldHighlightNumber) && (
-              <Text style={{ fontSize: indicatorSize * 0.5 }}> </Text>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderVerses = () => {
-    return (
-      <View style={{ gap: isFullScreen ? 2 : 6 }}>
-        {sortedVerses.map(renderVerseItem)}
+          );
+        })}
       </View>
-    );
-  };
+    ),
+    [
+      sortedVerses,
+      fontSize,
+      themeColors,
+      actualFontFamily,
+      handleTagPress,
+      handleWordPress,
+      highlightedVerses,
+      highlightVerse,
+      bookmarkedVerses,
+      showVerseNumbers,
+      handleVerseLayout,
+      handleVerseRef,
+      handleVersePress,
+      isFullScreen,
+    ]
+  );
 
   const wrapperStyle = useMemo<ViewStyle>(
     () => ({
@@ -271,7 +260,7 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
 
   const innerContent = (
     <>
-      {renderVerses()}
+      {renderVerses}
       <View style={footerStyle}>
         <Text
           style={{

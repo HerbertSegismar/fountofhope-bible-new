@@ -100,6 +100,13 @@ const findBookNumber = (
   return undefined;
 };
 
+// NEW: Helper to get base version for verse loading (strips "+" for augmented versions)
+const getVerseVersion = (version?: string): string | undefined => {
+  if (!version) return undefined;
+  // Assume "+" suffix indicates augmentation (e.g., "KJV+" -> "KJV")
+  return version.includes("+") ? version.split("+")[0] : version;
+};
+
 const renderCommentaryWithVerseLinks = (
   text: string,
   themeColors: ThemeColors,
@@ -516,6 +523,7 @@ const renderCommentaryWithVerseLinks = (
         if (
           word.toLowerCase() === "the" ||
           word.toLowerCase() === "further" ||
+          word.toLowerCase() === "also" ||
           word.toLowerCase() === "under"
         ) {
           // Do not make it clickable; treat as plain text
@@ -1090,18 +1098,20 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
         (_, i) => nextStart + i
       );
       let newAllVerses: Verse[] = [];
+      // MODIFIED: Use base version for verses (strips "+" if present)
+      const verseVersion = getVerseVersion(displayVersion);
       try {
         for (const ch of nextChapters) {
           let loadedVerses: Verse[] = [];
-          if (displayVersion) {
-            const dbFilename = getDatabaseFilename(displayVersion);
+          if (verseVersion) {
+            const dbFilename = getDatabaseFilename(verseVersion);
             if (dbFilename) {
               const secondaryDB = await getDatabase(dbFilename);
               if (secondaryDB) {
                 loadedVerses = await secondaryDB.getVerses(bookNum, ch);
               } else {
                 console.warn(
-                  `Secondary DB not available for ${displayVersion}, falling back to primary`
+                  `Secondary DB not available for ${verseVersion}, falling back to primary`
                 );
               }
             }
@@ -1155,7 +1165,7 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
       loadedUpTo,
       verseVerses,
       verseLoading,
-      displayVersion,
+      displayVersion, // UPDATED: Include for getVerseVersion
       bibleDB,
       getDatabase,
       batchSize,
@@ -1200,18 +1210,20 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
           (_, i) => chapterStart + i
         );
         let allVerses: Verse[] = [];
+        // MODIFIED: Use base version for verses (strips "+" if present)
+        const verseVersion = getVerseVersion(displayVersion);
         try {
           for (const ch of chapters) {
             let loadedVerses: Verse[] = [];
-            if (displayVersion) {
-              const dbFilename = getDatabaseFilename(displayVersion);
+            if (verseVersion) {
+              const dbFilename = getDatabaseFilename(verseVersion);
               if (dbFilename) {
                 const secondaryDB = await getDatabase(dbFilename);
                 if (secondaryDB) {
                   loadedVerses = await secondaryDB.getVerses(bookNum, ch);
                 } else {
                   console.warn(
-                    `Secondary DB not available for ${displayVersion}, falling back to primary`
+                    `Secondary DB not available for ${verseVersion}, falling back to primary`
                   );
                 }
               }
@@ -1262,7 +1274,7 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
           return [...prev.slice(0, -1), newTop];
         });
       },
-      [bibleDB, getDatabase, displayVersion, batchSize]
+      [bibleDB, getDatabase, displayVersion, batchSize] // UPDATED: Include displayVersion for getVerseVersion
     );
 
     const handleCloseModal = useCallback(() => {

@@ -13,9 +13,7 @@ export const useScrollSync = (
   contentHeight: number,
   secondaryContentHeight: number,
   verses: Verse[],
-  chapterMeasurements: Record<number, number>,
   secondaryVerses: Verse[],
-  secondaryChapterMeasurements: Record<number, number>,
   isLandscape: boolean,
   isFullScreen: boolean,
   setIsFullScreen: (full: boolean) => void,
@@ -33,23 +31,11 @@ export const useScrollSync = (
   const secondarySyncTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const lastScrollYMutableRef = useRef(lastScrollYRef.current || 0);
+  const lastSecondaryScrollYMutableRef = useRef(0);
   const syncEnabled = useRef(true);
 
-  const findVerseAtPosition = useCallback(
-    (measurements: Record<number, number>, scrollY: number) => {
-      let currentVerseNum = 1; // fallback to first verse
-      let maxOffset = -Infinity;
-      for (const [verseNum, offset] of Object.entries(measurements)) {
-        const num = parseInt(verseNum, 10);
-        if (offset <= scrollY && offset > maxOffset) {
-          maxOffset = offset;
-          currentVerseNum = num;
-        }
-      }
-      return currentVerseNum;
-    },
-    []
-  );
+  const primaryAnimating = useRef(false);
+  const secondaryAnimating = useRef(false);
 
   const syncToSecondary = useCallback(() => {
     if (!showMultiVersion || !syncEnabled.current || isSyncing.current) return;
@@ -81,38 +67,27 @@ export const useScrollSync = (
     }
 
     try {
-      let targetY = 0;
-      if (
-        Object.keys(chapterMeasurements).length > 0 &&
-        Object.keys(secondaryChapterMeasurements).length > 0
-      ) {
-        // Verse-level sync
-        const currentVerseNum = findVerseAtPosition(
-          chapterMeasurements,
-          primaryOffset
-        );
-        targetY = secondaryChapterMeasurements[currentVerseNum] || 0;
-      } else {
-        // Fallback to progress-based sync
-        const maxPrimary = Math.max(contentHeight - viewHeight, 1);
-        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
-        const progress = Math.max(0, Math.min(1, primaryOffset / maxPrimary));
-        targetY = progress * maxSecondary;
-      }
+      const maxPrimary = Math.max(contentHeight - viewHeight, 1);
+      const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
+      const progress = Math.max(0, Math.min(1, primaryOffset / maxPrimary));
+      let targetY = progress * maxSecondary;
 
-      targetY = Math.max(
-        0,
-        Math.min(targetY, secondaryContentHeight - viewHeight)
-      );
+      targetY = Math.max(0, Math.min(targetY, maxSecondary));
 
+      secondaryAnimating.current = true;
       if (secondaryScrollViewRef.current && targetY >= 0) {
         secondaryScrollViewRef.current.scrollTo({
           y: targetY,
           animated: true,
         });
       }
+      // Assume animation duration ~250ms, give buffer
+      setTimeout(() => {
+        secondaryAnimating.current = false;
+      }, 300);
     } catch (error) {
       console.error("Error in syncToSecondary:", error);
+      secondaryAnimating.current = false;
     } finally {
       requestAnimationFrame(() => {
         isSyncing.current = false;
@@ -125,11 +100,8 @@ export const useScrollSync = (
     secondaryContentHeight,
     verses,
     secondaryVerses,
-    chapterMeasurements,
-    secondaryChapterMeasurements,
     secondaryScrollViewRef,
     primaryScrollViewRef,
-    findVerseAtPosition,
   ]);
 
   const syncToPrimary = useCallback(() => {
@@ -154,30 +126,15 @@ export const useScrollSync = (
     }
 
     try {
-      let targetY = 0;
-      if (
-        Object.keys(secondaryChapterMeasurements).length > 0 &&
-        Object.keys(chapterMeasurements).length > 0
-      ) {
-        // Verse-level sync
-        const currentVerseNum = findVerseAtPosition(
-          secondaryChapterMeasurements,
-          secondaryOffset
-        );
-        targetY = chapterMeasurements[currentVerseNum] || 0;
-      } else {
-        // Fallback to progress-based sync
-        const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
-        const maxPrimary = Math.max(contentHeight - viewHeight, 1);
-        const progress = Math.max(
-          0,
-          Math.min(1, secondaryOffset / maxSecondary)
-        );
-        targetY = progress * maxPrimary;
-      }
+      const maxSecondary = Math.max(secondaryContentHeight - viewHeight, 1);
+      const maxPrimary = Math.max(contentHeight - viewHeight, 1);
 
-      targetY = Math.max(0, Math.min(targetY, contentHeight - viewHeight));
+      const progress = Math.max(0, Math.min(1, secondaryOffset / maxSecondary));
+      let targetY = progress * maxPrimary;
 
+      targetY = Math.max(0, Math.min(targetY, maxPrimary));
+
+      primaryAnimating.current = true;
       if (primaryScrollViewRef.current && targetY >= 0) {
         primaryScrollViewRef.current.scrollTo({
           y: targetY,
@@ -189,8 +146,13 @@ export const useScrollSync = (
           useNativeDriver: false,
         }).start();
       }
+      // Assume animation duration 250ms, give buffer
+      setTimeout(() => {
+        primaryAnimating.current = false;
+      }, 300);
     } catch (error) {
       console.error("Error in syncToPrimary:", error);
+      primaryAnimating.current = false;
     } finally {
       requestAnimationFrame(() => {
         isSyncing.current = false;
@@ -203,12 +165,9 @@ export const useScrollSync = (
     secondaryContentHeight,
     verses,
     secondaryVerses,
-    chapterMeasurements,
-    secondaryChapterMeasurements,
     scrollY,
     primaryScrollViewRef,
     secondaryScrollViewRef,
-    findVerseAtPosition,
   ]);
 
   const updatePrimaryOffset = useCallback(
@@ -229,18 +188,24 @@ export const useScrollSync = (
       const offsetY = event.nativeEvent.contentOffset.y;
       updatePrimaryOffset(offsetY);
 
-      if (isLandscape) {
+      if (isLandscape && !primaryAnimating.current) {
         const scrollDelta = offsetY - lastScrollYMutableRef.current;
         if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100) {
           setIsFullScreen(true);
         }
       }
 
+      // Always clear previous timeout to debounce
       if (primarySyncTimeout.current) {
         clearTimeout(primarySyncTimeout.current);
       }
 
-      if (showMultiVersion && syncEnabled.current) {
+      // Schedule sync only if not animating (i.e., user-initiated)
+      if (
+        showMultiVersion &&
+        syncEnabled.current &&
+        !primaryAnimating.current
+      ) {
         primarySyncTimeout.current = setTimeout(() => {
           if (!isSyncing.current) {
             syncToSecondary();
@@ -264,18 +229,25 @@ export const useScrollSync = (
       const offsetY = event.nativeEvent.contentOffset.y;
       updateSecondaryOffset(offsetY);
 
-      if (isLandscape) {
-        const scrollDelta = offsetY - lastScrollYMutableRef.current;
+      if (isLandscape && !secondaryAnimating.current) {
+        const scrollDelta = offsetY - lastSecondaryScrollYMutableRef.current;
         if (scrollDelta > scrollThreshold && !isFullScreen && offsetY > 100) {
           setIsFullScreen(true);
         }
+        lastSecondaryScrollYMutableRef.current = offsetY;
       }
 
+      // Always clear previous timeout to debounce
       if (secondarySyncTimeout.current) {
         clearTimeout(secondarySyncTimeout.current);
       }
 
-      if (showMultiVersion && syncEnabled.current) {
+      // Schedule sync only if not animating (i.e., user-initiated)
+      if (
+        showMultiVersion &&
+        syncEnabled.current &&
+        !secondaryAnimating.current
+      ) {
         secondarySyncTimeout.current = setTimeout(() => {
           if (!isSyncing.current) {
             syncToPrimary();
@@ -302,7 +274,7 @@ export const useScrollSync = (
         setShowEnd(false);
       }
 
-      if (isLandscape) {
+      if (isLandscape && !primaryAnimating.current) {
         const scrollDelta = value - lastScrollYMutableRef.current;
         if (scrollDelta > scrollThreshold && !isFullScreen && value > 100) {
           setIsFullScreen(true);
@@ -333,10 +305,6 @@ export const useScrollSync = (
       scrollViewHeight > 0
     ) {
       if (!isSyncing.current && syncEnabled.current) {
-        console.log("Initializing sync to secondary:", {
-          contentHeight,
-          secondaryContentHeight,
-        });
         syncToSecondary();
       }
     }

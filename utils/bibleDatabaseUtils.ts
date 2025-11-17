@@ -78,8 +78,12 @@ export const stripTags = (text: string): string => {
       // Verse reference: number followed by letter, do not add newline
       return "";
     }
+    // Plain number start followed by period: add 2 newlines
+    if (/^\d+\./.test(textAfter)) {
+      return "\n\n";
+    }
     const nextChar = textAfter[0];
-    // Plain number start: add newline
+    // Other plain number start: add space
     return nextChar >= "0" && nextChar <= "9" ? " " : "";
   });
   cleaned = cleaned.replace(
@@ -87,6 +91,6 @@ export const stripTags = (text: string): string => {
     ""
   );
   // Normalize spaces but preserve newlines
-  cleaned = cleaned.replace(/ +/g, " ").replace(/\n+/g, "\n").trim();
+  cleaned = cleaned.replace(/ +/g, " ").replace(/\n+/g, "\n\n").trim();
   return cleaned;
 };

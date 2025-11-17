@@ -97,7 +97,6 @@ interface ReaderContentProps {
   setUiMode: (value: number) => void;
 }
 
-// Memoized sub-components to prevent unnecessary re-renders during layout toggles
 const PrimaryHeader = memo(
   ({
     ref,
