@@ -86,10 +86,13 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   isLandscape,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
+
   useEffect(() => {
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
+
   if (!visible) return null;
+
   const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
@@ -97,18 +100,22 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     );
     onClose();
   };
+
   const handleOpacityChange = (text: string) => {
     const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
     const clampedNum = Math.min(100, Math.max(0, num));
     setTempOpacity(clampedNum / 100);
   };
+
   const handleOpacitySubmit = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
       console.error
     );
   };
+
   const maxBgIndex = 33;
+
   const handlePrevTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(maxBgIndex);
@@ -116,15 +123,15 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex - 1);
     }
   };
+
   const handleNextTexture = () => {
-    if (bgImageIndex === 0) {
-      onSetBgImageIndex(1);
-    } else if (bgImageIndex === maxBgIndex) {
+    if (bgImageIndex === maxBgIndex) {
       onSetBgImageIndex(0);
     } else {
       onSetBgImageIndex(bgImageIndex + 1);
     }
   };
+
   return (
     <TouchableOpacity
       style={{
@@ -156,40 +163,49 @@ const DropdownMenu: React.FC<DropdownProps> = ({
           elevation: 5,
         }}
       >
-        {filteredMenuItems.slice(0, -1).map((item, index) => (
-          <TouchableOpacity
-            key={item.key}
-            onPress={() => {
-              item.onPress();
-              if (item.key !== "close") {
-                handleClose();
-              }
-            }}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              paddingHorizontal: 12,
-              paddingVertical: 8,
-              borderBottomWidth: index < filteredMenuItems.length - 2 ? 1 : 0,
-              borderBottomColor: colors.primary + "40",
-            }}
-          >
-            <Ionicons
-              name={item.icon}
-              size={20}
-              color={item.color}
-              style={{ marginRight: 12 }}
-            />
-            <Text
+        {/* ==================== MENU ITEMS ==================== */}
+        {filteredMenuItems.slice(0, -1).map((item, index) => {
+          const isBibleItem = item.key === "bible";
+
+          return (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => {
+                item.onPress();
+                if (item.key !== "close") {
+                  handleClose();
+                }
+              }}
               style={{
-                color: primaryTextColor,
-                fontSize: 16,
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderBottomWidth: index < filteredMenuItems.length - 2 ? 1 : 0,
+                borderBottomColor: colors.primary + "40",
+                // ← ONLY CHANGE: "Bible" gets the special background
+                backgroundColor: isBibleItem ? "#FFFFFF44" : undefined,
               }}
             >
-              {item.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
+              <Ionicons
+                name={item.icon}
+                size={20}
+                color={item.color}
+                style={{ marginRight: 12 }}
+              />
+              <Text
+                style={{
+                  color: primaryTextColor,
+                  fontSize: 16,
+                }}
+              >
+                {item.name}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+
+        {/* ==================== BG & OPACITY SECTION ==================== */}
         <View
           style={{
             paddingHorizontal: 12,
@@ -233,6 +249,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
                 color={primaryTextColor}
               />
             </TouchableOpacity>
+
             <View
               style={{
                 flexDirection: "row",
@@ -264,15 +281,12 @@ const DropdownMenu: React.FC<DropdownProps> = ({
                 maxLength={3}
               />
               <Text
-                style={{
-                  color: primaryTextColor,
-                  fontSize: 14,
-                  marginLeft: 4,
-                }}
+                style={{ color: primaryTextColor, fontSize: 14, marginLeft: 4 }}
               >
                 %
               </Text>
             </View>
+
             <TouchableOpacity
               onPress={handleNextTexture}
               style={{
@@ -292,7 +306,10 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             </TouchableOpacity>
           </View>
         </View>
+
         <View className="h-[1px] bg-white mx-3" />
+
+        {/* ==================== CLOSE BUTTON ==================== */}
         <TouchableOpacity
           onPress={handleClose}
           style={{
@@ -310,14 +327,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             color={primaryTextColor}
             style={{ marginRight: 12 }}
           />
-          <Text
-            style={{
-              color: primaryTextColor,
-              fontSize: 16,
-            }}
-          >
-            Close
-          </Text>
+          <Text style={{ color: primaryTextColor, fontSize: 16 }}>Close</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     </TouchableOpacity>
@@ -1993,37 +2003,46 @@ export default function ReaderScreen({
                   <ActivityIndicator size="small" color={primaryTextColor} />
                 </View>
               ) : openSelector ? (
-                versionsToShow.map((v, index) => (
-                  <TouchableOpacity
-                    key={v}
-                    onPress={async () => {
-                      if (openSelector === "primary") {
-                        await handleVersionSelect(v);
-                      } else {
-                        handleSecondaryVersionSelect(v);
-                      }
-                      closeSelector();
-                    }}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderBottomWidth:
-                        index < versionsToShow.length - 1 ? 1 : 0,
-                      borderBottomColor: colors.primary + "40",
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={{
-                        color: primaryTextColor,
-                        fontWeight: "500",
-                        fontSize: 16,
+                versionsToShow.map((v, index) => {
+                  const isActive =
+                    (openSelector === "primary" && v === currentVersion) ||
+                    (openSelector === "secondary" && v === secondaryVersion);
+
+                  return (
+                    <TouchableOpacity
+                      key={v}
+                      onPress={async () => {
+                        if (openSelector === "primary") {
+                          await handleVersionSelect(v);
+                        } else {
+                          handleSecondaryVersionSelect(v);
+                        }
+                        closeSelector();
                       }}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        backgroundColor: isActive
+                          ? colors.secondary
+                          : undefined, // ← ONLY CHANGE: active gets colors.secondary
+                        borderBottomWidth:
+                          index < versionsToShow.length - 1 ? 1 : 0,
+                        borderBottomColor: colors.primary + "40",
+                      }}
+                      activeOpacity={0.7}
                     >
-                      {getVersionDisplayName(v)}
-                    </Text>
-                  </TouchableOpacity>
-                ))
+                      <Text
+                        style={{
+                          color: primaryTextColor,
+                          fontWeight: "500",
+                          fontSize: 16,
+                        }}
+                      >
+                        {getVersionDisplayName(v)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
               ) : null}
             </ScrollView>
           </View>

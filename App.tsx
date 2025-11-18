@@ -4,6 +4,8 @@ import ColorWheelPicker from "./components/ColorWheelPicker";
 import {
   NavigationContainer,
   useTheme as useNavigationTheme,
+  useNavigation,
+  useIsFocused, // ← Added
 } from "@react-navigation/native";
 import { createStackNavigator } from "@react-navigation/stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -309,7 +311,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
         </TouchableOpacity>
       </View>
 
-      <Modal
+            <Modal
         visible={showDropdown}
         transparent
         animationType="fade"
@@ -319,32 +321,51 @@ function HeaderActions({ navigation }: { navigation: any }) {
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
               <View style={dropdownStyle}>
-                {filteredMenuItems.map((item, index) => (
-                  <TouchableOpacity
-                    key={item.key}
-                    onPress={() => handleMenuItemPress(item)}
-                    style={[
-                      styles.dropdownMenuItem,
-                      index === filteredMenuItems.length - 1
-                        ? undefined
-                        : borderBottomStyle,
-                    ]}
-                  >
-                    <Ionicons
-                      name={item.icon}
-                      size={20}
-                      color={iconColor}
-                      style={styles.dropdownIcon}
-                    />
-                    <Text style={textStyle}>{item.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                {filteredMenuItems.map((item, index) => {
+                  // Fixed: use useFocusEffect + useIsFocused + route name mapping
+                  const navigation = useNavigation<any>();
+                  const isFocused = useIsFocused();
+                  const routeName = navigation.getState()?.routes[navigation.getState()?.index]?.name;
+
+                  const routeMap: Record<string, string> = {
+                    home: "Home",
+                    bible: "BookList",
+                    search: "Search",
+                    bookmarks: "Bookmarks",
+                    settings: "Settings",
+                  };
+
+                  const isActiveScreen = isFocused && routeName === routeMap[item.key];
+
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      onPress={() => handleMenuItemPress(item)}
+                      style={[
+                        styles.dropdownMenuItem,
+                        index === filteredMenuItems.length - 1
+                          ? undefined
+                          : borderBottomStyle,
+                        isActiveScreen && {
+                          backgroundColor: "#FFFFFF44",
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon}
+                        size={20}
+                        color={iconColor}
+                        style={styles.dropdownIcon}
+                      />
+                      <Text style={textStyle}>{item.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
-
       <ColorWheelPicker />
     </View>
   );
