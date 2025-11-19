@@ -68,7 +68,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     "hilab82.sqlite3",
     "iesvth.sqlite3",
     "kj2.sqlite3",
-    "kjv1769+.sqlite3",
+    "kjv+.sqlite3",
     "logos.sqlite3",
     "mbb05.sqlite3",
     "nasb+.sqlite3",

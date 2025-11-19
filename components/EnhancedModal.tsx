@@ -524,6 +524,7 @@ const renderCommentaryWithVerseLinks = (
           word.toLowerCase() === "the" ||
           word.toLowerCase() === "further" ||
           word.toLowerCase() === "also" ||
+          word.toLowerCase() === "broad" ||
           word.toLowerCase() === "under"
         ) {
           // Do not make it clickable; treat as plain text

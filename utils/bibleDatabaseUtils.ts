@@ -19,7 +19,7 @@ export const DISPLAY_TO_STEM_MAP: Record<string, string> = {
   NASB: "nasb+",
   Logos: "logos",
   KJ2: "kj2",
-  KJV1769: "kjv1769+",
+  KJV: "kjv+",
   ESV: "esv",
   ESVGSB: "esvgsb",
   IESV: "iesvth",

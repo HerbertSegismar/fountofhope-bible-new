@@ -1151,8 +1151,8 @@ class BibleDatabase {
         return require("../assets/databases/iesvth.sqlite3");
       case "kj2.sqlite3":
         return require("../assets/databases/kj2.sqlite3");
-      case "kjv1769+.sqlite3":
-        return require("../assets/databases/kjv1769+.sqlite3");
+      case "kjv+.sqlite3":
+        return require("../assets/databases/kjv+.sqlite3");
       case "logos.sqlite3":
         return require("../assets/databases/logos.sqlite3");
       case "mbb05.sqlite3":
