@@ -88,26 +88,9 @@ export const useChapterLoader = (
     };
   }, []);
 
-  const prevBookId = useRef<number | null>(null);
-  const prevChapter = useRef<number | null>(null);
-  const prevTargetVerse = useRef<number | undefined>(undefined);
-
   useEffect(() => {
-    // Prevent double-loading when only the object reference changed
-    if (
-      bookId === prevBookId.current &&
-      chapter === prevChapter.current &&
-      targetVerse === prevTargetVerse.current
-    ) {
-      return;
-    }
-
-    prevBookId.current = bookId;
-    prevChapter.current = chapter;
-    prevTargetVerse.current = targetVerse;
-
-    loadChapter(); 
-  }, [bookId, chapter, targetVerse]);
+     if (bibleDB) loadChapter();
+  }, [bibleDB, bookId, chapter, loadChapter]);
 
   useEffect(() => {
     if (targetVerse) {
