@@ -99,7 +99,7 @@ export const useChapterLoader = (
     }
   }, [targetVerse, bookId, chapter]);
 
-  const handleContentSizeChange = useCallback((w: number, h: number) => {
+  const handleContentSizeChange = useCallback((_w: number, h: number) => {
     setContentHeight(h);
   }, []);
 
@@ -109,11 +109,6 @@ export const useChapterLoader = (
     setScrollViewReady(true);
   }, []);
 
-  const handleChapterContainerLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-    },
-    []
-  );
 
   const handleVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
@@ -198,7 +193,7 @@ export const useChapterLoader = (
         if (isMounted.current && !hasScrolledToVerse) {
           scrollToTargetVerse();
         }
-      }, 50);
+      }, 100);
     }
   }, [
     verseMeasurements,
@@ -221,7 +216,6 @@ export const useChapterLoader = (
     chapterContainerRef,
     handleContentSizeChange,
     handleScrollViewLayout,
-    handleChapterContainerLayout,
     handleVerseLayout,
     scrollToTargetVerse,
     loadChapter,

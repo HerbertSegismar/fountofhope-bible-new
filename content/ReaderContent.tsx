@@ -388,8 +388,9 @@ const ToggleButton = memo(
         <Text
           style={{
             color: "white",
-            fontSize: isLandscape ? 20 : 24,
+            fontSize: isFullScreen ? 32 : 24,
             fontWeight: "bold",
+            marginBottom: isFullScreen? 3 : 0
           }}
         >
           {isFullScreen ? "▢" : "⛶"}

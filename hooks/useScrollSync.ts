@@ -81,7 +81,6 @@ export const useScrollSync = (
           animated: true,
         });
       }
-      // Assume animation duration ~250ms, give buffer
       setTimeout(() => {
         secondaryAnimating.current = false;
       }, 300);
@@ -120,7 +119,6 @@ export const useScrollSync = (
       !verses.length ||
       !secondaryVerses.length
     ) {
-      console.warn("Sync to primary skipped: Invalid state");
       isSyncing.current = false;
       return;
     }
@@ -146,7 +144,6 @@ export const useScrollSync = (
           useNativeDriver: false,
         }).start();
       }
-      // Assume animation duration 250ms, give buffer
       setTimeout(() => {
         primaryAnimating.current = false;
       }, 300);

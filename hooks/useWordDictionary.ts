@@ -54,7 +54,7 @@ const findBestMatch = (
   return bestMatch;
 };
 
-export const useWordDictionary = (displayVersion: string | undefined) => {
+export const useWordDictionary = (_displayVersion: string | undefined) => {
   const { getDatabase } = useBibleDatabase();
 
   const loadWordDefinition = useCallback(

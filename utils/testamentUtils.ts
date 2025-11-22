@@ -1,6 +1,6 @@
 export const getTestament = (
   bookNumber: number,
-  bookName: string
+  _bookName: string
 ): "OT" | "NT" => {
   if (bookNumber >= 10 && bookNumber <= 460) return "OT";
   if (bookNumber >= 470 && bookNumber <= 730) return "NT";
@@ -23,38 +23,38 @@ export const getBookByNumber = (bookNumber: number) => {
   return { number: standardNumber };
 };
 
-export const verifyBookDistribution = (books: any[]) => {
-  const otBooks = books.filter(
-    (book) => book.book_number >= 10 && book.book_number <= 460
-  );
-  const ntBooks = books.filter(
-    (book) => book.book_number >= 470 && book.book_number <= 730
-  );
-  const otherBooks = books.filter(
-    (book) =>
-      book.book_number < 10 ||
-      (book.book_number > 460 && book.book_number < 470) ||
-      book.book_number > 730
-  );
+// export const verifyBookDistribution = (books: any[]) => {
+//   const otBooks = books.filter(
+//     (book) => book.book_number >= 10 && book.book_number <= 460
+//   );
+//   const ntBooks = books.filter(
+//     (book) => book.book_number >= 470 && book.book_number <= 730
+//   );
+//   const otherBooks = books.filter(
+//     (book) =>
+//       book.book_number < 10 ||
+//       (book.book_number > 460 && book.book_number < 470) ||
+//       book.book_number > 730
+//   );
 
-  console.log(
-    `Book Distribution: OT=${otBooks.length}, NT=${ntBooks.length}, Other=${otherBooks.length}, Total=${books.length}`
-  );
-  console.log("Expected: OT=39, NT=27, Total=66");
+//   console.log(
+//     `Book Distribution: OT=${otBooks.length}, NT=${ntBooks.length}, Other=${otherBooks.length}, Total=${books.length}`
+//   );
+//   console.log("Expected: OT=39, NT=27, Total=66");
 
-  if (otherBooks.length > 0) {
-    console.warn(
-      "Unexpected book numbers found:",
-      otherBooks.map((b) => b.book_number)
-    );
-  }
+//   if (otherBooks.length > 0) {
+//     console.warn(
+//       "Unexpected book numbers found:",
+//       otherBooks.map((b) => b.book_number)
+//     );
+//   }
 
-  if (otBooks.length === 39 && ntBooks.length === 27) {
-    console.log("✅ Book distribution is correct!");
-  } else {
-    console.warn("❌ Book distribution doesn't match expected counts!");
-  }
-};
+//   if (otBooks.length === 39 && ntBooks.length === 27) {
+//     console.log("✅ Book distribution is correct!");
+//   } else {
+//     console.warn("❌ Book distribution doesn't match expected counts!");
+//   }
+// };
 
 export const BIBLE_BOOKS_MAP: {
   [key: number]: {

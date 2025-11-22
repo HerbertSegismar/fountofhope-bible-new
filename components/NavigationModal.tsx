@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Book, ChapterInfo } from "../types";
 import { BibleDatabase } from "../services/BibleDatabase";
 import { lightenColor } from "../utils/themeUtils";
-import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
+import { getTestament } from "../utils/testamentUtils";
 import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
@@ -158,7 +158,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
       setOldTestament(ot);
       setNewTestament(nt);
 
-      verifyBookDistribution(booksWithTestament);
+      //verifyBookDistribution(booksWithTestament);
       setIsDataLoaded(true);
     } catch (error) {
       console.error("Failed to load books:", error);

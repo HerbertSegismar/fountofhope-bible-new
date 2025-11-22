@@ -491,9 +491,6 @@ class BibleDatabase {
 
           // Analyze to ensure query planner uses the index
           await this.db.execAsync("ANALYZE verses;");
-          console.log(
-            "Enabled WAL and analyzed verses table for optimal performance"
-          );
 
           // Preload metadata caches for instant chapter/verse count lookups - moved earlier
           await this.preloadMetadata();
@@ -874,7 +871,7 @@ class BibleDatabase {
       throw new Error(`Missing required tables: ${missingTables.join(", ")}`);
     }
 
-    const [bookCount, verseCount] = await Promise.all([
+    const [bookCount, _verseCount] = await Promise.all([
       this.db!.getFirstAsync<{ count: number }>(
         "SELECT COUNT(*) as count FROM books"
       ),
@@ -1247,7 +1244,6 @@ export {
 // Additional exports (unchanged, as no issues identified)
 export const getTestament = (
   bookNumber: number,
-  bookName: string
 ): "OT" | "NT" => {
   if (bookNumber >= 10 && bookNumber <= 460) return "OT";
   if (bookNumber >= 470 && bookNumber <= 730) return "NT";
@@ -1294,12 +1290,6 @@ export const verifyBookDistribution = (books: any[]) => {
       "Unexpected book numbers found:",
       otherBooks.map((b) => b.book_number)
     );
-  }
-
-  if (otBooks.length === 39 && ntBooks.length === 27) {
-    console.log("✅ Book distribution is correct!");
-  } else {
-    console.warn("❌ Book distribution doesn't match expected counts!");
   }
 };
 

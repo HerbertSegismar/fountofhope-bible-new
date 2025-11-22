@@ -236,7 +236,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     async (keepVersions: string[] = []) => {
       const versionsToClose: string[] = [];
 
-      openDatabases.current.forEach((db, version) => {
+      openDatabases.current.forEach((_db, version) => {
         if (version === currentVersion) return;
         if (keepVersions.includes(version)) return;
         if (version.includes("com") || version.includes("dictionary")) {

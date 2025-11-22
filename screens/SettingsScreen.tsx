@@ -53,7 +53,7 @@ const SettingsScreen = () => {
 
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
+  const [_isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
   const [fontSize, setFontSize] = useState(16);
   const [tempFontInput, setTempFontInput] = useState("16");
   const [showMultiVersion, setShowMultiVersion] = useState(false);

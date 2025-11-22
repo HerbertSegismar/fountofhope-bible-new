@@ -27,7 +27,6 @@ export const DISPLAY_TO_STEM_MAP: Record<string, string> = {
   CEBB: "cebB",
   MBB05: "mbb05",
   TAGAB01: "tagab01",
-  
   TAGMB12: "tagmb12",
   HILAB82: "hilab82",
 } as const;

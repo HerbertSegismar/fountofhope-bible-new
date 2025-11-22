@@ -28,7 +28,7 @@ export const VERSION_DESCRIPTIONS: Record<string, string> = {
   "esvgsb.sqlite3": "ESV Global Study Bible",
   "hilab82.sqlite3": "Hiligaynon Ang Biblia 1982",
   "iesvth.sqlite3": "The Interliniar English-Greek NT",
-  "kj2.sqlite3": "King James 2",
+  "kj2.sqlite3": "King James 2000",
   "kjv+.sqlite3": "King James Version 1769",
   "logos.sqlite3": "Logos Bible",
   "mbb05.sqlite3": "Magandang Balita Biblia 2005",

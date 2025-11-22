@@ -9,7 +9,6 @@ export const useNavigationModal = (
   chapter: number,
   targetVerse: number | null,
   navigation: any,
-  _route: any
 ) => {
   const { bibleDB } = useBibleDatabase();
   const [showNavigation, setShowNavigation] = useState(false);
@@ -185,10 +184,10 @@ export const useNavigationModal = (
   const scrollToChaptersSection = useCallback(() => {
     if (modalScrollViewRef.current && chaptersSectionRef.current) {
       setTimeout(() => {
-        chaptersSectionRef.current?.measure((x, y, w, h, px, py) => {
-          modalScrollViewRef.current?.scrollTo({ y: py - 100, animated: true });
+        chaptersSectionRef.current?.measure((py) => {
+          modalScrollViewRef.current?.scrollTo({y: py - 100, animated: true });
         });
-      }, 100);
+      }, 120);
     }
   }, []);
 

@@ -40,6 +40,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
 import { ReaderContent } from "../content/ReaderContent";
+
 const initialDimensions = Dimensions.get("window");
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
@@ -358,7 +359,7 @@ export default function ReaderScreen({
   const [primaryMaxChapter, setPrimaryMaxChapter] = useState(0);
   const [secondaryMaxChapter, setSecondaryMaxChapter] = useState(0);
   const [openSelector, setOpenSelector] = useState<SelectorType>(null);
-  const [selectorLoading, setSelectorLoading] = useState(false);
+  const [selectorLoading, _setSelectorLoading] = useState(false);
   const [multiViewLayout, setMultiViewLayout] =
     useState<MultiViewLayout>("horizontal");
   const [isLinked, setIsLinked] = useState(true);
@@ -413,7 +414,7 @@ export default function ReaderScreen({
   const secondaryVerseMeasurementsRef = useRef<{ [key: number]: number }>({});
   const [secondaryScrollViewHeight, setSecondaryScrollViewHeight] = useState(0);
   const secondaryScrollViewRef = useRef<ScrollView>(null);
-  const [isSwitchingVersion, setIsSwitchingVersion] = useState(false);
+  const [_isSwitchingVersion, setIsSwitchingVersion] = useState(false);
   const secondaryDB = useRef<BibleDatabase | null>(null);
   const [fontSize, setFontSize] = useState(16);
   const [uiMode, setUiMode] = useState(0);

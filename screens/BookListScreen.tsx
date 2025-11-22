@@ -12,7 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../types";
 import { Book } from "../services/BibleDatabase";
-import { getTestament, verifyBookDistribution } from "../utils/testamentUtils";
+import { getTestament } from "../utils/testamentUtils";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme } from "../context/ThemeContext";
 import { lightenColor } from "../utils/themeUtils";
@@ -60,7 +60,6 @@ export default function BookListScreen({ navigation }: Props) {
       }));
 
       setBooks(booksWithTestament);
-      verifyBookDistribution(booksWithTestament);
     } catch (error) {
       console.error("Failed to load books:", error);
       Alert.alert("Error", "Failed to load books");
@@ -130,7 +129,7 @@ export default function BookListScreen({ navigation }: Props) {
       return { bgColor, textColor };
     };
 
-    const { bgColor, textColor } = getButtonStyles(borderColor, theme);
+    const { bgColor } = getButtonStyles(borderColor, theme);
 
     return (
       <TouchableOpacity

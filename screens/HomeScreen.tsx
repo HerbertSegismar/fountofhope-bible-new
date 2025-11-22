@@ -80,12 +80,6 @@ type BaseThemeColors =
   | typeof BASE_LIGHT_THEME_COLORS
   | typeof BASE_DARK_THEME_COLORS;
 
-type ThemeColors = BaseThemeColors & {
-  primary: string;
-  verseNumber: string;
-  tagColor: string;
-};
-
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
     case "serif":
@@ -122,7 +116,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [bookLongName, setBookLongName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
+  const [_isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
 
   useEffect(() => {
     if (bibleDB && !isInitializing) loadRandomVerse();

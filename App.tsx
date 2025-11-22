@@ -230,7 +230,15 @@ function HeaderActions({ navigation }: { navigation: any }) {
 
   const filteredMenuItems = useMemo(
     () =>
-      menuItems.filter((item) => item.key !== "theme" && item.key !== "colors"),
+      menuItems.filter(
+        (item) =>
+          item.key !== "bible" && item.key !== "theme" && item.key !== "colors"
+      ),
+    [menuItems]
+  );
+
+  const bibleItem = useMemo(
+    () => menuItems.find((item) => item.key === "bible"),
     [menuItems]
   );
 
@@ -299,6 +307,14 @@ function HeaderActions({ navigation }: { navigation: any }) {
   return (
     <View>
       <View style={styles.portraitHeaderContainer}>
+        {bibleItem && (
+          <TouchableOpacity
+            onPress={bibleItem.onPress}
+            style={styles.portraitHeaderButton}
+          >
+            <Ionicons name={bibleItem.icon} size={24} color={iconColor} />
+          </TouchableOpacity>
+        )}
         {themeItem && (
           <TouchableOpacity
             onPress={themeItem.onPress}

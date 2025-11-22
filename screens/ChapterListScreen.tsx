@@ -319,8 +319,7 @@ export default function ChapterListScreen({ navigation, route }: Props) {
             <View
               className={`p-6 rounded-lg border ${warningBorderClass}`}
               style={{
-                backgroundColor:
-                  warningBgClass === "bg-yellow-50" ? undefined : undefined,
+                backgroundColor: "#c05d5dff"
               }}
             >
               <Text

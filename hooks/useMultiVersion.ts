@@ -7,9 +7,8 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 export const useMultiVersion = (
   bookId: number,
   chapter: number,
-  verses: Verse[]
 ) => {
-  const { currentVersion, availableVersions, switchVersion } =
+  const { currentVersion, availableVersions } =
     useBibleDatabase();
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
@@ -47,17 +46,10 @@ export const useMultiVersion = (
 
   const handleSecondaryVersionSelect = useCallback(
     (version: string) => {
-      if (version === currentVersion) {
-        Alert.alert(
-          "Error",
-          "Secondary version cannot be the same as primary version"
-        );
-        return;
-      }
       setSecondaryVersion(version);
       setSecondaryFailureCount(0);
     },
-    [currentVersion]
+    []
   );
 
   const loadSecondaryVerses = useCallback(
@@ -95,11 +87,7 @@ export const useMultiVersion = (
           await dbInstance.init();
           secondaryDBCache.current[dbName] = dbInstance;
         }
-        if (secondaryVersion === currentVersion) {
-          secondaryChapterVerses = verses;
-        } else {
-          secondaryChapterVerses = await loadSecondaryVerses(dbInstance!);
-        }
+        secondaryChapterVerses = await loadSecondaryVerses(dbInstance!);
         setSecondaryFailureCount(0);
         setSecondaryVerses(secondaryChapterVerses);
       } catch (error) {
@@ -166,14 +154,11 @@ export const useMultiVersion = (
   );
 
   const handleSecondaryContentSizeChange = useCallback(
-    (w: number, h: number) => {
+    (h: number) => {
       setSecondaryContentHeight(h);
     },
     []
   );
-
-  const handleSecondaryScroll = useCallback((event: any) => {
-  }, []);
 
   return {
     showMultiVersion,
@@ -191,6 +176,5 @@ export const useMultiVersion = (
     handleSecondaryVersionSelect,
     handleSecondaryVerseLayout,
     handleSecondaryContentSizeChange,
-    handleSecondaryScroll,
   };
 };

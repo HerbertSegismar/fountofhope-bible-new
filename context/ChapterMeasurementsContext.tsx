@@ -71,7 +71,7 @@ export const ChapterMeasurementsProvider: React.FC<{ children: ReactNode }> = ({
     cacheHits: 0,
     cacheMisses: 0,
   });
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, _setIsLoaded] = useState(false);
 
   const saveMeasurementsToStorage = useCallback(() => {
     if (!isLoaded) return;

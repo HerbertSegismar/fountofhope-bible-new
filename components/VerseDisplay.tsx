@@ -136,7 +136,6 @@ const renderTree = (
       };
     } else if (node.type === "self-closing-tag") {
       const content = extractContentFromTag(node.fullTag || "");
-      const isNumber = /^\d+$/.test(content.trim());
       const tagContent = content.trim();
       return {
         header: [],
@@ -145,7 +144,7 @@ const renderTree = (
             key={`self-${globalKey}`}
             onPress={() => onTagPress?.(tagContent)}
             style={{
-              fontSize: isNumber ? baseFontSize: baseFontSize,
+              fontSize: baseFontSize,
               color: themeColors.tagColor,
               backgroundColor: themeColors.tagBg,
               fontFamily,
@@ -158,11 +157,6 @@ const renderTree = (
     } else if (node.type === "element") {
       const ch = node.children || [];
       const isTextContainer = node.tag === "t" || node.tag === "J";
-      const isNumber =
-        node.tag === "S" &&
-        ch.length === 1 &&
-        ch[0].type === "text" &&
-        /^\d+$/.test((ch[0].content || "").trim());
       const tagContent = ch
         .map((child: TreeNode) =>
           child.type === "text" ? child.content || "" : ""
@@ -199,7 +193,7 @@ const renderTree = (
               fontFamily,
             }
           : {
-              fontSize: baseFontSize * 1.1,
+              fontSize: baseFontSize * 0.8,
               color: themeColors.tagColor,
               fontFamily,
             };
