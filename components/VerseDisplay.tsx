@@ -145,7 +145,7 @@ const renderTree = (
             key={`self-${globalKey}`}
             onPress={() => onTagPress?.(tagContent)}
             style={{
-              fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
+              fontSize: isNumber ? baseFontSize: baseFontSize,
               color: themeColors.tagColor,
               backgroundColor: themeColors.tagBg,
               fontFamily,
@@ -195,11 +195,11 @@ const renderTree = (
         const renderedChildren = allBodies;
         const elemStyle = isTextContainer
           ? {
-              fontSize: baseFontSize * 0.95,
+              fontSize: baseFontSize,
               fontFamily,
             }
           : {
-              fontSize: isNumber ? baseFontSize * 0.5 : baseFontSize * 0.95,
+              fontSize: baseFontSize * 1.1,
               color: themeColors.tagColor,
               fontFamily,
             };
@@ -493,7 +493,7 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
     : themeColors.verseNumber;
   const numberStyle: TextStyle = useMemo(
     () => ({
-      fontSize: fontSize * 0.8,
+      fontSize: fontSize * 0.9,
       fontWeight: "600" as const,
       color: numberColor,
       fontFamily,
@@ -502,7 +502,7 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
   );
   const headerStyle: TextStyle = useMemo(
     () => ({
-      fontSize: fontSize * 0.9,
+      fontSize: fontSize,
       fontWeight: "bold" as const,
       color: textColor,
       marginBottom: 4,

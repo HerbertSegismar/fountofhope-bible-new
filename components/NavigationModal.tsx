@@ -542,7 +542,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                           }}
                         >
                           {chapterInfo.verseCount} v
-                          {chapterInfo.verseCount !== 1 ? "s" : ""}
+                          {chapterInfo.verseCount > 1 ? "s" : ""}
                         </Text>
                       </TouchableOpacity>
                     ))}

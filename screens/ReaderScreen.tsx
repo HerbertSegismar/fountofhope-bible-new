@@ -183,7 +183,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
                 paddingVertical: 8,
                 borderBottomWidth: index < filteredMenuItems.length - 2 ? 1 : 0,
                 borderBottomColor: colors.primary + "40",
-                // ← ONLY CHANGE: "Bible" gets the special background
                 backgroundColor: isBibleItem ? "#FFFFFF44" : undefined,
               }}
             >
@@ -842,7 +841,6 @@ export default function ReaderScreen({
   }, [openSelector]);
   const handleVersionSelect = useCallback(
     async (version: string) => {
-      if (version === currentVersion) return;
       try {
         setIsSwitchingVersion(true);
         await switchVersion(version);
@@ -871,22 +869,7 @@ export default function ReaderScreen({
     },
     [currentVersion, switchVersion]
   );
-  useEffect(() => {
-    if (showMultiVersion && secondaryVersion === currentVersion) {
-      const avail = availableBibleVersions.filter((v) => v !== currentVersion);
-      if (avail.length > 0) {
-        setSecondaryVersion(avail[0]);
-      } else {
-        setSecondaryVersion(null);
-        setShowMultiVersion(false);
-      }
-    }
-  }, [
-    currentVersion,
-    secondaryVersion,
-    showMultiVersion,
-    availableBibleVersions,
-  ]);
+  
   const toggleMultiVersion = useCallback(() => {
     setShowMultiVersion((prev) => !prev);
     resetButtonOpacity();

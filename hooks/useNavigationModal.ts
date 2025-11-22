@@ -1,4 +1,3 @@
-// Updated hooks/useNavigationModal.ts
 import { useState, useCallback, useEffect, useRef } from "react";
 import { ScrollView, View, Alert } from "react-native";
 import { Book, ChapterInfo } from "../types";
