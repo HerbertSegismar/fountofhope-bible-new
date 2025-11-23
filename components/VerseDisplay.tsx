@@ -110,50 +110,168 @@ const renderTree = (
   fontFamily?: string,
   onTagPress?: (content: string) => void,
   textColor?: string,
-  onWordPress?: (word: string) => void
+  onWordPress?: (word: string) => void,
+  isHighlighted?: boolean
 ): RenderResult => {
   const result: RenderResult = { header: [], body: [] };
+
+  // Function to detect if text contains encircled letters
+  const hasEncircledLetters = (text: string): boolean => {
+    return /[ⓐ-ⓩⓐ-ⓩ]/.test(text);
+  };
+
   const renderNode = (
     node: TreeNode,
     overrideTextColor?: string,
-    nodeOnWordPress?: (word: string) => void
+    nodeOnWordPress?: (word: string) => void,
+    _parentIsHighlighted?: boolean
   ): RenderResult => {
     globalKey++;
     if (node.type === "text") {
-      return {
-        header: [],
-        body: [
-          renderTextWithHighlight(
-            node.content || "",
-            themeColors,
-            highlight,
-            `text-${globalKey}`,
-            fontFamily,
-            overrideTextColor || textColor,
-            nodeOnWordPress
-          ),
-        ],
-      };
+      const content = node.content || "";
+
+      // Check if this text contains encircled letters
+      if (hasEncircledLetters(content)) {
+        // Split the text and apply larger font size to encircled letters
+        const parts: React.ReactNode[] = [];
+        const regex = /([ⓐ-ⓩⓐ-ⓩ])/g;
+        const textParts = content.split(regex);
+
+        textParts.forEach((part, index) => {
+          if (regex.test(part)) {
+            // Encircled letter - use larger font size
+            parts.push(
+              <Text
+                key={`encircled-${globalKey}-${index}`}
+                style={{
+                  fontSize: baseFontSize * 1.2,
+                  fontFamily,
+                  color: overrideTextColor || textColor,
+                  lineHeight: baseFontSize * 1.4, // Maintain line height consistency
+                }}
+              >
+                {part}
+              </Text>
+            );
+          } else if (part) {
+            // Regular text
+            parts.push(
+              renderTextWithHighlight(
+                part,
+                themeColors,
+                highlight,
+                `text-${globalKey}-${index}`,
+                fontFamily,
+                overrideTextColor || textColor,
+                nodeOnWordPress
+              )
+            );
+          }
+        });
+
+        return {
+          header: [],
+          body: [
+            <Text
+              key={`encircled-container-${globalKey}`}
+              style={{ fontFamily }}
+            >
+              {parts}
+            </Text>,
+          ],
+        };
+      } else {
+        // No encircled letters, use normal rendering
+        return {
+          header: [],
+          body: [
+            renderTextWithHighlight(
+              content,
+              themeColors,
+              highlight,
+              `text-${globalKey}`,
+              fontFamily,
+              overrideTextColor || textColor,
+              nodeOnWordPress
+            ),
+          ],
+        };
+      }
     } else if (node.type === "self-closing-tag") {
       const content = extractContentFromTag(node.fullTag || "");
       const tagContent = content.trim();
-      return {
-        header: [],
-        body: [
-          <Text
-            key={`self-${globalKey}`}
-            onPress={() => onTagPress?.(tagContent)}
-            style={{
-              fontSize: baseFontSize,
-              color: themeColors.tagColor,
-              backgroundColor: themeColors.tagBg,
-              fontFamily,
-            }}
-          >
-            {content}
-          </Text>,
-        ],
-      };
+
+      // Check if this tag content contains encircled letters
+      if (hasEncircledLetters(tagContent)) {
+        const parts: React.ReactNode[] = [];
+        const regex = /([ⓐ-ⓩⓐ-ⓩ])/g;
+        const textParts = tagContent.split(regex);
+
+        textParts.forEach((part, index) => {
+          if (regex.test(part)) {
+            // Encircled letter in tag - use larger font size
+            parts.push(
+              <Text
+                key={`tag-encircled-${globalKey}-${index}`}
+                style={{
+                  fontSize: baseFontSize * 1.2,
+                  color: themeColors.tagColor,
+                  backgroundColor: themeColors.tagBg,
+                  fontFamily,
+                  lineHeight: baseFontSize * 1.4,
+                }}
+                onPress={() => onTagPress?.(tagContent)}
+              >
+                {part}
+              </Text>
+            );
+          } else if (part) {
+            // Regular text in tag
+            parts.push(
+              <Text
+                key={`tag-normal-${globalKey}-${index}`}
+                style={{
+                  fontSize: baseFontSize * 0.8,
+                  color: themeColors.tagColor,
+                  backgroundColor: themeColors.tagBg,
+                  fontFamily,
+                }}
+                onPress={() => onTagPress?.(tagContent)}
+              >
+                {part}
+              </Text>
+            );
+          }
+        });
+
+        return {
+          header: [],
+          body: [
+            <Text key={`tag-container-${globalKey}`} style={{ fontFamily }}>
+              {parts}
+            </Text>,
+          ],
+        };
+      } else {
+        // No encircled letters in tag, use normal rendering
+        return {
+          header: [],
+          body: [
+            <Text
+              key={`self-${globalKey}`}
+              onPress={() => onTagPress?.(tagContent)}
+              style={{
+                fontSize: baseFontSize * 0.8,
+                color: themeColors.tagColor,
+                backgroundColor: themeColors.tagBg,
+                fontFamily,
+              }}
+            >
+              {content}
+            </Text>,
+          ],
+        };
+      }
     } else if (node.type === "element") {
       const ch = node.children || [];
       const isTextContainer = node.tag === "t" || node.tag === "J";
@@ -163,16 +281,25 @@ const renderTree = (
         )
         .join("")
         .trim();
+
+      // FIX: Only use wordsOfJesus color if we're NOT highlighted
       let childTextColor: string | undefined = overrideTextColor || textColor;
-      if (node.tag === "J") {
+      if (node.tag === "J" && !isHighlighted) {
+        // Only apply wordsOfJesus if not highlighted
         childTextColor = themeColors.wordsOfJesus;
       }
+
       const overrideTextColorForChildren = isTextContainer
         ? childTextColor
         : themeColors.tagColor;
       const childOnWordPress = isTextContainer ? onWordPress : undefined;
       const childResults = ch.map((child: TreeNode) =>
-        renderNode(child, overrideTextColorForChildren, childOnWordPress)
+        renderNode(
+          child,
+          overrideTextColorForChildren,
+          childOnWordPress,
+          isHighlighted
+        )
       );
       let allHeaders: React.ReactNode[] = [];
       let allBodies: React.ReactNode[] = [];
@@ -191,6 +318,7 @@ const renderTree = (
           ? {
               fontSize: baseFontSize,
               fontFamily,
+              color: childTextColor, // Use the determined color
             }
           : {
               fontSize: baseFontSize * 0.8,
@@ -213,8 +341,9 @@ const renderTree = (
     }
     return { header: [], body: [] };
   };
+
   for (const node of tree) {
-    const res = renderNode(node, undefined, onWordPress);
+    const res = renderNode(node, undefined, onWordPress, isHighlighted);
     result.header.push(...res.header);
     result.body.push(...res.body);
   }
@@ -394,7 +523,8 @@ const renderVerseTextWithXmlHighlight = (
   fontFamily?: string,
   onTagPress?: (content: string) => void,
   textColor?: string,
-  onWordPress?: (word: string) => void
+  onWordPress?: (word: string) => void,
+  isHighlighted?: boolean // Add this parameter
 ): RenderResult => {
   if (!text) return { header: [], body: [] };
   try {
@@ -408,7 +538,8 @@ const renderVerseTextWithXmlHighlight = (
       fontFamily,
       onTagPress,
       textColor,
-      onWordPress
+      onWordPress,
+      isHighlighted // Pass it through
     );
   } catch (error) {
     console.error("Error parsing XML tags:", error);
@@ -455,7 +586,7 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
   showVerseNumbers = true,
   prefix,
   showHeader = true,
-  isHighlighted = false,
+  isHighlighted = false, // This tells us if the verse is highlighted
   bookmarked = false,
 }) => {
   const rendered = useMemo(
@@ -468,7 +599,8 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
         fontFamily,
         (content) => onTagPress?.(content, verse),
         textColor,
-        onWordPress
+        onWordPress,
+        isHighlighted // Pass the highlight state
       ),
     [
       verse.text,
@@ -479,6 +611,7 @@ export const VerseDisplay: React.FC<VerseDisplayProps> = ({
       onTagPress,
       textColor,
       onWordPress,
+      isHighlighted, // Add to dependencies
     ]
   );
   const { header, body } = rendered;

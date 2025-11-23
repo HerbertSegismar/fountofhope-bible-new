@@ -10,6 +10,7 @@ import {
   type ThemeColors,
 } from "../utils/themeUtils";
 import { Fonts } from "../utils/fonts";
+import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 
 interface VerseViewProps {
   verses: Verse[];
@@ -413,7 +414,7 @@ export const VerseViewEnhanced: React.FC<VerseViewProps> = memo(
     const versionText = useMemo(
       () =>
         currentVersion
-          ? ` • ${currentVersion.replace(".sqlite3", "").toUpperCase()}`
+          ? ` • ${getVersionDisplayName(currentVersion)}`
           : "",
       [currentVersion]
     );

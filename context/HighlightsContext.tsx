@@ -131,7 +131,7 @@ export const HighlightsProvider: React.FC<{ children: ReactNode }> = ({
   const getChapterHighlights = (bookId: number, chapter: number): number[] => {
     const highlights: number[] = [];
 
-    highlightedVerses.forEach((value, key) => {
+    highlightedVerses.forEach((value, _key) => {
       if (value.bookId === bookId && value.chapter === chapter) {
         highlights.push(value.verse);
       }

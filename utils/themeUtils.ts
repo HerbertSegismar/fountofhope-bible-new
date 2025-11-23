@@ -54,12 +54,12 @@ export const BASE_LIGHT_THEME_COLORS = {
   textMuted: "#6C757D",
   highlightBg: "#FFF3CD",
   highlightBorder: "#FFD700",
-  highlightText: "#8B4513",
   highlightIcon: "#B8860B",
   tagBg: "rgba(0,255,0,0.1)",
   searchHighlightBg: "#FFFF99",
-  border: "#E9ECEF",
+  border: "#E9ECEF", 
   wordsOfJesus: "#de4924ff",
+  highlightText: "#108828ff",
 } as const;
 
 export const BASE_DARK_THEME_COLORS = {
@@ -71,12 +71,12 @@ export const BASE_DARK_THEME_COLORS = {
   textMuted: "#9CA3AF",
   highlightBg: "#1F2937",
   highlightBorder: "#FCD34D",
-  highlightText: "#FECACA",
   highlightIcon: "#FCD34D",
   tagBg: "rgba(255,255,0.1)",
   searchHighlightBg: "#c7a44cff",
   border: "#374151",
-  wordsOfJesus: "#d5520bff"
+  wordsOfJesus: "#d5520bff",
+  highlightText: "#c7a44cff",
 } as const;
 
 type BaseThemeColors =

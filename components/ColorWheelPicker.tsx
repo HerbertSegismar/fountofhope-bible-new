@@ -1,10 +1,4 @@
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useRef,
-  useCallback,
-} from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Modal,
@@ -44,9 +38,7 @@ const ColorWheelPicker = () => {
   const [isValidHex, setIsValidHex] = useState(true);
   const colorPickerRef = useRef<any>(null);
   const hexInputRef = useRef<TextInput>(null);
-  const isDraggingRef = useRef(false);
   const isManualInputRef = useRef(false);
-  const colorChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const palette = [
     "#FF0000",
@@ -101,16 +93,8 @@ const ColorWheelPicker = () => {
     return `#${formatted}`;
   };
 
-  const handleColorChange = useCallback((color: string) => {
-    if (!isManualInputRef.current) {
-      setSelectedColor(color);
-      setHexInput(color);
-      setIsValidHex(true);
-    }
-  }, []);
-
+  // Remove handleColorChange since we don't want continuous updates
   const handleColorChangeComplete = useCallback((color: string) => {
-    isDraggingRef.current = false;
     if (!isManualInputRef.current) {
       setSelectedColor(color);
       setHexInput(color);
@@ -142,9 +126,10 @@ const ColorWheelPicker = () => {
         isManualInputRef.current = false;
       }
     } else if (newText === "#") {
-      setIsValidHex(true); 
+      setIsValidHex(true);
     }
   }, []);
+
   const handleHexSubmit = useCallback(() => {
     if (validateHex(hexInput)) {
       const formattedHex = formatHex(hexInput);
@@ -164,6 +149,7 @@ const ColorWheelPicker = () => {
       );
     }
   }, [hexInput]);
+
   const handleSwatchPress = useCallback((color: string) => {
     isManualInputRef.current = false;
     setSelectedColor(color);
@@ -174,13 +160,16 @@ const ColorWheelPicker = () => {
       colorPickerRef.current.setState({ currentColor: color });
     }
   }, []);
+
   const handlePreviewPress = useCallback(() => {
     hexInputRef.current?.focus();
   }, []);
+
   const handleInputFocus = useCallback(() => {
     setIsInputFocused(true);
     isManualInputRef.current = true;
   }, []);
+
   const handleInputBlur = useCallback(() => {
     setIsInputFocused(false);
   }, []);
@@ -210,14 +199,6 @@ const ColorWheelPicker = () => {
     setIsValidHex(true);
     isManualInputRef.current = false;
   }, [setShowColorPicker, customColor]);
-
-  useEffect(() => {
-    return () => {
-      if (colorChangeTimeoutRef.current) {
-        clearTimeout(colorChangeTimeoutRef.current);
-      }
-    };
-  }, []);
 
   const isPortrait = screenDimensions.height >= screenDimensions.width;
   const minDim = Math.min(screenDimensions.width, screenDimensions.height);
@@ -413,7 +394,7 @@ const ColorWheelPicker = () => {
                       <ColorPicker
                         ref={colorPickerRef}
                         color={selectedColor}
-                        onColorChange={handleColorChange}
+                        onColorChange={() => {}} // Empty function to prevent continuous updates
                         onColorChangeComplete={handleColorChangeComplete}
                         thumbSize={30}
                         sliderSize={25}
@@ -466,8 +447,8 @@ const ColorWheelPicker = () => {
                         )}
 
                         <Text style={dynamicStyles.instructions}>
-                          Tap the wheel & slider to pick a color or type the
-                          hex code
+                          Tap the wheel & slider to pick a color or type the hex
+                          code
                         </Text>
                       </View>
 
