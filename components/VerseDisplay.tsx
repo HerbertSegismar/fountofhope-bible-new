@@ -321,7 +321,7 @@ const renderTree = (
               color: childTextColor, // Use the determined color
             }
           : {
-              fontSize: baseFontSize * 0.8,
+              fontSize: baseFontSize * 0.9,
               color: themeColors.tagColor,
               fontFamily,
             };

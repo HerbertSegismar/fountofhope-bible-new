@@ -754,7 +754,7 @@ const escapeRegex = (string: string) =>
 
 const getBookName = (bookNum: number) => {
   const entry = Object.entries(BIBLE_BOOKS_MAP).find(
-    ([key, value]) => parseInt(key) === bookNum
+    ([key, _value]) => parseInt(key) === bookNum
   );
   return entry ? entry[1].long : "Unknown Book";
 };
@@ -1408,8 +1408,8 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
                 </TouchableOpacity>
                 <Text
                   style={{
-                    color: themeColors.textPrimary,
-                    fontSize: 18,
+                    color: themeColors.primary,
+                    fontSize: 16,
                     fontWeight: "bold",
                     flex: 1,
                     textAlign: "center",
@@ -1605,9 +1605,9 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
                   style={{
                     flex: 1,
                     textAlign: "center",
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: "bold",
-                    color: themeColors.textPrimary,
+                    color: themeColors.primary,
                     fontFamily: actualFontFamily,
                   }}
                 >

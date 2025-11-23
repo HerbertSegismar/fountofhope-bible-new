@@ -732,11 +732,9 @@ export default function ReaderScreen({
         setShowMultiVersion(false);
       }
       let initialSec = secVer;
+      // REMOVED: The filtering that prevented same version selection
       if (!initialSec) {
-        const avail = availableBibleVersions.filter(
-          (v) => v !== currentVersion
-        );
-        initialSec = avail[0] || availableBibleVersions[0];
+        initialSec = availableBibleVersions[0]; // Just pick the first available version
       }
       setSecondaryVersion(initialSec);
       if (linkedStr !== null) {
@@ -745,7 +743,7 @@ export default function ReaderScreen({
     } catch (e) {
       console.error("Failed to load reader settings", e);
     }
-  }, [availableBibleVersions, currentVersion]);
+  }, [availableBibleVersions]); // REMOVED: currentVersion dependency
   const loadBackgroundSettings = useCallback(async () => {
     try {
       const [savedOpacity, savedIndex] = await Promise.all([
@@ -870,7 +868,7 @@ export default function ReaderScreen({
     },
     [currentVersion, switchVersion]
   );
-  
+
   const toggleMultiVersion = useCallback(() => {
     setShowMultiVersion((prev) => !prev);
     resetButtonOpacity();
@@ -1471,14 +1469,18 @@ export default function ReaderScreen({
   const versionName = getVersionDisplayName(currentVersion);
   const handleSecondaryVersionSelect = useCallback(
     (version: string) => {
-      if (version === currentVersion) return;
+      // REMOVED: The check that prevented same version selection
       setSecondaryVersion(version);
     },
-    [currentVersion]
+    [] // REMOVED: currentVersion dependency
   );
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   const headerContentHeight = 60;
   const headerTotalHeight = insets.top + headerContentHeight;
+
+  // REMOVED: Version filtering for selector dropdowns
+  const versionsToShow = availableBibleVersions;
+
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1516,20 +1518,7 @@ export default function ReaderScreen({
       }
     }
   }
-  const versionsToShow = useMemo(() => {
-    if (openSelector === "primary" && showMultiVersion && secondaryVersion) {
-      return availableBibleVersions.filter((v) => v !== secondaryVersion);
-    } else if (openSelector === "secondary") {
-      return availableBibleVersions.filter((v) => v !== currentVersion);
-    }
-    return availableBibleVersions;
-  }, [
-    openSelector,
-    availableBibleVersions,
-    currentVersion,
-    showMultiVersion,
-    secondaryVersion,
-  ]);
+
   const renderProgressBar = useCallback(() => {
     if (!showMultiVersion || isLinked) {
       return (
@@ -2008,7 +1997,7 @@ export default function ReaderScreen({
                         paddingVertical: 8,
                         backgroundColor: isActive
                           ? colors.secondary
-                          : undefined, // ← ONLY CHANGE: active gets colors.secondary
+                          : undefined,
                         borderBottomWidth:
                           index < versionsToShow.length - 1 ? 1 : 0,
                         borderBottomColor: colors.primary + "40",

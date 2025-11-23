@@ -133,22 +133,7 @@ const SettingsScreen = () => {
     setSelectedVersion(currentVersion);
   }, [currentVersion]);
 
-  useEffect(() => {
-    if (showMultiVersion && secondaryVersion === currentVersion) {
-      const avail = availableBibleVersions.filter((v) => v !== currentVersion);
-      if (avail.length > 0) {
-        setSecondaryVersion(avail[0]);
-      } else {
-        setSecondaryVersion(null);
-        setShowMultiVersion(false);
-      }
-    }
-  }, [
-    currentVersion,
-    secondaryVersion,
-    showMultiVersion,
-    availableBibleVersions,
-  ]);
+  // REMOVED: The useEffect that filtered versions for multiview
 
   useEffect(() => {
     setTempFontInput(fontSize.toString());
@@ -202,10 +187,10 @@ const SettingsScreen = () => {
 
   const handleSecondaryVersionSelect = useCallback(
     (version: string) => {
-      if (version === currentVersion) return;
+      // REMOVED: The check that prevented same version selection
       setSecondaryVersion(version);
     },
-    [currentVersion]
+    [] // REMOVED: currentVersion dependency
   );
 
   const commitFontSize = useCallback(() => {
@@ -603,18 +588,10 @@ const SettingsScreen = () => {
     );
   };
 
-  const primaryAvailableVersions = useMemo(
-    () =>
-      showMultiVersion && secondaryVersion
-        ? availableBibleVersions.filter((v) => v !== secondaryVersion)
-        : availableBibleVersions,
-    [availableBibleVersions, showMultiVersion, secondaryVersion]
-  );
-
-  const secondaryAvailableVersions = useMemo(
-    () => availableBibleVersions.filter((v) => v !== currentVersion),
-    [availableBibleVersions, currentVersion]
-  );
+  // REMOVED: Version filtering for primary and secondary versions
+  // Now both selectors can show all available versions including the current one
+  const primaryAvailableVersions = availableBibleVersions;
+  const secondaryAvailableVersions = availableBibleVersions;
 
   const contactEmail = "fountofhopedevotionals@gmail.com";
 
