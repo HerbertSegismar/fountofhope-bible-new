@@ -150,7 +150,7 @@ const renderTree = (
                   lineHeight: baseFontSize * 1.4, // Maintain line height consistency
                 }}
               >
-                {part}
+                {" "}{part}
               </Text>
             );
           } else if (part) {
