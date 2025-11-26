@@ -130,7 +130,7 @@ const renderCommentaryWithVerseLinks = (
   const escapedKeys = bookKeys.map((key) => escapeRegex(key));
   const bookPattern = escapedKeys.map((key) => `\\b${key}`).join("|");
   const DASH_PATTERN = "[-–—]";
-  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\\s*\\d+(?::\\d+)?)?`;
+  const VERSE_RANGE = `\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\\s*\\d+)?`;
   const VERSE_LIST = `(${VERSE_RANGE}(?:\\s*,\\s*${VERSE_RANGE})*)`;
 
   // Enhanced verse reference patterns
@@ -139,13 +139,20 @@ const renderCommentaryWithVerseLinks = (
     "gi"
   );
 
-  // NEW: Enhanced continuation regex that handles chapter:verse patterns after semicolons
+  // Enhanced continuation regex that handles chapter:verse patterns after semicolons
   const continuationWithChapterRegex = new RegExp(
     `[,;]\\s*(?:(\\d+)\\s*:\\s*${VERSE_LIST})\\b`,
     "gi"
   );
 
   const chapterOnlyRegex = /(?:ch\.|chs\.|chapter)\.?\s+(\d+)\b/gi;
+
+  // Pattern for "ch. 4:14" or "chapter 4:14" with verse ranges
+  const chapterWithVerseRegex = new RegExp(
+    `(?:ch\\.?|chs\\.?|chapter)\\.?\\s+(\\d+)\\s*:\\s*(\\d+(?:\\s*(?:${DASH_PATTERN}|\\s*to\\s*)\\s*\\d+)?)\\b`,
+    "gi"
+  );
+
   const verseOnlyRegex = new RegExp(
     `(?:v\\.|vv?\\.?|ver\\.|verse)s?\\s+${VERSE_LIST}\\b`,
     "gi"
@@ -181,7 +188,7 @@ const renderCommentaryWithVerseLinks = (
     const fullMatch = fullRefRegex.exec(text);
     const fullPos = fullMatch ? fullMatch.index : Infinity;
 
-    // NEW: Check for continuation with chapter references (like "; 9:11")
+    // Check for continuation with chapter references (like "; 9:11")
     continuationWithChapterRegex.lastIndex = lastIndex;
     const contWithChapterMatch = continuationWithChapterRegex.exec(text);
     const contWithChapterPos = contWithChapterMatch
@@ -191,6 +198,13 @@ const renderCommentaryWithVerseLinks = (
     chapterOnlyRegex.lastIndex = lastIndex;
     const chapMatch = chapterOnlyRegex.exec(text);
     const chapPos = chapMatch ? chapMatch.index : Infinity;
+
+    // Check for chapter with verse pattern (like "ch. 4:14" or "ch. 4:14-20")
+    chapterWithVerseRegex.lastIndex = lastIndex;
+    const chapWithVerseMatch = chapterWithVerseRegex.exec(text);
+    const chapWithVersePos = chapWithVerseMatch
+      ? chapWithVerseMatch.index
+      : Infinity;
 
     verseOnlyRegex.lastIndex = lastIndex;
     const verseMatch = verseOnlyRegex.exec(text);
@@ -224,8 +238,9 @@ const renderCommentaryWithVerseLinks = (
     let minPos = Infinity;
     let selectedType:
       | "full"
-      | "contWithChapter" // NEW: Added this type
+      | "contWithChapter"
       | "chap"
+      | "chapWithVerse"
       | "verse"
       | "chapVerse"
       | "see"
@@ -235,10 +250,15 @@ const renderCommentaryWithVerseLinks = (
       minPos = fullPos;
       selectedType = "full";
     }
-    // NEW: Check continuation with chapter before other patterns
+    // Check continuation with chapter before other patterns
     if (contWithChapterPos < minPos && contWithChapterMatch !== null) {
       minPos = contWithChapterPos;
       selectedType = "contWithChapter";
+    }
+    // Check chapterWithVerse BEFORE chapterOnly to ensure we capture verses
+    if (chapWithVersePos < minPos && chapWithVerseMatch !== null) {
+      minPos = chapWithVersePos;
+      selectedType = "chapWithVerse";
     }
     if (chapPos < minPos && chapMatch !== null) {
       minPos = chapPos;
@@ -267,10 +287,12 @@ const renderCommentaryWithVerseLinks = (
       switch (selectedType) {
         case "full":
           return fullMatch![0];
-        case "contWithChapter": // NEW: Handle this case
+        case "contWithChapter":
           return contWithChapterMatch![0];
         case "chap":
           return chapMatch![0];
+        case "chapWithVerse":
+          return chapWithVerseMatch![0];
         case "verse":
           return verseMatch![0];
         case "chapVerse":
@@ -286,10 +308,12 @@ const renderCommentaryWithVerseLinks = (
       switch (selectedType) {
         case "full":
           return fullMatch!;
-        case "contWithChapter": // NEW: Handle this case
+        case "contWithChapter":
           return contWithChapterMatch!;
         case "chap":
           return chapMatch!;
+        case "chapWithVerse":
+          return chapWithVerseMatch!;
         case "verse":
           return verseMatch!;
         case "chapVerse":
@@ -316,11 +340,12 @@ const renderCommentaryWithVerseLinks = (
     switch (selectedType) {
       case "full": {
         const bookStr = theMatch[1] ?? "";
-        let bookNum = currentBook;
+        let bookNum = currentBook; // Start with current book
         if (bookStr) {
+          // If book is specified, look it up and update current book
           bookNum = findBookNumber(bookStr, bookToNumber);
           if (bookNum !== undefined) {
-            currentBook = bookNum;
+            currentBook = bookNum; // Update current book for subsequent references
           }
         }
         const chapterStr = theMatch[2];
@@ -336,32 +361,19 @@ const renderCommentaryWithVerseLinks = (
             ranges = parseVerseList(verseListStr);
           } else {
             const rangeRegex = new RegExp(
-              `^(\\d+)\\s*(?:${DASH_PATTERN}|to)\\s*(\\d+(?::(\\d+))?)$`,
+              `^(\\d+)\\s*(?:${DASH_PATTERN}|to)\\s*(\\d+)$`,
               "i"
             );
             const match = verseListStr.match(rangeRegex);
             if (match) {
               const startV = parseInt(match[1]);
-              const endStr = match[2];
-              if (endStr.includes(":")) {
-                const endChStr = endStr.split(":")[0].trim();
-                const endVStr = endStr.split(":")[1].trim();
-                const endCh = parseInt(endChStr);
-                const endV = parseInt(endVStr);
-                if (!isNaN(endCh) && !isNaN(endV) && !isNaN(startV)) {
-                  chapterEnd = endCh;
+              const endV = parseInt(match[2]);
+              if (!isNaN(endV) && !isNaN(startV)) {
+                if (endV < startV) {
+                  chapterEnd = endV;
                   startVerseForRange = startV;
-                  endVerseForRange = endV;
-                }
-              } else {
-                const endV = parseInt(endStr);
-                if (!isNaN(endV) && !isNaN(startV)) {
-                  if (endV < startV) {
-                    chapterEnd = endV;
-                    startVerseForRange = startV;
-                  } else {
-                    ranges = [{ start: startV, end: endV }];
-                  }
+                } else {
+                  ranges = [{ start: startV, end: endV }];
                 }
               }
             } else {
@@ -411,7 +423,6 @@ const renderCommentaryWithVerseLinks = (
         break;
       }
 
-      // NEW: Handle continuation with chapter references (like "; 9:11")
       case "contWithChapter": {
         if (currentBook === undefined) {
           parts.push(
@@ -421,7 +432,7 @@ const renderCommentaryWithVerseLinks = (
           );
           break;
         }
-        const _currentBook = currentBook;
+        const _currentBook = currentBook; // Use current book (no update)
         const chapterStr = theMatch[1];
         const verseListStr = theMatch[2] ?? "";
 
@@ -479,7 +490,7 @@ const renderCommentaryWithVerseLinks = (
           );
           break;
         }
-        const _currentBook = currentBook;
+        const _currentBook = currentBook; // Use current book (no update)
         const ch = parseInt(`${chStr}`, 10);
         parts.push(
           <Text
@@ -494,6 +505,70 @@ const renderCommentaryWithVerseLinks = (
         break;
       }
 
+      case "chapWithVerse": {
+        const chStr = theMatch[1];
+        const verseStr = theMatch[2] ?? "";
+
+        if (chStr === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+          break;
+        }
+
+        // For "ch." pattern, use current book if available (no update)
+        const bookNum = currentBook;
+
+        if (bookNum === undefined) {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+          break;
+        }
+
+        const ch = parseInt(chStr, 10);
+
+        // Parse the verse string which could be a single verse or range
+        let ranges: { start: number; end: number }[] = [];
+        if (verseStr.includes("-")) {
+          const [startStr, endStr] = verseStr.split(/[-–—]/);
+          const start = parseInt(startStr);
+          const end = parseInt(endStr);
+          if (!isNaN(start) && !isNaN(end)) {
+            ranges = [{ start, end }];
+          }
+        } else {
+          const verse = parseInt(verseStr);
+          if (!isNaN(verse)) {
+            ranges = [{ start: verse, end: verse }];
+          }
+        }
+
+        if (ranges.length > 0) {
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={() => onNavigate(bookNum, ch, ranges)}
+              style={linkStyle}
+            >
+              {refText}
+            </Text>
+          );
+          currentChapter = ch;
+        } else {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+        }
+        break;
+      }
+
       case "verse": {
         if (currentBook === undefined || currentChapter === undefined) {
           parts.push(
@@ -503,8 +578,8 @@ const renderCommentaryWithVerseLinks = (
           );
           break;
         }
-        const _currentBook = currentBook;
-        const _currentChapter = currentChapter;
+        const _currentBook = currentBook; // Use current book (no update)
+        const _currentChapter = currentChapter; // Use current chapter (no update)
         const verseListStr = theMatch[1] ?? "";
         const ranges = parseVerseList(verseListStr);
         if (ranges.length > 0) {
@@ -529,11 +604,12 @@ const renderCommentaryWithVerseLinks = (
 
       case "chapVerse": {
         const bookStr = theMatch[1] ?? "";
-        let bookNum = currentBook;
+        let bookNum = currentBook; // Start with current book
         if (bookStr) {
+          // If book is specified, look it up and update current book
           bookNum = findBookNumber(bookStr, bookToNumber);
           if (bookNum !== undefined) {
-            currentBook = bookNum;
+            currentBook = bookNum; // Update current book for subsequent references
           }
         }
         const num1Str = theMatch[2];
