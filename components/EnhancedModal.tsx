@@ -482,7 +482,8 @@ const renderCommentaryWithVerseLinks = (
 
       case "chap": {
         const chStr = theMatch[1];
-        if (chStr === undefined || currentBook === undefined) {
+        if (chStr === undefined || currentBookNum === undefined) {
+          // CHANGED: Check currentBookNum instead of currentBook
           parts.push(
             <Text key={parts.length} style={plainStyle}>
               {refText}
@@ -490,7 +491,7 @@ const renderCommentaryWithVerseLinks = (
           );
           break;
         }
-        const _currentBook = currentBook; // Use current book (no update)
+        const _currentBook = currentBookNum; // CHANGED: Use currentBookNum instead of currentBook
         const ch = parseInt(`${chStr}`, 10);
         parts.push(
           <Text
@@ -518,8 +519,8 @@ const renderCommentaryWithVerseLinks = (
           break;
         }
 
-        // For "ch." pattern, use current book if available (no update)
-        const bookNum = currentBook;
+        // For "ch." pattern, use current book from commentary context
+        const bookNum = currentBookNum; // CHANGED: Use currentBookNum instead of currentBook
 
         if (bookNum === undefined) {
           parts.push(
