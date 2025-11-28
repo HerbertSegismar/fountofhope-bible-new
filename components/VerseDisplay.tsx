@@ -42,16 +42,6 @@ const buildTree = (nodes: ParsedNode[]): TreeNode[] => {
     } else if (node.type === "closing-tag") {
       if (stack.length > 0) {
         const parent = stack[stack.length - 1];
-        const lastElement = parent[parent.length - 1];
-        if (
-          lastElement &&
-          lastElement.type === "element" &&
-          lastElement.tag !== node.tag
-        ) {
-          console.warn(
-            `Mismatched closing tag: expected ${lastElement.tag}, got ${node.tag}`
-          );
-        }
         current = stack.pop()!;
       }
     } else if (node.type === "self-closing-tag" || node.type === "text") {

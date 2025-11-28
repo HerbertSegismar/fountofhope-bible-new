@@ -158,7 +158,7 @@ const renderCommentaryWithVerseLinks = (
     "gi"
   );
   const chapVerseRegex = new RegExp(
-    `(?:(${bookPattern})\\.?\\s+)?(\\d+)(?:\\s*${DASH_PATTERN}\\s*(\\d+))?\\b`,
+    `(?:(${bookPattern})\\.?\\s+)?${VERSE_LIST}\\b`,
     "gi"
   );
 
@@ -181,6 +181,16 @@ const renderCommentaryWithVerseLinks = (
   let lastIndex = 0;
   let currentBook: number | undefined = currentBookNum;
   let currentChapter: number | undefined = currentChapterNum;
+
+  const excludedSeeWords = new Set([
+    "v",
+    "vv",
+    "ver",
+    "verse",
+    "ch",
+    "chs",
+    "chapter",
+  ]);
 
   while (true) {
     // First, try all verse reference patterns
@@ -227,7 +237,7 @@ const renderCommentaryWithVerseLinks = (
 
       if (currentBookNum !== undefined ? isAllUpper : true) {
         const isBookAbbrev = findBookNumber(word, bookToNumber) !== undefined;
-        if (!isBookAbbrev) {
+        if (!isBookAbbrev && !excludedSeeWords.has(word.toLowerCase())) {
           seePos = seeRawMatch.index;
           seeMatchForUse = seeRawMatch;
         }
@@ -483,7 +493,6 @@ const renderCommentaryWithVerseLinks = (
       case "chap": {
         const chStr = theMatch[1];
         if (chStr === undefined || currentBookNum === undefined) {
-          // CHANGED: Check currentBookNum instead of currentBook
           parts.push(
             <Text key={parts.length} style={plainStyle}>
               {refText}
@@ -491,7 +500,7 @@ const renderCommentaryWithVerseLinks = (
           );
           break;
         }
-        const _currentBook = currentBookNum; // CHANGED: Use currentBookNum instead of currentBook
+        const _currentBook = currentBookNum;
         const ch = parseInt(`${chStr}`, 10);
         parts.push(
           <Text
@@ -520,7 +529,7 @@ const renderCommentaryWithVerseLinks = (
         }
 
         // For "ch." pattern, use current book from commentary context
-        const bookNum = currentBookNum; // CHANGED: Use currentBookNum instead of currentBook
+        const bookNum = currentBookNum;
 
         if (bookNum === undefined) {
           parts.push(
@@ -571,7 +580,7 @@ const renderCommentaryWithVerseLinks = (
       }
 
       case "verse": {
-        if (currentBook === undefined || currentChapter === undefined) {
+        if (currentBookNum === undefined || currentChapterNum === undefined) {
           parts.push(
             <Text key={parts.length} style={plainStyle}>
               {refText}
@@ -579,8 +588,8 @@ const renderCommentaryWithVerseLinks = (
           );
           break;
         }
-        const _currentBook = currentBook; // Use current book (no update)
-        const _currentChapter = currentChapter; // Use current chapter (no update)
+        const _currentBook = currentBookNum;
+        const _currentChapter = currentChapterNum;
         const verseListStr = theMatch[1] ?? "";
         const ranges = parseVerseList(verseListStr);
         if (ranges.length > 0) {
@@ -613,21 +622,8 @@ const renderCommentaryWithVerseLinks = (
             currentBook = bookNum; // Update current book for subsequent references
           }
         }
-        const num1Str = theMatch[2];
-        const num2Str = theMatch[3];
-        if (num1Str === undefined) {
-          parts.push(
-            <Text key={parts.length} style={plainStyle}>
-              {refText}
-            </Text>
-          );
-          break;
-        }
-        const num1 = parseInt(`${num1Str}`, 10);
-        const num2 = num2Str ? parseInt(`${num2Str}`, 10) : undefined;
-        const hasContext = !!bookStr || !!num2Str;
 
-        if (bookNum === undefined || !hasContext) {
+        if (bookNum === undefined) {
           parts.push(
             <Text key={parts.length} style={plainStyle}>
               {refText}
@@ -636,31 +632,65 @@ const renderCommentaryWithVerseLinks = (
           break;
         }
 
+        const listStr = theMatch[2];
+        const ranges = parseVerseList(listStr);
         const isSingleChapterBook = SINGLE_CHAPTER_BOOKS.has(bookNum);
-        let onPressCallback;
-        let tempCurrentChapter: number;
+
+        let onPressCallback: (() => void) | undefined = undefined;
 
         if (isSingleChapterBook) {
-          const verseStart = num1;
-          const verseEnd = num2 !== undefined ? num2 : num1;
-          onPressCallback = () =>
-            onNavigate(bookNum, 1, [{ start: verseStart, end: verseEnd }]);
-          tempCurrentChapter = 1;
+          const chapter = 1;
+          if (ranges.length > 0) {
+            onPressCallback = () => onNavigate(bookNum, chapter, ranges);
+            currentChapter = chapter;
+          }
         } else {
-          if (num2 !== undefined) {
-            onPressCallback = () => onNavigate(bookNum, num1, undefined, num2);
-            tempCurrentChapter = num2;
+          if (listStr.includes(",")) {
+            parts.push(
+              <Text key={parts.length} style={plainStyle}>
+                {refText}
+              </Text>
+            );
+            break;
           } else {
-            onPressCallback = () => onNavigate(bookNum, num1);
-            tempCurrentChapter = num1;
+            const hasDash = listStr.match(new RegExp(DASH_PATTERN));
+            if (hasDash) {
+              const splitRegex = new RegExp(`\\s*(?:${DASH_PATTERN}|to)\\s*`);
+              const [startStr, endStr] = listStr.split(splitRegex);
+              const start = parseInt(startStr.trim(), 10);
+              const end = parseInt(endStr.trim(), 10);
+              if (!isNaN(start) && !isNaN(end)) {
+                onPressCallback = () =>
+                  onNavigate(bookNum, start, undefined, end);
+                currentChapter = end;
+              }
+            } else {
+              const ch = parseInt(listStr.trim(), 10);
+              if (!isNaN(ch)) {
+                onPressCallback = () => onNavigate(bookNum, ch);
+                currentChapter = ch;
+              }
+            }
           }
         }
-        currentChapter = tempCurrentChapter;
-        parts.push(
-          <Text key={parts.length} onPress={onPressCallback} style={linkStyle}>
-            {refText}
-          </Text>
-        );
+
+        if (onPressCallback) {
+          parts.push(
+            <Text
+              key={parts.length}
+              onPress={onPressCallback}
+              style={linkStyle}
+            >
+              {refText}
+            </Text>
+          );
+        } else {
+          parts.push(
+            <Text key={parts.length} style={plainStyle}>
+              {refText}
+            </Text>
+          );
+        }
         break;
       }
 
@@ -1265,10 +1295,6 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
               const secondaryDB = await getDatabase(dbFilename);
               if (secondaryDB) {
                 loadedVerses = await secondaryDB.getVerses(bookNum, ch);
-              } else {
-                console.warn(
-                  `Secondary DB not available for ${verseVersion}, falling back to primary`
-                );
               }
             }
           }
@@ -1459,7 +1485,7 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
       } else if (ranges && ranges.length > 0) {
         chStr += `:${ranges
           .map((r) => (r.start === r.end ? r.start : `${r.start}-${r.end}`))
-          .join(",")}`;
+          .join(", ")}`;
       }
       return `${getBookName(bookNum)} ${chStr}`;
     }, [currentVerseRef]);

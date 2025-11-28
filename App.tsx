@@ -64,8 +64,6 @@ function useFonts() {
 
     async function loadFonts() {
       try {
-        console.log("Starting font loading...");
-
         await Font.loadAsync({
           "Oswald-Variable": Oswald_VariableFont,
           "RubikGlitch-Regular": RubikGlitch_Regular,
@@ -74,9 +72,6 @@ function useFonts() {
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         if (mounted) {
-          const fontFamilies = await Font.getLoadedFonts();
-          console.log("Loaded fonts:", fontFamilies);
-
           setFontsLoaded(true);
           setFontError(null);
         }

@@ -51,7 +51,6 @@ export const useChapterLoader = (
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       if (signal.aborted) {
-        console.log("Load aborted");
         return;
       }
       try {

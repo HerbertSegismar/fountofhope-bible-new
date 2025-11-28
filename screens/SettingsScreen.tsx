@@ -151,9 +151,6 @@ const SettingsScreen = () => {
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
           await switchVersion(version);
-          console.log(
-            `Version switch to ${version} succeeded on attempt ${attempt + 1}`
-          );
           setIsSwitching(false);
           return;
         } catch (error: unknown) {

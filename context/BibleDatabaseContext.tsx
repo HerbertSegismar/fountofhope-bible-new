@@ -364,11 +364,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     async (version: string): Promise<BibleDatabase | undefined> => {
       try {
         const db = await initializeDatabase(version, false);
-        if (!version.includes("com")) {
-          preloadCurrentCommentary(version).catch((error) => {
-            console.warn(`Failed to preload commentary for ${version}:`, error);
-          });
-        }
         return db;
       } catch (error) {
         console.error(`Error loading database ${version}:`, error);
@@ -379,7 +374,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   );
 
   const recoverDatabaseConnection = useCallback(async () => {
-    console.log("Attempting to recover database connection...");
     openDatabases.current.forEach((db, version) => {
       try {
         db.close();

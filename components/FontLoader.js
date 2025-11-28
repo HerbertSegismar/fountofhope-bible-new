@@ -16,14 +16,12 @@ export default function FontLoader({ children }) {
   React.useEffect(() => {
     async function prepare() {
       try {
-        console.log("🔄 Loading custom fonts...");
         await Font.loadAsync({
           "Oswald-Variable": Oswald_VariableFont,
           "RubikGlitch-Regular": RubikGlitch_Regular,
           "Poppins-Regular": Poppins_Regular,
         });
         setFontsLoaded(true);
-        console.log("✅ Custom fonts loaded successfully");
       } catch (e) {
         console.warn(
           "⚠️ Font loading failed (continuing with system fonts):",

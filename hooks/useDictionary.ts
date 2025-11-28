@@ -48,7 +48,6 @@ export const useDictionary = (displayVersion: string | undefined) => {
 
           return `Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"}):\n\n${cleanedDefinition}`;
         } else {
-          console.log(`No definition found for Strong's ${strongNumber}`);
           return `No definition found for Strong's ${strongNumber} (${isNewTestament ? "Greek" : "Hebrew"})`;
         }
       } catch (error) {

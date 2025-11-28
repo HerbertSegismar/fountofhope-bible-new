@@ -127,13 +127,12 @@ class BibleDatabase {
     if (this.db) {
       try {
         await this.db.closeAsync();
-        console.log("Database closed successfully");
       } catch (error) {
         console.error("Error closing database:", error);
       } finally {
         this.db = null;
         this.isInitialized = false;
-        this.initializationPromise = null; // Reset earlier for race condition prevention
+        this.initializationPromise = null;
         this.cache.clear();
         this.isClosing = false;
       }
@@ -255,7 +254,6 @@ class BibleDatabase {
     }, `getVerses(${bookNumber}, ${chapter})`);
 
     if (verses.length > 0) {
-      // Fetch book info once and augment all verses
       const book = await this.getBook(bookNumber);
       if (book) {
         verses.forEach((v) => {
@@ -266,12 +264,6 @@ class BibleDatabase {
     }
 
     this.cache.setQuery(cacheKey, verses);
-
-    if (verses.length === 0) {
-      console.warn(
-        `No verses found for book ${bookNumber}, chapter ${chapter}`
-      );
-    }
 
     return verses as Verse[];
   }
@@ -309,9 +301,8 @@ class BibleDatabase {
     bookNumber: number,
     chapter: number,
     verse: number,
-    marker: string | string[] // Updated to support single or array (prevents binding errors)
+    marker: string | string[]
   ): Promise<string | null> {
-    // Explicitly check if this is a commentary database before proceeding
     if (!this.isCommentaryDatabase()) {
       return null;
     }
@@ -323,8 +314,6 @@ class BibleDatabase {
         if (!(await this.tableExists("commentaries"))) {
           return null;
         }
-
-        // Helper to fetch a single marker
         const fetchSingle = async (m: string): Promise<string | null> => {
           const result = await this.db!.getFirstAsync<{ text: string }>(
             `SELECT text FROM commentaries 
@@ -342,15 +331,12 @@ class BibleDatabase {
           const results = await Promise.all(marker.map(fetchSingle));
           texts = results.filter((t): t is string => t !== null);
         } else {
-          // Invalid type guard
           throw new BibleDatabaseError(
             `Invalid marker type: expected string or string[], got ${typeof marker}`,
             null,
             `getCommentary(${bookNumber}, ${chapter}, ${verse}, ${JSON.stringify(marker)})`
           );
         }
-
-        // Join multiple texts with a separator (customize as needed)
         return texts.length > 0 ? texts.join("\n\n---\n\n") : null;
       },
       `getCommentary(${bookNumber}, ${chapter}, ${verse}, ${JSON.stringify(marker)})`
@@ -362,7 +348,6 @@ class BibleDatabase {
     chapter: number,
     verse: number
   ): Promise<string[]> {
-    // Explicitly check if this is a commentary database before proceeding
     if (!this.isCommentaryDatabase()) {
       return [];
     }
@@ -447,7 +432,6 @@ class BibleDatabase {
           )
         : { count: 0 };
 
-      // Add commentary count for commentary databases
       const commentaryCountRow = this.isCommentaryDatabase()
         ? await this.db!.getFirstAsync<{ count: number }>(
             "SELECT COUNT(*) as count FROM commentaries"
@@ -459,7 +443,7 @@ class BibleDatabase {
         verseCount: verseCountRow?.count ?? 0,
         storyCount: storyCountRow?.count ?? 0,
         introductionCount: introCountRow?.count ?? 0,
-        commentaryCount: commentaryCountRow?.count ?? 0, // New field
+        commentaryCount: commentaryCountRow?.count ?? 0, 
         lastUpdated: new Date(),
       };
     }, "getDatabaseStats");
@@ -477,22 +461,14 @@ class BibleDatabase {
         this.sqliteDirectory
       );
 
-      // Create performance index for verses lookups only if verses table exists
       if (await this.tableExists("verses")) {
         try {
           await this.db.execAsync(`
             CREATE INDEX IF NOT EXISTS idx_verses_lookup 
             ON verses (book_number, chapter, verse)
           `);
-          console.log("Created/verified verses lookup index");
-
-          // Enable WAL mode for better concurrency and performance
           await this.db.execAsync("PRAGMA journal_mode = WAL;");
-
-          // Analyze to ensure query planner uses the index
           await this.db.execAsync("ANALYZE verses;");
-
-          // Preload metadata caches for instant chapter/verse count lookups - moved earlier
           await this.preloadMetadata();
         } catch (indexError) {
           console.warn(`Failed to optimize verses table:`, indexError);
@@ -510,7 +486,6 @@ class BibleDatabase {
         console.warn(`Skipping verification for ${this.dbName}:`, verr);
       }
       this.isInitialized = true;
-      console.log(`Bible database ${this.dbName} initialized ✅`);
     } catch (error) {
       console.error(`Detailed init failure for ${this.dbName}:`, {
         error: error instanceof Error ? error.message : error,
@@ -540,7 +515,6 @@ class BibleDatabase {
 
   private async preloadMetadata(): Promise<void> {
     try {
-      // Preload chapter counts per book
       const chapterResults = await this.db!.getAllAsync<{
         book_number: number;
         max_chapter: number;
@@ -550,11 +524,7 @@ class BibleDatabase {
       chapterResults.forEach((r) => {
         this.cache.setChapterCount(r.book_number, r.max_chapter || 0);
       });
-      console.log(
-        `Preloaded chapter counts for ${chapterResults.length} books`
-      );
 
-      // Preload verse counts per book/chapter
       const verseResults = await this.db!.getAllAsync<{
         book_number: number;
         chapter: number;
@@ -565,10 +535,7 @@ class BibleDatabase {
       verseResults.forEach((r) => {
         this.cache.setVerseCount(`${r.book_number}:${r.chapter}`, r.count || 0);
       });
-      console.log(`Preloaded verse counts for ${verseResults.length} chapters`);
 
-      // Optional: Preload full verses for small chapters (<50 verses) to avoid future slow fetches
-      // Comment out if memory is a concern on low-end devices
       const smallChapters = await this.db!.getAllAsync<{
         book_number: number;
         chapter: number;
@@ -577,7 +544,6 @@ class BibleDatabase {
         `SELECT book_number, chapter, COUNT(*) as verse_count FROM verses GROUP BY book_number, chapter HAVING verse_count < 50`
       );
       for (const { book_number, chapter } of smallChapters.slice(0, 10)) {
-        // Limit to top 10 to prevent overload
         const verses = await this.db!.getAllAsync<
           Verse & {
             text: string;
@@ -604,11 +570,6 @@ class BibleDatabase {
           augmentedVerses
         );
       }
-      if (smallChapters.length > 0) {
-        console.log(
-          `Preloaded full verses for ${Math.min(smallChapters.length, 10)} small chapters`
-        );
-      }
     } catch (preloadError) {
       console.warn(`Failed to preload metadata:`, preloadError);
     }
@@ -623,19 +584,11 @@ class BibleDatabase {
         const rootInfo = await FileSystem.getInfoAsync(rootPath);
 
         if (rootInfo.exists && rootInfo.size! > 0) {
-          console.log(
-            `Migrating legacy DB from root to ${this.sqliteDirectory}`
-          );
           await FileSystem.copyAsync({ from: rootPath, to: this.dbPath });
         } else {
-          console.log(`Copying ${this.dbName} from assets...`);
           await this.copyDatabaseFromAssets();
         }
-      } else {
-        console.log(
-          `Using existing ${this.dbName} (size: ${fileInfo.size!} bytes)`
-        );
-      }
+      } 
     } catch (error) {
       throw new BibleDatabaseError(
         "Failed to setup database",
@@ -649,7 +602,6 @@ class BibleDatabase {
     try {
       await this.ensureDirectoryExists();
       await this.copyDatabaseFileFromBundle();
-      console.log(`Copied ${this.dbName} successfully`);
     } catch (error) {
       throw new BibleDatabaseError(
         "Failed to copy database from assets",
@@ -661,14 +613,11 @@ class BibleDatabase {
 
   private async copyDatabaseFileFromBundle(): Promise<void> {
     try {
-      console.log(`Starting database copy for: ${this.dbName}`);
-
       const assetModule = this.getDatabaseAsset();
       const asset = Asset.fromModule(assetModule);
 
       let sourceUri = asset.localUri;
       if (!sourceUri) {
-        console.log(`Downloading asset for: ${this.dbName}`);
         await asset.downloadAsync();
         sourceUri = asset.localUri;
       }
@@ -679,7 +628,6 @@ class BibleDatabase {
         );
       }
 
-      console.log(`Copying from: ${sourceUri} to: ${this.dbPath}`);
       await FileSystem.copyAsync({ from: sourceUri, to: this.dbPath });
 
       const copiedInfo = await FileSystem.getInfoAsync(this.dbPath);
@@ -688,10 +636,6 @@ class BibleDatabase {
           `Copy failed - file missing or empty at ${this.dbPath}`
         );
       }
-
-      console.log(
-        `Database copied successfully. Size: ${copiedInfo.size} bytes`
-      );
     } catch (error) {
       throw new BibleDatabaseError(
         "Failed to copy database file from bundle",
@@ -723,7 +667,6 @@ class BibleDatabase {
       throw new BibleDatabaseError("Database not open", null, "runMigrations");
 
     try {
-      // Create schema_version table if not exists, with error handling
       try {
         await this.db.execAsync(`
           CREATE TABLE IF NOT EXISTS schema_version (
@@ -739,7 +682,6 @@ class BibleDatabase {
       }
 
       let currentVersion = 0;
-      // Get current version with error handling
       try {
         const versionRow = await this.db.getFirstAsync<{ version: number }>(
           "SELECT MAX(version) as version FROM schema_version"
@@ -756,17 +698,12 @@ class BibleDatabase {
       const pendingMigrations = this.migrations.filter(
         (m) => m.version > currentVersion
       );
-
-      // Apply each pending migration individually with error handling
       for (const migration of pendingMigrations) {
         try {
           await this.db.execAsync(migration.sql);
           await this.db.runAsync(
             "INSERT INTO schema_version (version) VALUES (?)",
             [migration.version]
-          );
-          console.log(
-            `Applied migration: ${migration.name} (v${migration.version})`
           );
         } catch (mErr) {
           console.warn(`Skipping failed migration ${migration.name}:`, mErr);
@@ -785,8 +722,6 @@ class BibleDatabase {
     try {
       if (this.isCommentaryDatabase()) {
         await this.verifyCommentaryDatabase();
-      } else if (this.isDictionaryDatabase()) {
-        await this.verifyDictionaryDatabase();
       } else {
         await this.verifyMainDatabase();
       }
@@ -803,55 +738,6 @@ class BibleDatabase {
     return this.dbName.toLowerCase().includes("dictionary");
   }
 
-  private async verifyDictionaryDatabase(): Promise<void> {
-    const tableRows = await this.db!.getAllAsync<{ name: string }>(
-      "SELECT name FROM sqlite_master WHERE type='table'"
-    );
-    const foundTables = tableRows.map((r) => r.name.toLowerCase());
-
-    console.log(`Dictionary database tables: ${foundTables.join(", ")}`);
-
-    if (!foundTables.includes("dictionary")) {
-      const rowCount = await this.db!.getFirstAsync<{ count: number }>(
-        `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name != 'schema_version'`
-      );
-
-      if (rowCount?.count === 0) {
-        console.warn(
-          `Dictionary database ${this.dbName} appears to be empty or invalid`
-        );
-        return;
-      } else {
-        throw new Error("Dictionary table not found in dictionary database");
-      }
-    }
-    const columnsInfo = await this.db!.getAllAsync<any>(
-      `PRAGMA table_info(dictionary);`
-    );
-    const columnNames = columnsInfo.map((col: any) => col.name);
-
-    console.log(`Dictionary table columns: ${columnNames.join(", ")}`);
-
-    const requiredColumns = ["topic", "definition"];
-    const missingColumns = requiredColumns.filter(
-      (col) => !columnNames.includes(col)
-    );
-
-    if (missingColumns.length > 0) {
-      throw new Error(
-        `Missing required columns in dictionary table: ${missingColumns.join(", ")}`
-      );
-    }
-
-    const rowCount = await this.db!.getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM dictionary`
-    );
-    console.log(`Dictionary table has ${rowCount?.count || 0} rows`);
-
-    if (rowCount?.count === 0) {
-      console.warn("Dictionary table is empty");
-    }
-  }
 
   private isCommentaryDatabase(): boolean {
     return this.dbName.includes("com");
@@ -891,17 +777,12 @@ class BibleDatabase {
     );
     const foundTables = tableRows.map((r) => r.name.toLowerCase());
 
-    console.log(`Commentary database tables: ${foundTables.join(", ")}`);
-
     if (!foundTables.includes("commentaries")) {
       const rowCount = await this.db!.getFirstAsync<{ count: number }>(
         `SELECT COUNT(*) as count FROM sqlite_master WHERE type='table' AND name != 'schema_version'`
       );
 
       if (rowCount?.count === 0) {
-        console.warn(
-          `Commentary database ${this.dbName} appears to be empty or invalid`
-        );
         return;
       } else {
         throw new Error("Commentaries table not found in commentary database");
@@ -912,8 +793,6 @@ class BibleDatabase {
       `PRAGMA table_info(commentaries);`
     );
     const columnNames = columnsInfo.map((col: any) => col.name);
-
-    console.log(`Commentaries table columns: ${columnNames.join(", ")}`);
 
     const requiredColumns = [
       "book_number",
@@ -930,14 +809,6 @@ class BibleDatabase {
       throw new Error(
         `Missing required columns in commentaries table: ${missingColumns.join(", ")}`
       );
-    }
-    const rowCount = await this.db!.getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM commentaries`
-    );
-    console.log(`Commentaries table has ${rowCount?.count || 0} rows`);
-
-    if (rowCount?.count === 0) {
-      console.warn("Commentaries table is empty");
     }
   }
 
@@ -967,10 +838,9 @@ class BibleDatabase {
     retries = this.maxRetries
   ): Promise<T> {
     try {
-      return await this.withTiming(operation, operationName);
+      return await this.withTiming(operation);
     } catch (error) {
       if (retries > 0 && !this.isClosing) {
-        // Exponential backoff
         const backoffDelay = this.retryDelay * (this.maxRetries - retries + 1);
         await new Promise((r) => setTimeout(r, backoffDelay));
         return this.withRetry(operation, operationName, retries - 1);
@@ -985,30 +855,20 @@ class BibleDatabase {
 
   private async withTiming<T>(
     operation: () => Promise<T>,
-    operationName: string
   ): Promise<T> {
-    const startTime = Date.now();
     try {
       const result = await operation();
-      const duration = Date.now() - startTime;
-      if (duration > this.slowQueryThreshold) {
-        console.warn(`Slow operation ${operationName}: ${duration}ms`);
-      }
       return result;
     } catch (error) {
-      const duration = Date.now() - startTime;
-      console.error(`Operation ${operationName} failed after ${duration}ms`);
       if (
         error instanceof Error &&
         (error.message.includes("SQLITE_") ||
           error.message.includes("database is locked")) &&
         this.db
       ) {
-        console.warn(`Closing bad connection for ${operationName}`);
         try {
           await this.db.closeAsync();
         } catch (closeError) {
-          console.error("Failed to close bad connection:", closeError);
         }
         this.db = null;
         this.isInitialized = false;
@@ -1027,10 +887,7 @@ class BibleDatabase {
     }
     if (!this.isInitialized) await this.init();
   }
-
-  // Dictionary methods - these do not trigger commentary lookups
   async topicExists(word: string): Promise<boolean> {
-    // Explicitly check if this is a dictionary database before proceeding
     if (!this.isDictionaryDatabase()) {
       return false;
     }
@@ -1052,7 +909,6 @@ class BibleDatabase {
   }
 
   async getDefinitionFromTopic(topic: string): Promise<string | null> {
-    // Explicitly check if this is a dictionary database before proceeding
     if (!this.isDictionaryDatabase()) {
       return null;
     }
@@ -1074,7 +930,6 @@ class BibleDatabase {
   }
 
   async getDictionaryDefinition(strongNumber: string): Promise<string | null> {
-    // Explicitly check if this is a dictionary database before proceeding
     if (!this.isDictionaryDatabase()) {
       return null;
     }
@@ -1096,7 +951,6 @@ class BibleDatabase {
   }
 
   async getAllTopics(): Promise<string[]> {
-    // Explicitly check if this is a dictionary database before proceeding
     if (!this.isDictionaryDatabase()) {
       return [];
     }
@@ -1196,7 +1050,6 @@ class DatabaseManager {
       const db = new BibleDatabase(dbName);
       this.databases.set(dbName, db);
       await db.init();
-      console.log(`Database manager opened ${dbName}`);
     }
     return this.databases.get(dbName)!;
   }
@@ -1206,14 +1059,12 @@ class DatabaseManager {
     if (db) {
       await db.close();
       this.databases.delete(dbName);
-      console.log(`Database manager closed ${dbName}`);
     }
   }
 
   async closeAll(): Promise<void> {
-    for (const [dbName, db] of this.databases) {
+    for (const [_dbName, db] of this.databases) {
       await db.close();
-      console.log(`Database manager closed ${dbName}`);
     }
     this.databases.clear();
   }
@@ -1241,16 +1092,12 @@ export {
   DatabaseStats,
 };
 
-// Additional exports (unchanged, as no issues identified)
 export const getTestament = (
   bookNumber: number,
 ): "OT" | "NT" => {
   if (bookNumber >= 10 && bookNumber <= 460) return "OT";
   if (bookNumber >= 470 && bookNumber <= 730) return "NT";
 
-  console.warn(
-    `Unexpected book number: ${bookNumber}. Using fallback testament detection.`
-  );
   return bookNumber <= 460 ? "OT" : "NT";
 };
 
@@ -1264,33 +1111,6 @@ export const getBookByNumber = (bookNumber: number) => {
   }
 
   return { number: standardNumber };
-};
-
-export const verifyBookDistribution = (books: any[]) => {
-  const otBooks = books.filter(
-    (book) => book.book_number >= 10 && book.book_number <= 460
-  );
-  const ntBooks = books.filter(
-    (book) => book.book_number >= 470 && book.book_number <= 730
-  );
-  const otherBooks = books.filter(
-    (book) =>
-      book.book_number < 10 ||
-      (book.book_number > 460 && book.book_number < 470) ||
-      book.book_number > 730
-  );
-
-  console.log(
-    `Book Distribution: OT=${otBooks.length}, NT=${ntBooks.length}, Other=${otherBooks.length}, Total=${books.length}`
-  );
-  console.log("Expected: OT=39, NT=27, Total=66");
-
-  if (otherBooks.length > 0) {
-    console.warn(
-      "Unexpected book numbers found:",
-      otherBooks.map((b) => b.book_number)
-    );
-  }
 };
 
 export const BIBLE_BOOKS_MAP: {

@@ -89,9 +89,6 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
           }
           return `Word: "${word}" (Dictionary database not loaded)`;
         }
-
-        console.log(`Looking up word in dictionary: ${word}`);
-
         let searchTopic = word;
         let isExactMatch = false;
         let definition: string | null = null;
@@ -101,13 +98,8 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
           isExactMatch = true;
           definition = await dictionaryDB.getDefinitionFromTopic(word);
         } else {
-          console.log(
-            `No exact entry found for topic ${word}, searching for similar...`
-          );
-
           const allTopics: string[] = await dictionaryDB.getAllTopics();
           if (!allTopics || allTopics.length === 0) {
-            // Fallback to parts if phrase and no topics
             if (hasSpace) {
               const parts = word.split(/\s+/);
               const partDefs = await Promise.all(
@@ -129,30 +121,23 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
 
           let bestMatch = findBestMatch(word, allTopics);
           if (!bestMatch) {
-            // Try partial prefix match: topics starting with word + space
             const partialMatches = allTopics.filter((t) =>
               t.toLowerCase().startsWith(lowerWord + " ")
             );
             if (partialMatches.length > 0) {
-              // Pick the one with highest similarity
               bestMatch = partialMatches.reduce((best, current) =>
                 getSimilarity(word, current) > getSimilarity(word, best)
                   ? current
                   : best
               );
-              console.log(`Found partial prefix match: ${bestMatch}`);
             }
           }
 
           if (bestMatch) {
-            console.log(
-              `Found best match: ${bestMatch} with similarity ${(getSimilarity(word, bestMatch) * 100).toFixed(1)}%`
-            );
             searchTopic = bestMatch;
             definition = await dictionaryDB.getDefinitionFromTopic(bestMatch);
             isExactMatch = false;
           } else {
-            // Fallback to parts if phrase and no similar match
             if (hasSpace) {
               const parts = word.split(/\s+/);
               const partDefs = await Promise.all(
@@ -169,7 +154,6 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
                 return validDefs.join("\n\n");
               }
             }
-            console.log(`No similar entry found for topic ${word}`);
             return `No definition found for word "${word}"`;
           }
         }
@@ -202,10 +186,6 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
 
           return `\n${header}${cleanedDefinition}`;
         } else {
-          console.log(
-            `No definition found for ${isExactMatch ? "topic" : "matched topic"} ${searchTopic}`
-          );
-          // Fallback to parts if phrase and no definition
           if (hasSpace) {
             const parts = word.split(/\s+/);
             const partDefs = await Promise.all(
@@ -226,7 +206,6 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
         }
       } catch (error) {
         console.error(`[Word Dictionary] Error loading definition:`, error);
-        // Fallback to parts if phrase and error
         if (hasSpace) {
           const parts = word.split(/\s+/);
           const partDefs = await Promise.all(
@@ -327,9 +306,6 @@ export const useCommentary = (displayVersion: string | undefined) => {
             if (!isExactMatch && isWordCandidate) {
               const bestMatch = findBestMatch(tagContent, availableMarkers);
               if (bestMatch) {
-                console.log(
-                  `Found best commentary marker match: ${bestMatch} with similarity ${(getSimilarity(tagContent, bestMatch) * 100).toFixed(1)}%`
-                );
                 searchMarker = bestMatch;
                 const bestCommentaryText = await commentaryDB.getCommentary(
                   verse.book_number,

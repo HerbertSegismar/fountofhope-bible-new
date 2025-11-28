@@ -149,9 +149,6 @@ export const ChapterMeasurementsProvider: React.FC<{ children: ReactNode }> = ({
           currentFontSize &&
           Math.abs(measurement.fontSize - currentFontSize) > 2
         ) {
-          console.log(
-            `Font size changed from ${measurement.fontSize} to ${currentFontSize}, measurement discarded`
-          );
           setStats((prev) => ({ ...prev, cacheMisses: prev.cacheMisses + 1 }));
           return undefined;
         }
