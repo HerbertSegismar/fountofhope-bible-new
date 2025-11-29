@@ -76,7 +76,6 @@ function useFonts() {
           setFontError(null);
         }
       } catch (error) {
-        console.warn("Error loading fonts:", error);
         if (mounted) {
           const errorMessage =
             error instanceof Error
@@ -92,7 +91,6 @@ function useFonts() {
 
     const timeoutId = setTimeout(() => {
       if (mounted && !fontsLoaded) {
-        console.warn("Font loading timeout - continuing without custom fonts");
         setFontsLoaded(true);
       }
     }, 5000);

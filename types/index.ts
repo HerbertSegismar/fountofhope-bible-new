@@ -6,6 +6,7 @@ export interface Verse {
   book_name?: string;
   book_color?: string;
   testament?: "OT" | "NT";
+  yPos: number;
 }
 
 export interface Book {

@@ -290,7 +290,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
         return;
       }
       if (newVersion.includes("com")) {
-        console.warn("Cannot switch to commentary database as main Bible");
         return;
       }
       setIsInitializing(true);
@@ -329,7 +328,6 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
           }
         }
       } catch (err) {
-        console.error("Failed to switch version:", err);
         await AsyncStorage.setItem(STORAGE_KEY, currentVersion);
         throw err;
       } finally {

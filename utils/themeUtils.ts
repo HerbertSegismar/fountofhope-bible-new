@@ -256,7 +256,6 @@ export function generateColorPalette(baseColor: string): {
 
 export const getLighterColor = (hex: string, amount: number = 50): string => {
   if (!hex || typeof hex !== "string" || !hex.startsWith("#")) {
-    console.warn("Invalid hex color provided to getLighterColor:", hex);
     return "#3B82F6"; 
   }
 
@@ -264,7 +263,6 @@ export const getLighterColor = (hex: string, amount: number = 50): string => {
     const percent = amount > 0 ? amount * 0.5 : amount;
     return adjustLightness(hex, percent);
   } catch (error) {
-    console.warn("Error in getLighterColor:", error);
     return "#3B82F6";
   }
 };
@@ -333,7 +331,6 @@ export const getContrastColor = (
       ? themeColors.textSecondary
       : themeColors.textPrimary;
   } catch (error) {
-    console.warn("Error calculating contrast color:", error);
     return themeColors.textPrimary;
   }
 };

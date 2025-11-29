@@ -1403,10 +1403,6 @@ const EnhancedModalComp = forwardRef<EnhancedModalRef, EnhancedModalProps>(
                 const secondaryDB = await getDatabase(dbFilename);
                 if (secondaryDB) {
                   loadedVerses = await secondaryDB.getVerses(bookNum, ch);
-                } else {
-                  console.warn(
-                    `Secondary DB not available for ${verseVersion}, falling back to primary`
-                  );
                 }
               }
             }

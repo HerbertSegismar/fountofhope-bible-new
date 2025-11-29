@@ -53,15 +53,6 @@ export const useScrollSync = (
       !verses.length ||
       !secondaryVerses.length
     ) {
-      console.warn("Sync to secondary skipped: Invalid state", {
-        hasPrimaryRef: !!primaryScrollViewRef.current,
-        hasSecondaryRef: !!secondaryScrollViewRef.current,
-        contentHeight,
-        secondaryContentHeight,
-        viewHeight,
-        versesLength: verses.length,
-        secondaryVersesLength: secondaryVerses.length,
-      });
       isSyncing.current = false;
       return;
     }
