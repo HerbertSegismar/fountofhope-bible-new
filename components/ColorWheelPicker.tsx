@@ -93,7 +93,6 @@ const ColorWheelPicker = () => {
     return `#${formatted}`;
   };
 
-  // Remove handleColorChange since we don't want continuous updates
   const handleColorChangeComplete = useCallback((color: string) => {
     if (!isManualInputRef.current) {
       setSelectedColor(color);
@@ -394,7 +393,7 @@ const ColorWheelPicker = () => {
                       <ColorPicker
                         ref={colorPickerRef}
                         color={selectedColor}
-                        onColorChange={() => {}} // Empty function to prevent continuous updates
+                        onColorChange={() => {}}
                         onColorChangeComplete={handleColorChangeComplete}
                         thumbSize={30}
                         sliderSize={25}

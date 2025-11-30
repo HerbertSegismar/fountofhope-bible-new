@@ -126,7 +126,6 @@ export const VersionSelector: React.FC<VersionSelectorProps> = ({
                   >
                     {getVersionDescription(version)}
                   </Text>
-                  {/* REMOVED: The check that showed "Currently active" only when not selected */}
                   {showActiveIndicator && isCurrentlyActive && (
                     <Text
                       className="text-xs mt-1"

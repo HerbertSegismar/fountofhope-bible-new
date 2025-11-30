@@ -183,12 +183,10 @@ export const useScrollSync = (
         }
       }
 
-      // Always clear previous timeout to debounce
       if (primarySyncTimeout.current) {
         clearTimeout(primarySyncTimeout.current);
       }
 
-      // Schedule sync only if not animating (i.e., user-initiated)
       if (
         showMultiVersion &&
         syncEnabled.current &&
@@ -225,12 +223,10 @@ export const useScrollSync = (
         lastSecondaryScrollYMutableRef.current = offsetY;
       }
 
-      // Always clear previous timeout to debounce
       if (secondarySyncTimeout.current) {
         clearTimeout(secondarySyncTimeout.current);
       }
 
-      // Schedule sync only if not animating (i.e., user-initiated)
       if (
         showMultiVersion &&
         syncEnabled.current &&

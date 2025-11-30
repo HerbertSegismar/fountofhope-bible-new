@@ -70,7 +70,6 @@ export const useWordDictionary = (_displayVersion: string | undefined) => {
       try {
         const dictionaryDB = await getDatabase("atsbd.dictionary.sqlite3");
         if (!dictionaryDB) {
-          // Fallback to parts if phrase and DB not loaded
           if (hasSpace) {
             const parts = word.split(/\s+/);
             const partDefs = await Promise.all(

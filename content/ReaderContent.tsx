@@ -361,7 +361,6 @@ const ToggleButton = memo(
     onPress,
     resetButtonOpacity,
     colors,
-    isLandscape,
   }: {
     isFullScreen: boolean;
     onPress: () => void;
@@ -439,12 +438,10 @@ const ErrorView = memo(
   )
 );
 
-// Memoize sets to avoid recreation on every render
 const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
   const [hasSecondaryFailed, setHasSecondaryFailed] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Memoize highlighted sets to prevent recreation
   const primaryHighlightedSet = useMemo(
     () => new Set(props.primaryHighlightedVerses),
     [props.primaryHighlightedVerses]
@@ -498,7 +495,6 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     props.secondaryVersion || ""
   );
 
-  // Use refs for setHeader callbacks to avoid dep bloat
   const primaryHeaderCallbacksRef = useRef({
     setX: props.setPrimaryHeaderX,
     setY: props.setPrimaryHeaderY,

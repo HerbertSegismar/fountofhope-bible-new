@@ -47,7 +47,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
   bibleDB,
   secondaryDB,
 }) => {
-  const [books, setBooks] = useState<Book[]>([]);
+  const [, setBooks] = useState<Book[]>([]);
   const [oldTestament, setOldTestament] = useState<Book[]>([]);
   const [newTestament, setNewTestament] = useState<Book[]>([]);
   const [isLoadingNavigation, setIsLoadingNavigation] = useState(true);
@@ -157,8 +157,6 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
       const nt = booksWithTestament.filter((book) => book.testament === "NT");
       setOldTestament(ot);
       setNewTestament(nt);
-
-      //verifyBookDistribution(booksWithTestament);
       setIsDataLoaded(true);
     } catch (error) {
       console.error("Failed to load books:", error);

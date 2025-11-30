@@ -162,7 +162,6 @@ export default function BookListScreen({ navigation }: Props) {
         contentContainerStyle={{ padding: 16 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Old Testament Section */}
         <View className="mb-6">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-xl font-bold" style={{ color: primaryColor }}>
