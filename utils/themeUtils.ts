@@ -54,7 +54,7 @@ export const BASE_LIGHT_THEME_COLORS = {
   textMuted: "#6C757D",
   highlightBg: "#9ef496ff",
   highlightBorder: "#FFD700",
-  highlightIcon: "#2244efff",
+  highlightIcon: "#29cd49ff",
   tagBg: "rgba(0,255,0,0.1)",
   searchHighlightBg: "#FFFF99",
   border: "#E9ECEF",

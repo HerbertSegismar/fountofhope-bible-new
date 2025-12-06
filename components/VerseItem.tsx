@@ -50,8 +50,8 @@ export const VerseItem: React.FC<VerseItemProps> = memo(
     const animationRef = useRef<Animated.CompositeAnimation | null>(null);
     const animatedViewRef = useRef<View>(null);
     const wasHighlightedRef = useRef(false);
-    const fadeDuration = 3000; // 3 seconds for smoother fade
-    const fadeDelay = 1000; // Start fade after 1 second
+    const fadeDuration = 5000;
+    const fadeDelay = 1000;
 
     const localOnTagPress = useCallback(
       (content: string) => {
@@ -62,7 +62,6 @@ export const VerseItem: React.FC<VerseItemProps> = memo(
 
     const indicatorSize = isFullScreen ? fontSize * 0.7 : fontSize * 0.8;
 
-    // Handle the ref for onVerseRef
     const handleRef = useCallback(
       (ref: View | null) => {
         animatedViewRef.current = ref;
@@ -71,7 +70,6 @@ export const VerseItem: React.FC<VerseItemProps> = memo(
       [onVerseRef, verse.verse]
     );
 
-    // Clean up animation on unmount
     useEffect(() => {
       return () => {
         if (animationRef.current) {

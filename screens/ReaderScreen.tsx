@@ -447,6 +447,9 @@ export default function ReaderScreen({
     null
   );
   const isFullScreen = uiMode === 1;
+
+  const isProgrammaticScrollRef = useRef(false);
+
   const scrollSync = useScrollSync(
     showMultiVersion && isLinked,
     primaryProps.scrollViewHeight,
@@ -596,21 +599,31 @@ export default function ReaderScreen({
       }).start();
     }, 5000);
   }, [buttonOpacity]);
+
   const resetPrimaryScroll = useCallback(() => {
+    isProgrammaticScrollRef.current = true;
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
     if (primaryScrollViewRef.current) {
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
     }
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 100);
   }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
+
   const resetSecondaryScroll = useCallback(() => {
-    secondaryScrollY.setValue(0);
+    isProgrammaticScrollRef.current = true;
     if (secondaryScrollViewRef.current) {
       secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updateSecondaryOffset(0);
     }
-  }, [secondaryScrollViewRef, updateSecondaryOffset, secondaryScrollY]);
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 100);
+  }, [secondaryScrollViewRef, updateSecondaryOffset]);
+
   useEffect(() => {
     resetButtonOpacity();
     return () => {
@@ -732,9 +745,8 @@ export default function ReaderScreen({
         setShowMultiVersion(false);
       }
       let initialSec = secVer;
-      // REMOVED: The filtering that prevented same version selection
       if (!initialSec) {
-        initialSec = availableBibleVersions[0]; // Just pick the first available version
+        initialSec = availableBibleVersions[0];
       }
       setSecondaryVersion(initialSec);
       if (linkedStr !== null) {
@@ -743,7 +755,7 @@ export default function ReaderScreen({
     } catch (e) {
       console.error("Failed to load reader settings", e);
     }
-  }, [availableBibleVersions]); // REMOVED: currentVersion dependency
+  }, [availableBibleVersions]);
   const loadBackgroundSettings = useCallback(async () => {
     try {
       const [savedOpacity, savedIndex] = await Promise.all([
@@ -800,7 +812,7 @@ export default function ReaderScreen({
   const closeSelector = useCallback(() => setOpenSelector(null), []);
   const openPrimaryNavigation = useCallback(() => {
     setNavigationTarget("primary");
-    setShowNavigationModal(true); 
+    setShowNavigationModal(true);
   }, []);
   const openSecondaryNavigation = useCallback(() => {
     setNavigationTarget("secondary");
@@ -1174,20 +1186,31 @@ export default function ReaderScreen({
     isLinked,
     resetButtonOpacity,
   ]);
+
   const primaryHandleScroll = useCallback(
     (event: any) => {
       const y = event.nativeEvent.contentOffset.y;
       lastScrollYRef.current = y;
       scrollY.setValue(y);
-      if (showMultiVersionRef.current && isLinkedRef.current) {
+
+      if (
+        showMultiVersionRef.current &&
+        isLinkedRef.current &&
+        !isProgrammaticScrollRef.current
+      ) {
         handleScrollRef.current(event);
       }
     },
     [scrollY]
   );
+
   const secondaryHandleScrollCb = useCallback(
     (event: any) => {
-      if (showMultiVersionRef.current && isLinkedRef.current) {
+      if (
+        showMultiVersionRef.current &&
+        isLinkedRef.current &&
+        !isProgrammaticScrollRef.current
+      ) {
         handleSecondaryScrollRef.current(event);
       } else if (showMultiVersionRef.current) {
         const y = event.nativeEvent.contentOffset.y;
@@ -1196,6 +1219,7 @@ export default function ReaderScreen({
     },
     [secondaryScrollY]
   );
+
   useEffect(() => {
     const updateLayout = () => {
       const newDimensions = Dimensions.get("window");
@@ -1219,8 +1243,10 @@ export default function ReaderScreen({
       setSecondaryTargetVerse(undefined);
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
+
   useEffect(() => {
     if (!primaryLoading && primaryScrollViewRef.current) {
+      isProgrammaticScrollRef.current = true;
       const verseNum = primaryTargetVerse;
       if (verseNum) {
         const meas = primaryProps.verseMeasurements[verseNum];
@@ -1229,13 +1255,22 @@ export default function ReaderScreen({
           primaryScrollViewRef.current.scrollTo({ y, animated: false });
           updatePrimaryOffset(y);
           lastScrollYRef.current = y;
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false;
+          }, 100);
           return;
         }
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 100);
         return;
       }
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
       updatePrimaryOffset(0);
       lastScrollYRef.current = 0;
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 100);
     }
   }, [
     primaryLoading,
@@ -1244,6 +1279,7 @@ export default function ReaderScreen({
     updatePrimaryOffset,
     primaryProps.verseMeasurements,
   ]);
+
   const [secondaryMeasuredVerses, setSecondaryMeasuredVerses] = useState<
     Set<number>
   >(new Set());
@@ -1251,6 +1287,7 @@ export default function ReaderScreen({
     secondaryVerseMeasurementsRef.current = {};
     setSecondaryMeasuredVerses(new Set());
   }, [secondaryVerses]);
+
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -1263,12 +1300,23 @@ export default function ReaderScreen({
         const meas = secondaryVerseMeasurementsRef.current[verseNum];
         if (meas !== undefined) {
           const y = Math.max(0, meas - secondaryScrollViewHeight / 2);
+
+          isProgrammaticScrollRef.current = true;
           secondaryScrollViewRef.current?.scrollTo({ y, animated: false });
           updateSecondaryOffset(y);
+
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false;
+          }, 100);
         }
       } else {
+        isProgrammaticScrollRef.current = true;
         secondaryScrollViewRef.current?.scrollTo({ y: 0, animated: false });
         updateSecondaryOffset(0);
+
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 100);
       }
     }
   }, [
@@ -1281,6 +1329,7 @@ export default function ReaderScreen({
     getHighlightVerse,
     secondaryScrollViewHeight,
   ]);
+
   useEffect(() => {
     if (
       showMultiVersion &&
@@ -1304,11 +1353,17 @@ export default function ReaderScreen({
           cached.height;
         const centerOffset = approxY - secondaryScrollViewHeight / 2;
         const scrollPos = Math.max(0, centerOffset);
+
+        isProgrammaticScrollRef.current = true;
         secondaryScrollViewRef.current.scrollTo({
           y: scrollPos,
           animated: false,
         });
         updateSecondaryOffset(scrollPos);
+
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 100);
       }
     }
   }, [
@@ -1328,6 +1383,7 @@ export default function ReaderScreen({
     currentVersion,
     updateSecondaryOffset,
   ]);
+
   useEffect(() => {
     if (secondaryContentHeight > 0 && showMultiVersion && secondaryVersion) {
       const version = secondaryVersion;
@@ -1453,18 +1509,13 @@ export default function ReaderScreen({
   const secondaryDisplayBookName =
     secondaryBookInfo?.long || secondaryLocation.bookName;
   const versionName = getVersionDisplayName(currentVersion);
-  const handleSecondaryVersionSelect = useCallback(
-    (version: string) => {
-      // REMOVED: The check that prevented same version selection
-      setSecondaryVersion(version);
-    },
-    [] // REMOVED: currentVersion dependency
-  );
+  const handleSecondaryVersionSelect = useCallback((version: string) => {
+    setSecondaryVersion(version);
+  }, []);
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   const headerContentHeight = 60;
   const headerTotalHeight = insets.top + headerContentHeight;
 
-  // REMOVED: Version filtering for selector dropdowns
   const versionsToShow = availableBibleVersions;
 
   if (!bibleDB || highlightedVersesLoading) {

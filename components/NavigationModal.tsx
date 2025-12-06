@@ -613,7 +613,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                       >
                         <Text
                           style={{
-                            color: colors.text?.primary,
+                            color: selectedVerse === verse ? "white" : colors.text?.primary,
                             fontSize: 12,
                             fontWeight:
                               selectedVerse === verse ? "bold" : "500",
