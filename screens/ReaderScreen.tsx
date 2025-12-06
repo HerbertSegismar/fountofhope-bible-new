@@ -799,27 +799,13 @@ export default function ReaderScreen({
   }, [bgImageIndex]);
   const closeSelector = useCallback(() => setOpenSelector(null), []);
   const openPrimaryNavigation = useCallback(() => {
-    if (showMultiVersion && !isLinked) {
-      setNavigationTarget("primary");
-      setShowNavigationModal(true);
-    } else {
-      navigation.navigate("BookList", {
-        showMultiVersion,
-        secondaryVersion,
-      });
-    }
-  }, [showMultiVersion, isLinked, navigation, secondaryVersion]);
+    setNavigationTarget("primary");
+    setShowNavigationModal(true); 
+  }, []);
   const openSecondaryNavigation = useCallback(() => {
-    if (showMultiVersion && !isLinked) {
-      setNavigationTarget("secondary");
-      setShowNavigationModal(true);
-    } else {
-      navigation.navigate("BookList", {
-        showMultiVersion,
-        secondaryVersion,
-      });
-    }
-  }, [showMultiVersion, isLinked, navigation, secondaryVersion]);
+    setNavigationTarget("secondary");
+    setShowNavigationModal(true);
+  }, []);
   const openPrimaryVersionSelector = useCallback(
     () => setOpenSelector("primary"),
     []

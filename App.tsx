@@ -140,7 +140,6 @@ function HeaderActions({ navigation }: { navigation: any }) {
     setShowColorPicker,
   } = useTheme();
 
-  // ✅ Move hooks to top level - FIXED THE ERROR
   const nav = useNavigation<any>();
   const isFocused = useIsFocused();
   const currentRoute = nav.getState()?.routes[nav.getState()?.index]?.name;
