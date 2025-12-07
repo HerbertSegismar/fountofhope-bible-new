@@ -57,7 +57,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
   const textTertiaryClass =
     theme === "dark" ? "text-gray-300" : "text-gray-600";
   const lightGrayClass = theme === "dark" ? "bg-gray-700" : "bg-gray-100";
-  const warningBgClass = theme === "dark" ? "bg-yellow-900/20" : "bg-yellow-50";
   const warningBorderClass =
     theme === "dark" ? "border-yellow-800/50" : "border-yellow-200";
   const warningTextPrimaryClass =
@@ -138,17 +137,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
         [{ text: "OK" }]
       );
     }
-  };
-
-  const handleLongPress = (chapter: number) => {
-    const verseCount = verseMapping[chapter] || 0;
-    Alert.alert(
-      `${book.short_name} ${chapter}`,
-      verseCount > 0
-        ? `This chapter has ${verseCount} verse${verseCount !== 1 ? "s" : ""}`
-        : "No verses available for this chapter",
-      [{ text: "OK" }]
-    );
   };
 
   const getChapterColor = (chapter: number) => {
@@ -304,7 +292,6 @@ export default function ChapterListScreen({ navigation, route }: Props) {
                     getBorderColor(chapter),
                   ]}
                   onPress={() => handleChapterPress(chapter)}
-                  onLongPress={() => handleLongPress(chapter)}
                   delayLongPress={500}
                   activeOpacity={0.7}
                   disabled={

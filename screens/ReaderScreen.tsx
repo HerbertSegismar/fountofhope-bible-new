@@ -928,7 +928,7 @@ export default function ReaderScreen({
         key: "bible",
         name: "Bible",
         icon: "book-outline",
-        onPress: () => navigation.navigate("BookList"),
+        onPress: () => setShowNavigationModal(true),
         color: primaryTextColor,
       },
       {

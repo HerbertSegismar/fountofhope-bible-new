@@ -125,24 +125,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
     });
   };
 
-  const handleVerseLongPress = (verseNumber: number) => {
-    Alert.alert(
-      `${book.short_name} ${chapter}:${verseNumber}`,
-      `Navigate to verse ${verseNumber}`,
-      [
-        {
-          text: "Read This Verse",
-          onPress: () => handleVersePress(verseNumber),
-        },
-        {
-          text: "Read Full Chapter",
-          onPress: () => handleReadFullChapter(),
-        },
-        { text: "Cancel", style: "cancel" },
-      ]
-    );
-  };
-
   const handleReadFullChapter = () => {
     navigation.navigate("Reader", {
       bookId: book.book_number,
@@ -277,7 +259,6 @@ export default function VerseListScreen({ navigation, route }: Props) {
                       getBorderColor(),
                     ]}
                     onPress={() => handleVersePress(verse.verse)}
-                    onLongPress={() => handleVerseLongPress(verse.verse)}
                     delayLongPress={500}
                     activeOpacity={0.7}
                   >

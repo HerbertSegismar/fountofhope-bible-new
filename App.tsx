@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, {
+  useEffect,
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+} from "react";
 import { StatusBar as ExpoStatusBar } from "expo-status-bar";
 import ColorWheelPicker from "./components/ColorWheelPicker";
 import {
@@ -18,6 +24,7 @@ import {
   Modal,
   TouchableWithoutFeedback,
   StyleSheet,
+  Dimensions,
 } from "react-native";
 import * as Font from "expo-font";
 
@@ -43,6 +50,8 @@ import RubikGlitch_Regular from "./assets/fonts/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 import { getBookInfo } from "./utils/testamentUtils";
 import { ChapterMeasurementsProvider } from "./context/ChapterMeasurementsContext";
+import { NavigationModal } from "./components/NavigationModal";
+import { useBibleDatabase } from "./context/BibleDatabaseContext";
 
 export type RootStackParamList = {
   Home: undefined;
@@ -130,6 +139,7 @@ interface MenuItem {
 function HeaderActions({ navigation }: { navigation: any }) {
   const isPortrait = usePortraitMode();
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showNavigationModal, setShowNavigationModal] = useState(false);
   const navigationTheme = useNavigationTheme();
   const {
     toggleTheme,
@@ -138,7 +148,10 @@ function HeaderActions({ navigation }: { navigation: any }) {
     setColorScheme,
     colorSchemes,
     setShowColorPicker,
-  } = useTheme();
+    navTheme,
+  } = useTheme(); 
+  const { bibleDB, currentVersion } = useBibleDatabase();
+  const secondaryDBRef = useRef(null);
 
   const nav = useNavigation<any>();
   const isFocused = useIsFocused();
@@ -166,6 +179,24 @@ function HeaderActions({ navigation }: { navigation: any }) {
     setShowDropdown(false);
   }, []);
 
+  const handleLocationSelect = useCallback(
+    (location: { book: Book; chapter: number; verse?: number }) => {
+      const bookInfo = getBookInfo(Number(location.book.book_number));
+      const bookName =
+        bookInfo?.long || location.book.long_name || "Unknown Book";
+
+      navigation.navigate("Reader", {
+        bookId: location.book.book_number,
+        chapter: location.chapter,
+        bookName: bookName,
+        verse: location.verse,
+        bookColor: location.book.book_color || "#DC2626",
+      });
+      setShowNavigationModal(false);
+    },
+    [navigation]
+  );
+
   const menuItems = useMemo<MenuItem[]>(
     () => [
       {
@@ -178,7 +209,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
         key: "bible",
         name: "Bible",
         icon: "book",
-        onPress: () => navigation.navigate("BookList"),
+        onPress: () => setShowNavigationModal(true),
       },
       {
         key: "search",
@@ -224,7 +255,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
     () =>
       menuItems.filter(
         (item) =>
-          item.key !== "bible" && item.key !== "theme" && item.key !== "colors"
+          item.key !== "theme" && item.key !== "colors"
       ),
     [menuItems]
   );
@@ -244,9 +275,26 @@ function HeaderActions({ navigation }: { navigation: any }) {
     [menuItems]
   );
 
-  const dropdownBgColor = navigationTheme.colors.primary;
+  const colors = useMemo(() => {
+    return {
+      primary: navTheme.colors.primary,
+      secondary: navTheme.colors.background,
+      background: {
+        default:
+          navTheme.colors.background,
+      },
+      text: {
+        primary: navTheme.colors.text,
+      },
+      muted: navTheme.colors.border,
+      card: navTheme.colors.card,
+    };
+  }, [navTheme, navigationTheme]);
+
+  const primaryTextColor = "#FFFFFF";
+  const dropdownBgColor = navTheme.colors.primary;
   const textColor = "#fff";
-  const borderColor = "rgba(255,255,255,0.3)";
+  const borderColor = "rgba(220, 204, 204, 0.3)";
   const iconColor = "#fff";
 
   const dropdownStyle = useMemo(
@@ -273,6 +321,16 @@ function HeaderActions({ navigation }: { navigation: any }) {
     },
     [closeDropdown]
   );
+
+  useEffect(() => {
+    const updateLayout = () => {
+      setShowDropdown(false);
+      setShowNavigationModal(false);
+    };
+
+    const subscription = Dimensions.addEventListener("change", updateLayout);
+    return () => subscription?.remove();
+  }, []);
 
   if (!isPortrait) {
     return (
@@ -332,6 +390,20 @@ function HeaderActions({ navigation }: { navigation: any }) {
         </TouchableOpacity>
       </View>
 
+      {bibleDB && (
+        <NavigationModal
+          visible={showNavigationModal}
+          onClose={() => setShowNavigationModal(false)}
+          colors={colors} // Pass the full colors object
+          primaryTextColor={primaryTextColor}
+          navigationTarget="primary"
+          currentVersion={currentVersion}
+          onLocationSelect={handleLocationSelect}
+          bibleDB={bibleDB}
+          secondaryDB={secondaryDBRef}
+        />
+      )}
+
       <Modal
         visible={showDropdown}
         transparent
@@ -343,7 +415,6 @@ function HeaderActions({ navigation }: { navigation: any }) {
             <TouchableWithoutFeedback>
               <View style={dropdownStyle}>
                 {filteredMenuItems.map((item, index) => {
-                  // ✅ FIXED: No hooks inside map function
                   const isActiveScreen =
                     isFocused && currentRoute === routeMap[item.key];
 
