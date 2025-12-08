@@ -276,17 +276,19 @@ function HeaderActions({ navigation }: { navigation: any }) {
   );
 
   const colors = useMemo(() => {
+    const mutedColor = navTheme.dark
+      ? "rgba(255,255,255,0.5)"
+      : "rgba(0,0,0,0.5)";
     return {
       primary: navTheme.colors.primary,
       secondary: navTheme.colors.background,
       background: {
-        default:
-          navTheme.colors.background,
+        default: navTheme.colors.background,
       },
       text: {
         primary: navTheme.colors.text,
       },
-      muted: navTheme.colors.border,
+      muted: mutedColor,
       card: navTheme.colors.card,
     };
   }, [navTheme, navigationTheme]);
