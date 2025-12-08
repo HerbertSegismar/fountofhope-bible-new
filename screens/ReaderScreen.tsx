@@ -610,7 +610,7 @@ export default function ReaderScreen({
     }
     setTimeout(() => {
       isProgrammaticScrollRef.current = false;
-    }, 100);
+    }, 1000);
   }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
 
   const resetSecondaryScroll = useCallback(() => {
@@ -621,7 +621,7 @@ export default function ReaderScreen({
     }
     setTimeout(() => {
       isProgrammaticScrollRef.current = false;
-    }, 100);
+    }, 1000);
   }, [secondaryScrollViewRef, updateSecondaryOffset]);
 
   useEffect(() => {
@@ -1257,12 +1257,12 @@ export default function ReaderScreen({
           lastScrollYRef.current = y;
           setTimeout(() => {
             isProgrammaticScrollRef.current = false;
-          }, 100);
+          }, 1000);
           return;
         }
         setTimeout(() => {
           isProgrammaticScrollRef.current = false;
-        }, 100);
+        }, 1000);
         return;
       }
       primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
@@ -1270,7 +1270,7 @@ export default function ReaderScreen({
       lastScrollYRef.current = 0;
       setTimeout(() => {
         isProgrammaticScrollRef.current = false;
-      }, 100);
+      }, 1000);
     }
   }, [
     primaryLoading,
@@ -1307,7 +1307,7 @@ export default function ReaderScreen({
 
           setTimeout(() => {
             isProgrammaticScrollRef.current = false;
-          }, 100);
+          }, 1000);
         }
       } else {
         isProgrammaticScrollRef.current = true;
@@ -1316,7 +1316,7 @@ export default function ReaderScreen({
 
         setTimeout(() => {
           isProgrammaticScrollRef.current = false;
-        }, 100);
+        }, 1000);
       }
     }
   }, [
@@ -1363,7 +1363,7 @@ export default function ReaderScreen({
 
         setTimeout(() => {
           isProgrammaticScrollRef.current = false;
-        }, 100);
+        }, 1000);
       }
     }
   }, [
