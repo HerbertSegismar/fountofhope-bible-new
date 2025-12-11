@@ -1131,18 +1131,18 @@ export default function ReaderScreen({
     if (secondaryLocation.chapter > 1) {
       resetSecondaryScroll();
       const newChapter = secondaryLocation.chapter - 1;
-      setSecondaryLocation((prev) => ({
-        ...prev,
+      const newLocation = {
+        ...secondaryLocation,
         chapter: newChapter,
         verse: undefined,
-      }));
+      };
+
+      setSecondaryLocation(newLocation);
       setSecondaryTargetVerse(undefined);
+
+      // If linked and in multi-version mode, update primary to match
       if (showMultiVersion && isLinked) {
-        setPrimaryLocation((prev) => ({
-          ...prev,
-          chapter: newChapter,
-          verse: undefined,
-        }));
+        setPrimaryLocation(newLocation);
         setPrimaryTargetVerse(undefined);
         resetPrimaryScroll();
       }
@@ -1154,23 +1154,25 @@ export default function ReaderScreen({
     showMultiVersion,
     isLinked,
     resetButtonOpacity,
+    resetPrimaryScroll,
   ]);
+
   const goToSecondaryNextChapter = useCallback(() => {
     if (secondaryLocation.chapter < secondaryMaxChapter) {
       resetSecondaryScroll();
       const newChapter = secondaryLocation.chapter + 1;
-      setSecondaryLocation((prev) => ({
-        ...prev,
+      const newLocation = {
+        ...secondaryLocation,
         chapter: newChapter,
         verse: undefined,
-      }));
+      };
+
+      setSecondaryLocation(newLocation);
       setSecondaryTargetVerse(undefined);
+
+      // If linked and in multi-version mode, update primary to match
       if (showMultiVersion && isLinked) {
-        setPrimaryLocation((prev) => ({
-          ...prev,
-          chapter: newChapter,
-          verse: undefined,
-        }));
+        setPrimaryLocation(newLocation);
         setPrimaryTargetVerse(undefined);
         resetPrimaryScroll();
       }
@@ -1185,6 +1187,7 @@ export default function ReaderScreen({
     showMultiVersion,
     isLinked,
     resetButtonOpacity,
+    resetPrimaryScroll,
   ]);
 
   const primaryHandleScroll = useCallback(
@@ -1237,12 +1240,36 @@ export default function ReaderScreen({
   }, [targetVerse]);
   useEffect(() => {
     if (showMultiVersion && isLinked) {
-      setSecondaryLocation(primaryLocation);
-      setSecondaryTargetVerse(primaryTargetVerse);
+      // This handles primary → secondary sync (existing logic)
+      if (
+        primaryLocation.bookId !== secondaryLocation.bookId ||
+        primaryLocation.chapter !== secondaryLocation.chapter
+      ) {
+        setSecondaryLocation(primaryLocation);
+        setSecondaryTargetVerse(primaryTargetVerse);
+        resetSecondaryScroll();
+      }
     } else if (!showMultiVersion) {
       setSecondaryTargetVerse(undefined);
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
+
+  useEffect(() => {
+    // When linked and in multi-version mode, keep primary and secondary locations synchronized
+    if (showMultiVersion && isLinked) {
+      // If secondary bookId changes when linked, update primary to match
+      if (secondaryLocation.bookId !== primaryLocation.bookId) {
+        setPrimaryLocation(secondaryLocation);
+        setPrimaryTargetVerse(secondaryTargetVerse);
+        resetPrimaryScroll();
+      }
+    }
+  }, [
+    secondaryLocation.bookId,
+    secondaryLocation.chapter,
+    showMultiVersion,
+    isLinked,
+  ]);
 
   useEffect(() => {
     if (!primaryLoading && primaryScrollViewRef.current) {
@@ -1852,12 +1879,20 @@ export default function ReaderScreen({
             chapter: location.chapter,
             verse: location.verse,
           };
+
           if (navigationTarget === "primary") {
             setPrimaryLocation(newLocation);
             setPrimaryTargetVerse(newLocation.verse);
           } else {
             setSecondaryLocation(newLocation);
             setSecondaryTargetVerse(newLocation.verse);
+
+            // If linked and in multi-version mode, update primary to match
+            if (showMultiVersion && isLinked) {
+              setPrimaryLocation(newLocation);
+              setPrimaryTargetVerse(newLocation.verse);
+              resetPrimaryScroll();
+            }
           }
         }}
         bibleDB={bibleDB}
