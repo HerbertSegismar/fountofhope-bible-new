@@ -360,7 +360,6 @@ const ToggleButton = memo(
     onPress,
     resetButtonOpacity,
     colors,
-    isLandscape,
   }: {
     isFullScreen: boolean;
     onPress: () => void;

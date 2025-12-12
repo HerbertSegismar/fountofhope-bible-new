@@ -14,7 +14,6 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
-  LayoutChangeEvent,
   FlatList,
   TextInput,
 } from "react-native";
@@ -152,7 +151,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
           elevation: 5,
         }}
       >
-        {/* ==================== MENU ITEMS ==================== */}
         {filteredMenuItems.slice(0, -1).map((item, index) => {
           const isBibleItem = item.key === "bible";
           return (
@@ -191,7 +189,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             </TouchableOpacity>
           );
         })}
-        {/* ==================== BG & OPACITY SECTION ==================== */}
         <View
           style={{
             paddingHorizontal: 12,
@@ -291,7 +288,6 @@ const DropdownMenu: React.FC<DropdownProps> = ({
           </View>
         </View>
         <View className="h-[1px] bg-white mx-3" />
-        {/* ==================== CLOSE BUTTON ==================== */}
         <TouchableOpacity
           onPress={handleClose}
           style={{
@@ -388,7 +384,6 @@ export default function ReaderScreen({
     ...primaryProps
   } = primaryLoader;
   const defaultVerseHeight = 80;
-  const blankLineHeight = 12;
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
   const [secondaryReady, setSecondaryReady] = useState(false);
@@ -396,8 +391,6 @@ export default function ReaderScreen({
   const [secondaryLoading, setSecondaryLoading] = useState(false);
   const [primaryContentHeight, setPrimaryContentHeight] = useState(0);
   const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
-  const [primaryScrollViewHeight, setPrimaryScrollViewHeight] = useState(0);
-  const [secondaryScrollViewHeight, setSecondaryScrollViewHeight] = useState(0);
   const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<
     Record<number, number>
   >({});
@@ -409,7 +402,6 @@ export default function ReaderScreen({
   const [isLandscape, setIsLandscape] = useState(
     initialDimensions.width > initialDimensions.height
   );
-  const [_showEnd, setShowEnd] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNavigationModal, setShowNavigationModal] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<
@@ -418,7 +410,6 @@ export default function ReaderScreen({
   const [bgTextureOpacity, setBgTextureOpacity] = useState(0.1);
   const [bgImageIndex, setBgImageIndex] = useState(0);
   const lastScrollYRef = useRef(0);
-  const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
   const secondaryScrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
@@ -435,7 +426,6 @@ export default function ReaderScreen({
     null
   );
   const isFullScreen = uiMode === 1;
-  const isProgrammaticScrollRef = useRef(false);
   const { setShowColorPicker } = useTheme();
   const reloadSecondaryDB = useCallback(
     async (retries = 10): Promise<boolean> => {
@@ -539,24 +529,16 @@ export default function ReaderScreen({
     }, 5000);
   }, [buttonOpacity]);
   const resetPrimaryScroll = useCallback(() => {
-    isProgrammaticScrollRef.current = true;
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
     if (primaryFlatListRef.current) {
       primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
     }
-    setTimeout(() => {
-      isProgrammaticScrollRef.current = false;
-    }, 1000);
   }, [scrollY, primaryFlatListRef]);
   const resetSecondaryScroll = useCallback(() => {
-    isProgrammaticScrollRef.current = true;
     if (secondaryFlatListRef.current) {
       secondaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
     }
-    setTimeout(() => {
-      isProgrammaticScrollRef.current = false;
-    }, 1000);
   }, [secondaryFlatListRef]);
   useEffect(() => {
     resetButtonOpacity();
@@ -1071,7 +1053,6 @@ export default function ReaderScreen({
       };
       setSecondaryLocation(newLocation);
       setSecondaryTargetVerse(undefined);
-      // If linked and in multi-version mode, update primary to match
       if (showMultiVersion && isLinked) {
         setPrimaryLocation(newLocation);
         setPrimaryTargetVerse(undefined);
@@ -1098,7 +1079,6 @@ export default function ReaderScreen({
       };
       setSecondaryLocation(newLocation);
       setSecondaryTargetVerse(undefined);
-      // If linked and in multi-version mode, update primary to match
       if (showMultiVersion && isLinked) {
         setPrimaryLocation(newLocation);
         setPrimaryTargetVerse(undefined);
@@ -1117,38 +1097,78 @@ export default function ReaderScreen({
     resetButtonOpacity,
     resetPrimaryScroll,
   ]);
+  const secondaryStartOffsets = useMemo(() => {
+    const spacing = isFullScreen ? 2 : 6;
+    const offsets: Record<number, number> = {};
+    let cum = 0;
+    secondaryVerses.forEach((verse, index) => {
+      offsets[verse.verse] = cum;
+      cum += secondaryVerseMeasurements[verse.verse] || defaultVerseHeight;
+      if (index < secondaryVerses.length - 1) cum += spacing;
+    });
+    return offsets;
+  }, [secondaryVerses, secondaryVerseMeasurements, isFullScreen]);
   const syncSecondaryToPrimary = useCallback((event: any) => {
-    if (!showMultiVersion || !isLinked || isProgrammaticScrollRef.current) {
+    if (!showMultiVersion || !isLinked) {
       return;
     }
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const denominator = contentSize.height - layoutMeasurement.height;
-    if (denominator <= 0) return;
-    let progress = contentOffset.y / denominator;
-    progress = Math.max(0, Math.min(1, progress));
-    const secondaryDenom = secondaryContentHeight - secondaryScrollViewHeight;
-    if (secondaryDenom <= 0) return;
-    const targetY = progress * secondaryDenom;
-    isProgrammaticScrollRef.current = true;
+    const y = event.nativeEvent.contentOffset.y;
+    const pVerses = primaryVerses;
+    let topVerse = pVerses[0]?.verse ?? 1;
+    let fraction = 0;
+    const measurements = primaryProps.verseMeasurements;
+    const length = pVerses.length;
+    for (let i = 0; i < length; i++) {
+      const v = pVerses[i].verse;
+      const start = measurements[v];
+      const nextStart = i < length - 1 ? measurements[pVerses[i + 1].verse] : primaryContentHeight;
+      const boundsH = nextStart - start;
+      if (boundsH <= 0) continue;
+      if (y < nextStart) {
+        fraction = (y - start) / boundsH;
+        topVerse = v;
+        break;
+      }
+    }
+    const secStart = secondaryStartOffsets[topVerse];
+    if (secStart === undefined) return;
+    const secVerseIndex = secondaryVerses.findIndex((v) => v.verse === topVerse);
+    if (secVerseIndex === -1) return;
+    const nextSecStart = secVerseIndex < secondaryVerses.length - 1 ? secondaryStartOffsets[secondaryVerses[secVerseIndex + 1].verse] : secondaryContentHeight;
+    const secBoundsH = nextSecStart - secStart;
+    const targetY = secStart + fraction * secBoundsH;
     secondaryFlatListRef.current?.scrollToOffset({ offset: targetY, animated: false });
-    setTimeout(() => (isProgrammaticScrollRef.current = false), 50);
-  }, [showMultiVersion, isLinked, secondaryContentHeight, secondaryScrollViewHeight]);
+  }, [showMultiVersion, isLinked, primaryVerses, primaryProps.verseMeasurements, primaryContentHeight, secondaryStartOffsets, secondaryVerses, secondaryContentHeight]);
   const syncPrimaryToSecondary = useCallback((event: any) => {
-    if (!showMultiVersion || !isLinked || isProgrammaticScrollRef.current) {
+    if (!showMultiVersion || !isLinked) {
       return;
     }
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const denominator = contentSize.height - layoutMeasurement.height;
-    if (denominator <= 0) return;
-    let progress = contentOffset.y / denominator;
-    progress = Math.max(0, Math.min(1, progress));
-    const primaryDenom = primaryContentHeight - primaryScrollViewHeight;
-    if (primaryDenom <= 0) return;
-    const targetY = progress * primaryDenom;
-    isProgrammaticScrollRef.current = true;
+    const y = event.nativeEvent.contentOffset.y;
+    const sVerses = secondaryVerses;
+    let topVerse = sVerses[0]?.verse ?? 1;
+    let fraction = 0;
+    const length = sVerses.length;
+    for (let i = 0; i < length; i++) {
+      const v = sVerses[i].verse;
+      const start = secondaryStartOffsets[v];
+      const nextStart = i < length - 1 ? secondaryStartOffsets[sVerses[i + 1].verse] : secondaryContentHeight;
+      const boundsH = nextStart - start;
+      if (boundsH <= 0) continue;
+      if (y < nextStart) {
+        fraction = (y - start) / boundsH;
+        topVerse = v;
+        break;
+      }
+    }
+    const priStart = primaryProps.verseMeasurements[topVerse];
+    if (priStart === undefined) return;
+    const priVerseIndex = primaryVerses.findIndex((v) => v.verse === topVerse);
+    if (priVerseIndex === -1) return;
+    const nextPriStart = priVerseIndex < primaryVerses.length - 1 ? primaryProps.verseMeasurements[primaryVerses[priVerseIndex + 1].verse] : primaryContentHeight;
+    const priBoundsH = nextPriStart - priStart;
+    const targetY = priStart + fraction * priBoundsH;
     primaryFlatListRef.current?.scrollToOffset({ offset: targetY, animated: false });
-    setTimeout(() => (isProgrammaticScrollRef.current = false), 50);
-  }, [showMultiVersion, isLinked, primaryContentHeight, primaryScrollViewHeight]);
+  }, [showMultiVersion, isLinked, secondaryVerses, secondaryStartOffsets, secondaryContentHeight, primaryProps.verseMeasurements, primaryVerses, primaryContentHeight]);
   useEffect(() => {
     handleScrollRef.current = syncSecondaryToPrimary;
     handleSecondaryScrollRef.current = syncPrimaryToSecondary;
@@ -1160,8 +1180,7 @@ export default function ReaderScreen({
       scrollY.setValue(y);
       if (
         showMultiVersionRef.current &&
-        isLinkedRef.current &&
-        !isProgrammaticScrollRef.current
+        isLinkedRef.current
       ) {
         handleScrollRef.current(event);
       }
@@ -1172,9 +1191,7 @@ export default function ReaderScreen({
     (event: any) => {
       if (
         showMultiVersionRef.current &&
-        isLinkedRef.current &&
-        !isProgrammaticScrollRef.current
-      ) {
+        isLinkedRef.current) {
         handleSecondaryScrollRef.current(event);
       } else if (showMultiVersionRef.current) {
         const y = event.nativeEvent.contentOffset.y;
@@ -1200,67 +1217,39 @@ export default function ReaderScreen({
   }, [targetVerse]);
   useEffect(() => {
     if (showMultiVersion && isLinked) {
-      // This handles primary → secondary sync (existing logic)
       if (
         primaryLocation.bookId !== secondaryLocation.bookId ||
         primaryLocation.chapter !== secondaryLocation.chapter
       ) {
         setSecondaryLocation(primaryLocation);
         setSecondaryTargetVerse(primaryTargetVerse);
-        resetSecondaryScroll();
       }
     } else if (!showMultiVersion) {
       setSecondaryTargetVerse(undefined);
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
-  useEffect(() => {
-    // When linked and in multi-version mode, keep primary and secondary locations synchronized
-    if (showMultiVersion && isLinked) {
-      // If secondary bookId changes when linked, update primary to match
-      if (secondaryLocation.bookId !== primaryLocation.bookId) {
-        setPrimaryLocation(secondaryLocation);
-        setPrimaryTargetVerse(secondaryTargetVerse);
-        resetPrimaryScroll();
-      }
-    }
-  }, [
-    secondaryLocation.bookId,
-    secondaryLocation.chapter,
-    showMultiVersion,
-    isLinked,
-  ]);
+  
   useEffect(() => {
     if (!primaryLoading && primaryFlatListRef.current) {
-      isProgrammaticScrollRef.current = true;
       const verseNum = primaryTargetVerse;
       if (verseNum) {
         const meas = primaryProps.verseMeasurements[verseNum];
         if (meas !== undefined) {
-          const y = Math.max(0, meas - primaryScrollViewHeight / 2);
+          const y = Math.max(0, meas);
           primaryFlatListRef.current.scrollToOffset({ offset: y, animated: false });
           lastScrollYRef.current = y;
-          setTimeout(() => {
-            isProgrammaticScrollRef.current = false;
-          }, 1000);
           return;
         }
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, 1000);
         return;
       }
       primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
       lastScrollYRef.current = 0;
-      setTimeout(() => {
-        isProgrammaticScrollRef.current = false;
-      }, 1000);
     }
   }, [
     primaryLoading,
     primaryTargetVerse,
     primaryFlatListRef,
     primaryProps.verseMeasurements,
-    primaryScrollViewHeight
   ]);
   useEffect(() => {
     setSecondaryVerseMeasurements({});
@@ -1273,13 +1262,12 @@ export default function ReaderScreen({
       Object.keys(secondaryVerseMeasurements).length >= secondaryVerses.length &&
       secondaryFlatListRef.current
     ) {
-      let totalHeight = (isFullScreen ? 6 : 12) + 50;
+      const spacing = isFullScreen ? 2 : 6;
+      let totalHeight = 0;
       secondaryVerses.forEach((verse, index) => {
         totalHeight +=
           secondaryVerseMeasurements[verse.verse] || defaultVerseHeight;
-        if (index < secondaryVerses.length - 1) {
-          totalHeight += isFullScreen ? 2 : 6;
-        }
+        if (index < secondaryVerses.length - 1) totalHeight += spacing;
       });
       setSecondaryContentHeight(totalHeight);
       const verseNum = getHighlightVerse(false);
@@ -1289,22 +1277,12 @@ export default function ReaderScreen({
         let cumulative = 0;
         for (let i = 0; i < verseIndex; i++) {
           cumulative += secondaryVerseMeasurements[secondaryVerses[i].verse] || defaultVerseHeight;
-          if (i < verseIndex - 1) {
-            cumulative += blankLineHeight;
-          }
+          if (i < verseIndex - 1) cumulative += spacing;
         }
-        const scrollPosition = Math.max(0, cumulative - secondaryScrollViewHeight / 2);
-        isProgrammaticScrollRef.current = true;
+        const scrollPosition = Math.max(0, cumulative);
         secondaryFlatListRef.current.scrollToOffset({ offset: scrollPosition, animated: false });
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, 1000);
       } else {
-        isProgrammaticScrollRef.current = true;
         secondaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
-        setTimeout(() => {
-          isProgrammaticScrollRef.current = false;
-        }, 1000);
       }
     }
   }, [
@@ -1314,7 +1292,6 @@ export default function ReaderScreen({
     secondaryVerseMeasurements,
     getHighlightVerse,
     secondaryFlatListRef,
-    secondaryScrollViewHeight,
     isFullScreen
   ]);
   
@@ -1685,7 +1662,6 @@ export default function ReaderScreen({
         }}
         pointerEvents={overlaysOpen ? "none" : "auto"}
       >
-        {/* @ts-ignore - Temporary suppression for prop type until ReaderContentProps is updated */}
         <ReaderContent
           primaryVerses={primaryVerses}
           secondaryVerses={secondaryVerses}

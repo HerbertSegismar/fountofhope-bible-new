@@ -337,7 +337,6 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
 
     const getItemLayout = useCallback(
       (data: ArrayLike<Verse> | null | undefined, index: number) => {
-        // Estimate item height based on font size
         const itemHeight = fontSize * 4 + (isFullScreen ? 8 : 24);
         return {
           length: itemHeight,
