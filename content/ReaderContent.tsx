@@ -10,10 +10,10 @@ import {
   View,
   Text,
   TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
-  LayoutChangeEvent,
   Animated,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
@@ -52,14 +52,10 @@ interface ReaderContentProps {
   colors: any;
   fontSize: number;
   primaryProps: any;
-  primaryHandleScroll: (event: any) => void;
+  primaryHandleScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   handlePrimaryContentSizeChange: (width: number, height: number) => void;
-  secondaryHandleScrollCb: (event: any) => void;
-  handleSecondaryContentSizeChange: (width: number, height: number) => void;
-  handleSecondaryScrollViewLayout: (event: any) => void;
-  handleSecondaryVerseLayout: (
-    verseNumber: number,
-    event: LayoutChangeEvent
+  secondaryHandleScrollCb: (
+    event: NativeSyntheticEvent<NativeScrollEvent>
   ) => void;
   primaryHeaderRef: React.RefObject<View | null>;
   secondaryHeaderRef: React.RefObject<View | null>;
@@ -80,8 +76,6 @@ interface ReaderContentProps {
   effectiveLayout: "horizontal" | "vertical";
   showMultiVersion: boolean;
   isLandscape: boolean;
-  primaryScrollViewRef: React.RefObject<ScrollView | null>;
-  secondaryScrollViewRef: React.RefObject<ScrollView | null>;
   bgTextureOpacity: number;
   scrollEnabled: boolean;
   bgImageIndex: number;
@@ -95,6 +89,7 @@ interface ReaderContentProps {
   buttonOpacity: Animated.Value;
   resetButtonOpacity: () => void;
   setUiMode: (value: number) => void;
+  handleSecondaryContentSizeChange: (width: number, height: number) => void;
 }
 
 const PrimaryHeader = memo(
@@ -231,6 +226,7 @@ const ChevronButtons = memo(
     const pairGap = isLandscape ? 200 : 48;
     const buttonSize = 35;
     const iconSize = 24;
+
     if (!showMultiVersion || isLinked) {
       return (
         <>
@@ -253,6 +249,7 @@ const ChevronButtons = memo(
           <View style={{ flex: 1, alignItems: "center" }} />
           <TouchableOpacity
             onPress={goToPrimaryNextChapter}
+            disabled={primaryChapter >= primaryMaxChapter}
             style={{
               width: buttonSize,
               height: buttonSize,
@@ -261,6 +258,7 @@ const ChevronButtons = memo(
               justifyContent: "center",
               alignItems: "center",
               marginRight: 28,
+              opacity: primaryChapter >= primaryMaxChapter ? 0.3 : 1,
             }}
           >
             <Ionicons name="chevron-forward" size={iconSize} color="white" />
@@ -272,6 +270,7 @@ const ChevronButtons = memo(
       const secondaryPrevDisabled = secondaryChapter <= 1;
       const primaryNextDisabled = primaryChapter >= primaryMaxChapter;
       const secondaryNextDisabled = secondaryChapter >= secondaryMaxChapter;
+
       return (
         <View
           style={{
@@ -361,6 +360,7 @@ const ToggleButton = memo(
     onPress,
     resetButtonOpacity,
     colors,
+    isLandscape,
   }: {
     isFullScreen: boolean;
     onPress: () => void;
@@ -389,7 +389,7 @@ const ToggleButton = memo(
             color: "white",
             fontSize: isFullScreen ? 32 : 24,
             fontWeight: "bold",
-            marginBottom: isFullScreen? 3 : 0
+            marginBottom: isFullScreen ? 3 : 0,
           }}
         >
           {isFullScreen ? "▢" : "⛶"}
@@ -561,59 +561,40 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     if (props.primaryVerses.length === 0) {
       return <ErrorView display={primaryDisplay} colors={props.colors} />;
     }
+
     return (
-      <ScrollView
-        style={{ flex: 1 }}
-        ref={props.primaryScrollViewRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 40,
-          paddingTop: 0,
-        }}
-        onScroll={props.primaryHandleScroll}
-        scrollEventThrottle={16}
-        onContentSizeChange={props.handlePrimaryContentSizeChange}
-        onLayout={props.primaryProps.handleScrollViewLayout}
-        scrollEnabled={props.scrollEnabled}
-      >
-        <View
-          ref={props.primaryProps.chapterContainerRef}
-          onLayout={props.primaryProps.handleChapterContainerLayout}
-          style={{}}
-        >
-          <ChapterViewEnhanced
-            verses={props.primaryVerses}
-            bookName={props.primaryLocation.bookName}
-            chapterNumber={props.primaryLocation.chapter}
-            bookId={props.primaryLocation.bookId}
-            showVerseNumbers
-            fontSize={props.fontSize}
-            onVersePress={props.primaryOnVersePress}
-            onVerseLayout={props.primaryProps.handleVerseLayout}
-            highlightVerse={props.getHighlightVerse(true)}
-            highlightedVerses={primaryHighlightedSet}
-            bookmarkedVerses={props.primaryBookmarkedVerses}
-            isFullScreen={props.isFullScreen}
-            displayVersion={primaryDisplay}
-            colors={props.colors}
-            bgImageIndex={bgHook.effectiveIndex}
-            bgTextureOpacity={bgHook.effectiveOpacity}
-            noBackground={bgHook.hasSource}
-          />
-        </View>
-      </ScrollView>
+      <View style={{ flex: 1, paddingBottom: 40 }}>
+        <ChapterViewEnhanced
+          verses={props.primaryVerses}
+          bookName={props.primaryLocation.bookName}
+          chapterNumber={props.primaryLocation.chapter}
+          bookId={props.primaryLocation.bookId}
+          showVerseNumbers
+          fontSize={props.fontSize}
+          onVersePress={props.primaryOnVersePress}
+          onVerseLayout={props.primaryProps.handleVerseLayout}
+          highlightVerse={props.getHighlightVerse(true)}
+          highlightedVerses={primaryHighlightedSet}
+          bookmarkedVerses={props.primaryBookmarkedVerses}
+          isFullScreen={props.isFullScreen}
+          displayVersion={primaryDisplay}
+          colors={props.colors}
+          bgImageIndex={bgHook.effectiveIndex}
+          bgTextureOpacity={bgHook.effectiveOpacity}
+          noBackground={bgHook.hasSource}
+          onScroll={props.primaryHandleScroll}
+          scrollEnabled={props.scrollEnabled}
+        />
+      </View>
     );
   }, [
     props.primaryLoading,
-    props.primaryVerses.length,
+    props.primaryVerses,
     props.primaryLocation,
     primaryDisplay,
-    props.primaryScrollViewRef,
-    props.primaryHandleScroll,
-    props.handlePrimaryContentSizeChange,
-    props.primaryProps,
     props.fontSize,
     props.primaryOnVersePress,
+    props.primaryProps.handleVerseLayout,
     props.getHighlightVerse,
     primaryHighlightedSet,
     props.primaryBookmarkedVerses,
@@ -622,33 +603,23 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     bgHook.effectiveIndex,
     bgHook.effectiveOpacity,
     bgHook.hasSource,
+    props.primaryHandleScroll,
     props.scrollEnabled,
   ]);
 
-  const renderSecondaryContent = useMemo(() => {
+  const renderSecondaryContent = useCallback(() => {
     const isPostLoadEmpty =
       !props.secondaryLoading && props.secondaryVerses.length === 0;
+
     if (props.secondaryLoading || (isPostLoadEmpty && !hasSecondaryFailed)) {
       return <LoadingView colors={props.colors} />;
     }
     if (hasSecondaryFailed) {
       return <ErrorView display={secondaryDisplay} colors={props.colors} />;
     }
+
     return (
-      <ScrollView
-        style={{ flex: 1 }}
-        ref={props.secondaryScrollViewRef}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingBottom: 40,
-          paddingTop: 0,
-        }}
-        onScroll={props.secondaryHandleScrollCb}
-        scrollEventThrottle={16}
-        onContentSizeChange={props.handleSecondaryContentSizeChange}
-        onLayout={props.handleSecondaryScrollViewLayout}
-        scrollEnabled={props.scrollEnabled}
-      >
+      <View style={{ flex: 1, paddingBottom: 40 }}>
         <ChapterViewEnhanced
           verses={props.secondaryVerses}
           bookName={props.secondaryLocation.bookName}
@@ -657,7 +628,6 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
           showVerseNumbers
           fontSize={props.fontSize}
           onVersePress={props.secondaryOnVersePress}
-          onVerseLayout={props.handleSecondaryVerseLayout}
           highlightVerse={props.getHighlightVerse(false)}
           highlightedVerses={secondaryHighlightedSet}
           bookmarkedVerses={props.secondaryBookmarkedVerses}
@@ -667,19 +637,17 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
           bgImageIndex={bgHook.effectiveIndex}
           bgTextureOpacity={bgHook.effectiveOpacity}
           noBackground={bgHook.hasSource}
+          onScroll={props.secondaryHandleScrollCb}
+          scrollEnabled={props.scrollEnabled}
         />
-      </ScrollView>
+      </View>
     );
   }, [
     props.secondaryLoading,
+    props.secondaryVerses,
     hasSecondaryFailed,
-    props.secondaryVerses.length,
-    props.secondaryLocation,
     secondaryDisplay,
-    props.secondaryScrollViewRef,
-    props.secondaryHandleScrollCb,
-    props.handleSecondaryContentSizeChange,
-    props.handleSecondaryScrollViewLayout,
+    props.secondaryLocation,
     props.fontSize,
     props.secondaryOnVersePress,
     props.getHighlightVerse,
@@ -690,6 +658,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     bgHook.effectiveIndex,
     bgHook.effectiveOpacity,
     bgHook.hasSource,
+    props.secondaryHandleScrollCb,
     props.scrollEnabled,
   ]);
 
@@ -753,7 +722,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
               colors={props.colors}
               isFullScreen={false}
             />
-            {renderSecondaryContent}
+            {renderSecondaryContent()}
           </View>
         </View>
       );
@@ -810,7 +779,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
               colors={props.colors}
               isFullScreen={true}
             />
-            {renderSecondaryContent}
+            {renderSecondaryContent()}
           </View>
         </View>
       );

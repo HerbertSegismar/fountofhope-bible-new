@@ -29,7 +29,7 @@ import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Fonts } from "../utils/fonts";
 import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import Footer from "../components/Footer";
-import { bgTextures } from "../assets/textures/bgTextures";
+import { bgTextures } from "../android/assets/textures/bgTextures";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 

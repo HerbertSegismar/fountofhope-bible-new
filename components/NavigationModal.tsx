@@ -364,8 +364,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                 fontSize: 18,
               }}
             >
-              Choose Passage to Read (
-              {navigationTarget === "primary" ? "Primary" : "Secondary"})
+              Choose Passage to Read
             </Text>
             <View style={{ width: 24 }} />
           </View>

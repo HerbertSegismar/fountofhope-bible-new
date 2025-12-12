@@ -27,7 +27,6 @@ import { getBookInfo } from "../utils/testamentUtils";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getThemeColors } from "../utils/themeUtils";
 
-
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, "Home">;
 
 interface Props {
@@ -76,10 +75,6 @@ const BASE_DARK_THEME_COLORS = {
   border: "#374151",
 } as const;
 
-type BaseThemeColors =
-  | typeof BASE_LIGHT_THEME_COLORS
-  | typeof BASE_DARK_THEME_COLORS;
-
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
     case "serif":
@@ -93,7 +88,6 @@ const getFontFamily = (fontFamily: FontFamily): string | undefined => {
 };
 
 export default function HomeScreen({ navigation }: Props) {
-
   const { theme, colorScheme, fontFamily, customColor } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
 
@@ -217,16 +211,12 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   const handleVersePress = (verse: Verse) => {
-    const bookInfo = getBookInfo(Number(verse.book_number));
-    const longName = bookInfo?.long || bookLongName || "Unknown Book";
-    navigation.navigate("VerseList", {
-      book: {
-        book_number: verse.book_number,
-        short_name: verse.book_name ?? "Unknown",
-        long_name: longName,
-        book_color: verse.book_color || "#3B82F6",
-      },
+    const bookInfo = getBookInfo(verse.book_number);
+    navigation.navigate("Reader", {
+      bookId: verse.book_number,
       chapter: verse.chapter,
+      bookName: bookInfo?.long || bookLongName || "Unknown Book",
+      verse: verse.verse,
     });
   };
 

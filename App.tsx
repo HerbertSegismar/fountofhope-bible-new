@@ -29,9 +29,6 @@ import {
 import * as Font from "expo-font";
 
 import HomeScreen from "./screens/HomeScreen";
-import BookListScreen from "./screens/BookListScreen";
-import ChapterListScreen from "./screens/ChapterListScreen";
-import VerseListScreen from "./screens/VerseListScreen";
 import SearchScreen from "./screens/SearchScreen";
 import BookmarksScreen from "./screens/BookmarksScreen";
 import ReaderScreen from "./screens/ReaderScreen";
@@ -49,7 +46,6 @@ import Oswald_VariableFont from "./assets/fonts/Oswald_VariableFont.ttf";
 import RubikGlitch_Regular from "./assets/fonts/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 import { getBookInfo } from "./utils/testamentUtils";
-import { ChapterMeasurementsProvider } from "./context/ChapterMeasurementsContext";
 import { NavigationModal } from "./components/NavigationModal";
 import { useBibleDatabase } from "./context/BibleDatabaseContext";
 
@@ -529,31 +525,6 @@ function AppStack() {
         options={{ title: "Home" }}
       />
       <RootStack.Screen
-        name="BookList"
-        component={BookListScreen}
-        options={{ title: "Bible Books" }}
-      />
-      <RootStack.Screen
-        name="ChapterList"
-        component={ChapterListScreen}
-        options={({ route }) => {
-          const bookInfo = getBookInfo(Number(route.params.book.book_number));
-          const longName = bookInfo?.long || route.params.book.long_name;
-          return { title: longName };
-        }}
-      />
-      <RootStack.Screen
-        name="VerseList"
-        component={VerseListScreen}
-        options={({ route }) => {
-          const bookInfo = getBookInfo(Number(route.params.book.book_number));
-          const longName = bookInfo?.long || route.params.book.long_name;
-          return {
-            title: `${longName} ${route.params.chapter}`,
-          };
-        }}
-      />
-      <RootStack.Screen
         name="Reader"
         component={ReaderScreen}
         options={({ route }) => ({
@@ -617,7 +588,6 @@ export default function App() {
     <SafeAreaProvider>
       <FontLoader>
         <HighlightsProvider>
-          <ChapterMeasurementsProvider>
             <BibleDatabaseProvider>
               <ThemeProvider>
                 <BookmarksProvider>
@@ -625,7 +595,6 @@ export default function App() {
                 </BookmarksProvider>
               </ThemeProvider>
             </BibleDatabaseProvider>
-          </ChapterMeasurementsProvider>
         </HighlightsProvider>
       </FontLoader>
     </SafeAreaProvider>
