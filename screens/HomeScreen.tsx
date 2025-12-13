@@ -436,68 +436,22 @@ export default function HomeScreen({ navigation }: Props) {
           )}
         </View>
       </SafeAreaView>
-
-      <View
-        style={{
-          padding: 10,
-          margin: 20,
-        }}
-      >
-        <Text
-          style={{
-            color: themeColors.primary,
-            fontSize: 16,
-            textAlign: "center",
-            fontWeight: "500",
-            fontFamily: actualFontFamily,
-          }}
-        >
-          📖 Start your day with God's Word
-        </Text>
-      </View>
-
       <SafeAreaView
         style={{
           gap: 8,
           marginBottom: 24,
-        }}
+        }} 
       >
         <Button
-          title="Read Bible"
-          onPress={() => navigation.navigate("BookList")}
+          title="Search Bible"
+          onPress={() => navigation.navigate("Search")}
         />
         <Button
-          title="Browse Books"
-          onPress={() => navigation.navigate("BookList")}
+          title="Browse Bookmarks"
+          onPress={() => navigation.navigate("Bookmarks")}
           variant="outline"
         />
       </SafeAreaView>
-
-      {verseRange && verseRange.length > 0 && (
-        <SafeAreaView>
-          <View
-            style={{
-              backgroundColor: themeColors.card,
-              padding: 16,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: themeColors.border,
-            }}
-          >
-            <Text
-              style={{
-                color: themeColors.textMuted,
-                textAlign: "center",
-                fontSize: 16,
-                fontFamily: actualFontFamily,
-              }}
-            >
-              ✨ Tap "Refresh" for fresh inspiration anytime
-            </Text>
-          </View>
-        </SafeAreaView>
-      )}
-
       <SafeAreaView>
         <MatrixRN />
       </SafeAreaView>

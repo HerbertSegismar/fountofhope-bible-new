@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, memo } from "react";
+import React, { useMemo, useCallback, useRef, memo, forwardRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -22,7 +22,7 @@ import { useBackgroundTexture } from "../hooks/useBackgroundTexture";
 import { Fonts } from "../utils/fonts";
 import { EnhancedModal, type EnhancedModalRef } from "./EnhancedModal";
 import { VerseItem } from "./VerseItem";
-import { useWindowDimensions } from 'react-native';
+import { useWindowDimensions } from "react-native";
 
 const STYLES = {
   container: {
@@ -66,6 +66,15 @@ interface ChapterViewProps {
   noBackground?: boolean;
   onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   scrollEnabled?: boolean;
+  onScrollBeginDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onScrollEndDrag?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  onMomentumScrollBegin?: (
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) => void;
+  onMomentumScrollEnd?: (
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) => void;
+   scrollEventThrottle: number;
 }
 
 const MemoizedVerseItem = memo(
@@ -134,19 +143,7 @@ const MemoizedVerseItem = memo(
 );
 
 const MemoizedFooter = memo(
-  ({
-    versesCount,
-    highlightedCount,
-    bookmarkedCount,
-    themeColors,
-    fontFamily,
-  }: {
-    versesCount: number;
-    highlightedCount: number;
-    bookmarkedCount: number;
-    themeColors: any;
-    fontFamily?: string;
-  }) => {
+  ({ themeColors, fontFamily }: { themeColors: any; fontFamily?: string }) => {
     return (
       <View
         style={{
@@ -163,19 +160,18 @@ const MemoizedFooter = memo(
             fontSize: 10,
             fontFamily,
           }}
-          numberOfLines={1}
-          ellipsizeMode="tail"
         >
-          {versesCount} verse{versesCount !== 1 ? "s" : ""}
-          {highlightedCount > 0 && ` • ${highlightedCount} highlighted`}
-          {bookmarkedCount > 0 && ` • ${bookmarkedCount} bookmarked`}
+          End of Chapter
         </Text>
       </View>
     );
   }
 );
 
-export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
+export const ChapterViewEnhanced = forwardRef<
+  FlatList<Verse>,
+  ChapterViewProps
+>(
   (
     {
       verses,
@@ -197,7 +193,7 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
       onScroll,
       scrollEnabled = true,
     },
-    ref
+    forwardedRef
   ) => {
     const { theme, colorScheme, fontFamily, customColor } = useTheme();
     const themeColors = getThemeColors(theme, colorScheme, customColor);
@@ -228,6 +224,32 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
     const modalRef = useRef<EnhancedModalRef>(null);
     const flatListRef = useRef<FlatList<Verse>>(null);
 
+    // Create a ref callback that updates both the local ref and the forwarded ref
+    const setFlatListRef = useCallback(
+      (node: FlatList<Verse> | null) => {
+        console.log("ChapterViewEnhanced: Setting FlatList ref", {
+          nodeExists: !!node,
+          forwardedRefExists: !!forwardedRef,
+          versesCount: verses.length,
+        });
+
+        // Update local ref
+        flatListRef.current = node;
+
+        // Update forwarded ref if it exists
+        if (forwardedRef) {
+          if (typeof forwardedRef === "function") {
+            forwardedRef(node);
+          } else {
+            (
+              forwardedRef as React.MutableRefObject<FlatList<Verse> | null>
+            ).current = node;
+          }
+        }
+      },
+      [forwardedRef, verses.length]
+    );
+
     const { width, height } = useWindowDimensions();
     const isLandscape = width > height;
 
@@ -251,6 +273,15 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
       () => [...verses].sort((a, b) => a.verse - b.verse),
       [verses]
     );
+
+    useEffect(() => {
+      console.log("ChapterViewEnhanced: Component mounted/updated", {
+        localRef: !!flatListRef.current,
+        forwardedRef: !!forwardedRef,
+        versesCount: verses.length,
+        sortedVersesCount: sortedVerses.length,
+      });
+    }, [flatListRef.current, verses.length, sortedVerses.length]);
 
     const handleVerseLayout = useCallback(
       (verseNumber: number, event: LayoutChangeEvent) => {
@@ -336,7 +367,7 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
     );
 
     const getItemLayout = useCallback(
-      (data: ArrayLike<Verse> | null | undefined, index: number) => {
+      (_data: ArrayLike<Verse> | null | undefined, index: number) => {
         const itemHeight = fontSize * 4 + (isFullScreen ? 8 : 24);
         return {
           length: itemHeight,
@@ -350,20 +381,11 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
     const ListFooterComponent = useMemo(
       () => (
         <MemoizedFooter
-          versesCount={sortedVerses.length}
-          highlightedCount={highlightedVerses.size}
-          bookmarkedCount={bookmarkedVerses.size}
           themeColors={themeColors}
           fontFamily={actualFontFamily}
         />
       ),
-      [
-        sortedVerses.length,
-        highlightedVerses.size,
-        bookmarkedVerses.size,
-        themeColors,
-        actualFontFamily,
-      ]
+      [themeColors, actualFontFamily]
     );
 
     const wrapperStyle = useMemo<ViewStyle>(
@@ -411,16 +433,7 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
         style={[wrapperStyle, style]}
       >
         <FlatList
-          ref={(listRef) => {
-            flatListRef.current = listRef;
-            if (ref) {
-              if (typeof ref === "function") {
-                ref(listRef);
-              } else {
-                ref.current = listRef;
-              }
-            }
-          }}
+          ref={setFlatListRef}
           data={sortedVerses}
           renderItem={renderVerseItem}
           keyExtractor={keyExtractor}
@@ -446,34 +459,6 @@ export const ChapterViewEnhanced = React.forwardRef<FlatList, ChapterViewProps>(
         <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
           {chapterContent}
         </TouchableOpacity>
-      );
-    }
-
-    if (sortedVerses.length === 0) {
-      return (
-        <View
-          style={[
-            {
-              backgroundColor: effectiveNoBg ? "transparent" : themeColors.card,
-              padding: isFullScreen ? 8 : 16,
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: themeColors.border,
-            },
-            style,
-          ]}
-        >
-          <Text
-            style={{
-              textAlign: "center",
-              color: themeColors.textMuted,
-              fontSize: isFullScreen ? 14 : 16,
-              fontFamily: actualFontFamily,
-            }}
-          >
-            No verses available
-          </Text>
-        </View>
       );
     }
 

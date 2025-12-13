@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  LayoutChangeEvent,
   TextInput,
 } from "react-native";
 import {
@@ -389,8 +390,8 @@ export default function ReaderScreen({
   const [secondaryReady, setSecondaryReady] = useState(false);
   const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(false);
-  const [primaryContentHeight, setPrimaryContentHeight] = useState(0);
-  const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
+  const [, setPrimaryContentHeight] = useState(0);
+  const [, setSecondaryContentHeight] = useState(0);
   const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<
     Record<number, number>
   >({});
@@ -407,17 +408,32 @@ export default function ReaderScreen({
   const [navigationTarget, setNavigationTarget] = useState<
     "primary" | "secondary"
   >("primary");
+  // Scroll state tracking
+  const hasScrolledToInitialVerse = useRef(false);
+  const shouldScrollToPrimaryVerse = useRef(false);
+  const shouldScrollToSecondaryVerse = useRef(false);
+  const initialScrollDone = useRef(false);
+  const primaryScrollRetryCount = useRef(0);
+  const secondaryScrollRetryCount = useRef(0);
+  const maxScrollRetries = 5;
+  const handleSecondaryVerseLayout = useCallback(
+    (verse: number, event: LayoutChangeEvent) => {
+      const { height } = event.nativeEvent.layout;
+      setSecondaryVerseMeasurements((prev) => ({
+        ...prev,
+        [verse]: height,
+      }));
+    },
+    []
+  );
   const [bgTextureOpacity, setBgTextureOpacity] = useState(0.1);
   const [bgImageIndex, setBgImageIndex] = useState(0);
   const lastScrollYRef = useRef(0);
   const scrollY = useRef(new Animated.Value(0)).current;
-  const secondaryScrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showMultiVersionRef = useRef(false);
   const isLinkedRef = useRef(true);
-  const handleScrollRef = useRef<(event: any) => void>(() => {});
-  const handleSecondaryScrollRef = useRef<(event: any) => void>(() => {});
   const effectiveLayout = useMemo(
     () => (isLandscape ? "horizontal" : multiViewLayout),
     [isLandscape, multiViewLayout]
@@ -427,6 +443,263 @@ export default function ReaderScreen({
   );
   const isFullScreen = uiMode === 1;
   const { setShowColorPicker } = useTheme();
+  const ignorePrimaryScroll = useRef(false);
+  const ignoreSecondaryScroll = useRef(false);
+  const isPrimaryUserScrolling = useRef(false);
+  const isSecondaryUserScrolling = useRef(false);
+  const scrollToPrimaryVerse = useCallback(
+    (verseNum: number, animated = true) => {
+      // Check if FlatList ref exists and has current
+      if (!primaryFlatListRef || !primaryFlatListRef.current) {
+        console.log("Primary scroll: FlatList ref is not available");
+        return false;
+      }
+      // Store ref in variable for TypeScript
+      const flatList = primaryFlatListRef.current;
+      // Check if we have verses
+      if (!primaryVerses || primaryVerses.length === 0) {
+        console.log("Primary scroll: No verses loaded yet");
+        return false;
+      }
+      const verseIndex = primaryVerses.findIndex((v) => v.verse === verseNum);
+      if (verseIndex === -1) {
+        console.log(`Primary scroll: Verse ${verseNum} not found`);
+        return false;
+      }
+      console.log(
+        `Primary: Scrolling to verse ${verseNum} at index ${verseIndex}`
+      );
+      try {
+        // First try scrollToIndex
+        flatList.scrollToIndex({
+          index: verseIndex,
+          animated,
+          viewPosition: 0.1,
+          viewOffset: 20,
+        });
+        console.log("scrollToIndex called successfully");
+        return true;
+      } catch (error) {
+        console.log("scrollToIndex failed, trying scrollToOffset:", error);
+        // Fallback: use scrollToOffset
+        try {
+          const spacing = isFullScreen ? 2 : 4;
+          let cumulativeHeight = 0;
+          // Calculate cumulative height up to this verse
+          for (let i = 0; i < verseIndex; i++) {
+            const verse = primaryVerses[i];
+            if (verse) {
+              const verseHeight =
+                primaryProps.verseMeasurements?.[verse.verse] ||
+                defaultVerseHeight;
+              cumulativeHeight += verseHeight + spacing;
+            }
+          }
+          // Scroll to calculated offset
+          flatList.scrollToOffset({
+            offset: Math.max(0, cumulativeHeight - 50),
+            animated: true,
+          });
+          console.log("scrollToOffset called successfully");
+          return true;
+        } catch (offsetError) {
+          console.log("scrollToOffset also failed:", offsetError);
+          // Last resort: scroll to item
+          try {
+            const targetVerseObj = primaryVerses[verseIndex];
+            if (targetVerseObj) {
+              flatList.scrollToItem({
+                item: targetVerseObj,
+                animated: true,
+                viewPosition: 0.1,
+              });
+              console.log("scrollToItem called successfully");
+              return true;
+            }
+          } catch (itemError) {
+            console.log("All scroll methods failed:", itemError);
+          }
+          return false;
+        }
+      }
+    },
+    [
+      primaryFlatListRef,
+      primaryVerses,
+      primaryProps.verseMeasurements,
+      isFullScreen,
+      defaultVerseHeight,
+    ]
+  );
+  const scrollToVerseWhenReady = useCallback(
+    async (verseNum: number, maxWaitTime = 5000) => {
+      console.log(`Waiting to scroll to verse ${verseNum}...`);
+      const startTime = Date.now();
+      let lastRetryTime = 0;
+      const retryInterval = 200;
+      const checkAndScroll = () => {
+        const currentTime = Date.now();
+        // Check if timeout reached
+        if (currentTime - startTime > maxWaitTime) {
+          console.log("Timeout reached, trying final scroll attempt...");
+          // Final attempt
+          if (
+            primaryFlatListRef &&
+            primaryFlatListRef.current &&
+            primaryVerses.length > 0
+          ) {
+            const verseIndex = primaryVerses.findIndex(
+              (v) => v.verse === verseNum
+            );
+            if (verseIndex !== -1) {
+              primaryFlatListRef.current.scrollToIndex({
+                index: verseIndex,
+                animated: true,
+                viewPosition: 0.1,
+              });
+              console.log("Final scroll attempt made");
+              return true;
+            }
+          }
+          console.log("Failed to scroll after waiting");
+          return false;
+        }
+        // Only retry every retryInterval ms
+        if (currentTime - lastRetryTime < retryInterval) {
+          setTimeout(checkAndScroll, retryInterval);
+          return false;
+        }
+        lastRetryTime = currentTime;
+        // Check conditions
+        const conditions = {
+          flatListRef: !!(primaryFlatListRef && primaryFlatListRef.current),
+          verses: primaryVerses.length > 0,
+          loading: !primaryLoading,
+          measurements:
+            primaryProps.verseMeasurements &&
+            Object.keys(primaryProps.verseMeasurements).length > 0,
+        };
+        console.log("Waiting for:", conditions);
+        if (conditions.flatListRef && conditions.verses && conditions.loading) {
+          console.log("Conditions met, attempting scroll...");
+          const verseIndex = primaryVerses.findIndex(
+            (v) => v.verse === verseNum
+          );
+          if (verseIndex !== -1 && primaryFlatListRef.current) {
+            try {
+              primaryFlatListRef.current.scrollToIndex({
+                index: verseIndex,
+                animated: true,
+                viewPosition: 0.1,
+              });
+              console.log("Scroll successful!");
+              return true;
+            } catch (error) {
+              console.log("Scroll error:", error);
+            }
+          }
+        }
+        // Continue waiting
+        setTimeout(checkAndScroll, retryInterval);
+        return false;
+      };
+      return checkAndScroll();
+    },
+    [
+      primaryFlatListRef,
+      primaryVerses,
+      primaryLoading,
+      primaryProps.verseMeasurements,
+    ]
+  );
+  // Function to scroll to a specific verse in the secondary view
+  const scrollToSecondaryVerse = useCallback(
+    (verseNum: number, animated = true) => {
+      if (!secondaryFlatListRef.current || !secondaryVerses.length) {
+        console.log("Secondary scroll: No list ref or verses available");
+        return false;
+      }
+      const verseIndex = secondaryVerses.findIndex((v) => v.verse === verseNum);
+      if (verseIndex === -1) {
+        console.log(
+          `Secondary scroll: Verse ${verseNum} not found in secondary verses`
+        );
+        return false;
+      }
+      console.log(
+        `Secondary: Scrolling to verse ${verseNum} at index ${verseIndex}`
+      );
+      try {
+        // Use scrollToIndex with better parameters
+        secondaryFlatListRef.current.scrollToIndex({
+          index: verseIndex,
+          animated,
+          viewPosition: 0.1,
+          viewOffset: 20,
+        });
+        return true;
+      } catch (error) {
+        console.log("Secondary scroll error:", error);
+        // Fallback: use scrollToOffset with measurements
+        const spacing = isFullScreen ? 2 : 4;
+        let cumulativeHeight = 0;
+        // Calculate cumulative height up to this verse
+        for (let i = 0; i < verseIndex; i++) {
+          const verse = secondaryVerses[i];
+          if (verse) {
+            const verseHeight =
+              secondaryVerseMeasurements[verse.verse] || defaultVerseHeight;
+            cumulativeHeight += verseHeight + spacing;
+          }
+        }
+        // Scroll to calculated offset
+        secondaryFlatListRef.current.scrollToOffset({
+          offset: Math.max(0, cumulativeHeight - 50),
+          animated: true,
+        });
+        return true;
+      }
+    },
+    [
+      secondaryFlatListRef,
+      secondaryVerses,
+      secondaryVerseMeasurements,
+      isFullScreen,
+      defaultVerseHeight,
+    ]
+  );
+  const scrollToPrimaryVerseWithRetry = useCallback(
+    async (verseNum: number, maxRetries = 3) => {
+      console.log(`scrollToPrimaryVerseWithRetry called for verse ${verseNum}`);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        // Check if FlatList is ready
+        if (
+          !primaryFlatListRef ||
+          !primaryFlatListRef.current ||
+          !primaryVerses.length
+        ) {
+          console.log(`Attempt ${attempt + 1}: FlatList not ready, waiting...`);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          continue;
+        }
+        console.log(`Attempt ${attempt + 1} to scroll to verse ${verseNum}`);
+        const success = scrollToPrimaryVerse(verseNum);
+        if (success) {
+          console.log(`Successfully scrolled to verse ${verseNum}`);
+          return true;
+        }
+        // Wait before retry with exponential backoff
+        const retryDelay = 300 * Math.pow(2, attempt);
+        console.log(`Retrying in ${retryDelay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      }
+      console.log(
+        `Failed to scroll to verse ${verseNum} after ${maxRetries} attempts`
+      );
+      return false;
+    },
+    [scrollToPrimaryVerse, primaryVerses, primaryFlatListRef]
+  );
   const reloadSecondaryDB = useCallback(
     async (retries = 10): Promise<boolean> => {
       if (!secondaryVersion) return false;
@@ -465,6 +738,23 @@ export default function ReaderScreen({
     },
     [secondaryVersion]
   );
+  // Add this useEffect to track when the ref becomes available
+  useEffect(() => {
+    console.log("Primary FlatList ref updated:", {
+      hasRef: !!primaryFlatListRef,
+      hasCurrent: !!primaryFlatListRef?.current,
+      refType: typeof primaryFlatListRef,
+      isRefObject: primaryFlatListRef && "current" in primaryFlatListRef,
+    });
+  }, [primaryFlatListRef?.current]);
+  // Add this to check when ChapterViewEnhanced mounts
+  useEffect(() => {
+    console.log("ChapterViewEnhanced mounted with ref:", {
+      refExists: !!primaryFlatListRef,
+      refCurrent: !!primaryFlatListRef?.current,
+      versesLength: primaryVerses.length,
+    });
+  }, [primaryFlatListRef, primaryVerses.length]);
   useEffect(() => {
     if (!showMultiVersion || !secondaryVersion) {
       setSecondaryReady(false);
@@ -531,13 +821,16 @@ export default function ReaderScreen({
   const resetPrimaryScroll = useCallback(() => {
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
-    if (primaryFlatListRef.current) {
+    if (primaryFlatListRef && primaryFlatListRef.current) {
       primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
     }
   }, [scrollY, primaryFlatListRef]);
   const resetSecondaryScroll = useCallback(() => {
     if (secondaryFlatListRef.current) {
-      secondaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
+      secondaryFlatListRef.current.scrollToOffset({
+        offset: 0,
+        animated: false,
+      });
     }
   }, [secondaryFlatListRef]);
   useEffect(() => {
@@ -698,7 +991,23 @@ export default function ReaderScreen({
         currentDimensions.width > currentDimensions.height;
       setDimensions(currentDimensions);
       setIsLandscape(currentIsLandscape);
-    }, [loadPreferences, loadReaderSettings, loadBackgroundSettings])
+      // Reset scroll state when screen comes into focus
+      hasScrolledToInitialVerse.current = false;
+      shouldScrollToPrimaryVerse.current = true;
+      shouldScrollToSecondaryVerse.current = false;
+      initialScrollDone.current = false;
+      primaryScrollRetryCount.current = 0;
+      secondaryScrollRetryCount.current = 0;
+      // Set target verse from route params
+      if (targetVerse) {
+        setPrimaryTargetVerse(targetVerse);
+      }
+    }, [
+      loadPreferences,
+      loadReaderSettings,
+      loadBackgroundSettings,
+      targetVerse,
+    ])
   );
   useEffect(() => {
     AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
@@ -909,6 +1218,76 @@ export default function ReaderScreen({
       linkItem,
     ]
   );
+  const safeScrollToVerse = useCallback(
+    (verseNum: number, isPrimary = true) => {
+      console.log(
+        `safeScrollToVerse called for verse ${verseNum}, primary: ${isPrimary}`
+      );
+      if (isPrimary) {
+        // Check if ref exists and has current
+        if (!primaryFlatListRef || !primaryFlatListRef.current) {
+          console.log("Primary FlatList ref is null, cannot scroll");
+          return false;
+        }
+        const flatList = primaryFlatListRef.current;
+        if (primaryVerses.length === 0) {
+          console.log("No primary verses loaded yet");
+          return false;
+        }
+        // Find the verse
+        const verseIndex = primaryVerses.findIndex((v) => v.verse === verseNum);
+        if (verseIndex === -1) {
+          console.log(`Verse ${verseNum} not found in primary verses`);
+          return false;
+        }
+        console.log(`Found verse ${verseNum} at index ${verseIndex}`);
+        // Try multiple scrolling methods
+        const tryScroll = () => {
+          try {
+            // Method 1: scrollToIndex
+            flatList.scrollToIndex({
+              index: verseIndex,
+              animated: true,
+              viewPosition: 0.1,
+            });
+            return true;
+          } catch (error1) {
+            console.log("Method 1 failed:", error1);
+            try {
+              // Method 2: scrollToOffset (calculate approximate offset)
+              const estimatedOffset = verseIndex * (defaultVerseHeight + 4);
+              flatList.scrollToOffset({
+                offset: Math.max(0, estimatedOffset - 100),
+                animated: true,
+              });
+              return true;
+            } catch (error2) {
+              console.log("Method 2 failed:", error2);
+              // Method 3: scroll to item
+              try {
+                const targetVerseObj = primaryVerses[verseIndex];
+                if (targetVerseObj) {
+                  flatList.scrollToItem({
+                    item: targetVerseObj,
+                    animated: true,
+                    viewPosition: 0.1,
+                  });
+                  return true;
+                }
+              } catch (error3) {
+                console.log("Method 3 failed:", error3);
+              }
+              return false;
+            }
+          }
+        };
+        return tryScroll();
+      }
+      // Handle secondary view scrolling similarly
+      return false;
+    },
+    [primaryFlatListRef, primaryVerses, defaultVerseHeight]
+  );
   const filteredMenuItems = useMemo(
     () =>
       menuItems.filter(
@@ -928,55 +1307,95 @@ export default function ReaderScreen({
   const handleVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
-      Alert.alert(`${bookName} ${verse.chapter}:${verse.verse}`, "Options:", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isHighlighted ? "Remove Highlight" : "Highlight",
-          onPress: () => toggleVerseHighlight(verse),
-        },
-        {
-          text: "Bookmark",
-          onPress: () => {
-            addBookmark(verse);
-            Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+      Alert.alert(
+        `${primaryLocation.bookName} ${verse.chapter}:${verse.verse}`,
+        "Options:",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: isHighlighted ? "Remove Highlight" : "Highlight",
+            onPress: () => toggleVerseHighlight(verse),
           },
-        },
-        {
-          text: "Share",
-          onPress: () => Alert.alert("Share", "Coming soon!"),
-        },
-      ]);
+          {
+            text: "Bookmark",
+            onPress: () => {
+              addBookmark(verse);
+              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+            },
+          },
+          {
+            text: "Scroll to Verse",
+            onPress: () => {
+              console.log(`User requested scroll to verse ${verse.verse}`);
+              const success = safeScrollToVerse(verse.verse, true);
+              if (success) {
+                Alert.alert("Success", `Scrolled to verse ${verse.verse}`);
+              } else {
+                Alert.alert(
+                  "Error",
+                  "Could not scroll to verse. Please try again."
+                );
+              }
+            },
+          },
+          {
+            text: "Share",
+            onPress: () => Alert.alert("Share", "Coming soon!"),
+          },
+        ]
+      );
     },
     [
       primaryHighlightedVerses,
+      primaryLocation.bookName,
       toggleVerseHighlight,
       addBookmark,
-      setPrimaryTargetVerse,
+      safeScrollToVerse,
     ]
   );
   const handleSecondaryVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = secondaryHighlightedVerses.includes(verse.verse);
-      Alert.alert(`${bookName} ${verse.chapter}:${verse.verse}`, "Options:", [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isHighlighted ? "Remove Highlight" : "Highlight",
-          onPress: () => toggleVerseHighlight(verse),
-        },
-        {
-          text: "Bookmark",
-          onPress: () => {
-            addBookmark(verse);
-            Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+      Alert.alert(
+        `${secondaryLocation.bookName} ${verse.chapter}:${verse.verse}`,
+        "Options:",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: isHighlighted ? "Remove Highlight" : "Highlight",
+            onPress: () => toggleVerseHighlight(verse),
           },
-        },
-        {
-          text: "Share",
-          onPress: () => Alert.alert("Share", "Coming soon!"),
-        },
-      ]);
+          {
+            text: "Bookmark",
+            onPress: () => {
+              addBookmark(verse);
+              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
+            },
+          },
+          {
+            text: "Scroll to Verse",
+            onPress: () => {
+              setSecondaryTargetVerse(verse.verse);
+              setTimeout(() => {
+                scrollToSecondaryVerse(verse.verse, true);
+              }, 0);
+            },
+          },
+          {
+            text: "Share",
+            onPress: () => Alert.alert("Share", "Coming soon!"),
+          },
+        ]
+      );
     },
-    [secondaryHighlightedVerses, toggleVerseHighlight, addBookmark]
+    [
+      secondaryHighlightedVerses,
+      secondaryLocation.bookName,
+      toggleVerseHighlight,
+      addBookmark,
+      setSecondaryTargetVerse,
+      scrollToSecondaryVerse,
+    ]
   );
   const primaryOnVersePress = handleVersePress;
   const secondaryOnVersePress =
@@ -1097,109 +1516,92 @@ export default function ReaderScreen({
     resetButtonOpacity,
     resetPrimaryScroll,
   ]);
-  const secondaryStartOffsets = useMemo(() => {
-    const spacing = isFullScreen ? 2 : 6;
-    const offsets: Record<number, number> = {};
-    let cum = 0;
-    secondaryVerses.forEach((verse, index) => {
-      offsets[verse.verse] = cum;
-      cum += secondaryVerseMeasurements[verse.verse] || defaultVerseHeight;
-      if (index < secondaryVerses.length - 1) cum += spacing;
-    });
-    return offsets;
-  }, [secondaryVerses, secondaryVerseMeasurements, isFullScreen]);
-  const syncSecondaryToPrimary = useCallback((event: any) => {
-    if (!showMultiVersion || !isLinked) {
-      return;
-    }
-    const y = event.nativeEvent.contentOffset.y;
-    const pVerses = primaryVerses;
-    let topVerse = pVerses[0]?.verse ?? 1;
-    let fraction = 0;
-    const measurements = primaryProps.verseMeasurements;
-    const length = pVerses.length;
-    for (let i = 0; i < length; i++) {
-      const v = pVerses[i].verse;
-      const start = measurements[v];
-      const nextStart = i < length - 1 ? measurements[pVerses[i + 1].verse] : primaryContentHeight;
-      const boundsH = nextStart - start;
-      if (boundsH <= 0) continue;
-      if (y < nextStart) {
-        fraction = (y - start) / boundsH;
-        topVerse = v;
-        break;
-      }
-    }
-    const secStart = secondaryStartOffsets[topVerse];
-    if (secStart === undefined) return;
-    const secVerseIndex = secondaryVerses.findIndex((v) => v.verse === topVerse);
-    if (secVerseIndex === -1) return;
-    const nextSecStart = secVerseIndex < secondaryVerses.length - 1 ? secondaryStartOffsets[secondaryVerses[secVerseIndex + 1].verse] : secondaryContentHeight;
-    const secBoundsH = nextSecStart - secStart;
-    const targetY = secStart + fraction * secBoundsH;
-    secondaryFlatListRef.current?.scrollToOffset({ offset: targetY, animated: false });
-  }, [showMultiVersion, isLinked, primaryVerses, primaryProps.verseMeasurements, primaryContentHeight, secondaryStartOffsets, secondaryVerses, secondaryContentHeight]);
-  const syncPrimaryToSecondary = useCallback((event: any) => {
-    if (!showMultiVersion || !isLinked) {
-      return;
-    }
-    const y = event.nativeEvent.contentOffset.y;
-    const sVerses = secondaryVerses;
-    let topVerse = sVerses[0]?.verse ?? 1;
-    let fraction = 0;
-    const length = sVerses.length;
-    for (let i = 0; i < length; i++) {
-      const v = sVerses[i].verse;
-      const start = secondaryStartOffsets[v];
-      const nextStart = i < length - 1 ? secondaryStartOffsets[sVerses[i + 1].verse] : secondaryContentHeight;
-      const boundsH = nextStart - start;
-      if (boundsH <= 0) continue;
-      if (y < nextStart) {
-        fraction = (y - start) / boundsH;
-        topVerse = v;
-        break;
-      }
-    }
-    const priStart = primaryProps.verseMeasurements[topVerse];
-    if (priStart === undefined) return;
-    const priVerseIndex = primaryVerses.findIndex((v) => v.verse === topVerse);
-    if (priVerseIndex === -1) return;
-    const nextPriStart = priVerseIndex < primaryVerses.length - 1 ? primaryProps.verseMeasurements[primaryVerses[priVerseIndex + 1].verse] : primaryContentHeight;
-    const priBoundsH = nextPriStart - priStart;
-    const targetY = priStart + fraction * priBoundsH;
-    primaryFlatListRef.current?.scrollToOffset({ offset: targetY, animated: false });
-  }, [showMultiVersion, isLinked, secondaryVerses, secondaryStartOffsets, secondaryContentHeight, primaryProps.verseMeasurements, primaryVerses, primaryContentHeight]);
+  // In ReaderContent component
   useEffect(() => {
-    handleScrollRef.current = syncSecondaryToPrimary;
-    handleSecondaryScrollRef.current = syncPrimaryToSecondary;
-  }, [syncSecondaryToPrimary, syncPrimaryToSecondary]);
-  const primaryHandleScroll = useCallback(
-    (event: any) => {
-      const y = event.nativeEvent.contentOffset.y;
-      lastScrollYRef.current = y;
-      scrollY.setValue(y);
-      if (
-        showMultiVersionRef.current &&
-        isLinkedRef.current
-      ) {
-        handleScrollRef.current(event);
-      }
-    },
-    [scrollY]
-  );
-  const secondaryHandleScrollCb = useCallback(
-    (event: any) => {
-      if (
-        showMultiVersionRef.current &&
-        isLinkedRef.current) {
-        handleSecondaryScrollRef.current(event);
-      } else if (showMultiVersionRef.current) {
-        const y = event.nativeEvent.contentOffset.y;
-        secondaryScrollY.setValue(y);
-      }
-    },
-    [secondaryScrollY]
-  );
+    console.log("ReaderContent: primaryFlatListRef received:", {
+      refExists: !!primaryFlatListRef,
+      refCurrent: !!primaryFlatListRef?.current,
+    });
+  }, [primaryFlatListRef]);
+  useEffect(() => {
+    console.log("Primary FlatList ref state:", {
+      refExists: !!primaryFlatListRef,
+      refCurrent: !!(primaryFlatListRef && primaryFlatListRef.current),
+      versesLength: primaryVerses.length,
+      loading: primaryLoading,
+      targetVerse: primaryTargetVerse,
+    });
+  }, [
+    primaryFlatListRef,
+    primaryFlatListRef?.current,
+    primaryVerses,
+    primaryLoading,
+    primaryTargetVerse,
+  ]);
+  // Update the useEffect for initial scroll:
+  useEffect(() => {
+    if (
+      primaryTargetVerse &&
+      primaryFlatListRef.current &&
+      !primaryLoading &&
+      primaryVerses.length > 0
+    ) {
+      // Wait for measurements if available
+      const hasMeasurements =
+        primaryProps.verseMeasurements &&
+        Object.keys(primaryProps.verseMeasurements).length > 0;
+      const delay = hasMeasurements ? 100 : 300;
+      const timer = setTimeout(() => {
+        if (shouldScrollToPrimaryVerse.current && primaryFlatListRef.current) {
+          console.log(`Scrolling to primary verse ${primaryTargetVerse}`);
+          // Use the retry function instead of manual retry logic
+          scrollToPrimaryVerseWithRetry(
+            primaryTargetVerse,
+            maxScrollRetries
+          ).then((success) => {
+            if (success) {
+              console.log("Scroll successful");
+            } else {
+              console.log("Scroll failed after retries");
+            }
+            shouldScrollToPrimaryVerse.current = false;
+          });
+        }
+      }, delay);
+      return () => clearTimeout(timer);
+    } else if (
+      primaryTargetVerse === undefined &&
+      primaryFlatListRef.current &&
+      !primaryLoading
+    ) {
+      // Scroll to top if no target verse
+      primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
+      lastScrollYRef.current = 0;
+    }
+  }, [
+    primaryTargetVerse,
+    primaryLoading,
+    primaryVerses,
+    primaryProps.verseMeasurements,
+    scrollToPrimaryVerseWithRetry,
+    maxScrollRetries,
+    primaryFlatListRef,
+  ]);
+  useEffect(() => {
+    if (
+      primaryFlatListRef &&
+      primaryFlatListRef.current &&
+      primaryVerses.length > 0
+    ) {
+      console.log("Primary FlatList is READY! Ref and verses available");
+      console.log("Verse count:", primaryVerses.length);
+      console.log("First verse:", primaryVerses[0]?.verse);
+      console.log(
+        "Last verse:",
+        primaryVerses[primaryVerses.length - 1]?.verse
+      );
+    }
+  }, [primaryFlatListRef, primaryFlatListRef?.current, primaryVerses]);
   useEffect(() => {
     const updateLayout = () => {
       const newDimensions = Dimensions.get("window");
@@ -1212,9 +1614,36 @@ export default function ReaderScreen({
     const subscription = Dimensions.addEventListener("change", updateLayout);
     return () => subscription?.remove();
   }, []);
+  // Effect to handle initial scroll to target verse
   useEffect(() => {
-    setPrimaryTargetVerse(targetVerse);
-  }, [targetVerse]);
+    if (
+      targetVerse &&
+      !hasScrolledToInitialVerse.current &&
+      primaryVerses.length > 0
+    ) {
+      console.log(`Attempting to scroll to verse ${targetVerse}`);
+      // Set a flag so we know we need to scroll
+      shouldScrollToPrimaryVerse.current = true;
+      setPrimaryTargetVerse(targetVerse);
+      // Start the scrolling process after a short delay
+      const timer = setTimeout(() => {
+        scrollToVerseWhenReady(targetVerse).then((success) => {
+          if (success) {
+            hasScrolledToInitialVerse.current = true;
+            console.log("Initial scroll completed successfully");
+          } else {
+            console.log("Initial scroll failed, will retry on next render");
+          }
+        });
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [
+    targetVerse,
+    primaryVerses,
+    scrollToVerseWhenReady,
+    setPrimaryTargetVerse,
+  ]);
   useEffect(() => {
     if (showMultiVersion && isLinked) {
       if (
@@ -1228,73 +1657,111 @@ export default function ReaderScreen({
       setSecondaryTargetVerse(undefined);
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
-  
+  // Effect to scroll to primary target verse when it changes
   useEffect(() => {
-    if (!primaryLoading && primaryFlatListRef.current) {
-      const verseNum = primaryTargetVerse;
-      if (verseNum) {
-        const meas = primaryProps.verseMeasurements[verseNum];
-        if (meas !== undefined) {
-          const y = Math.max(0, meas);
-          primaryFlatListRef.current.scrollToOffset({ offset: y, animated: false });
-          lastScrollYRef.current = y;
-          return;
+    if (
+      primaryTargetVerse &&
+      primaryFlatListRef.current &&
+      !primaryLoading &&
+      primaryVerses.length > 0
+    ) {
+      // Wait for measurements if available
+      const hasMeasurements =
+        primaryProps.verseMeasurements &&
+        Object.keys(primaryProps.verseMeasurements).length > 0;
+      const delay = hasMeasurements ? 100 : 300;
+      const timer = setTimeout(() => {
+        if (shouldScrollToPrimaryVerse.current) {
+          console.log(`Scrolling to primary verse ${primaryTargetVerse}`);
+          // Use the retry function instead of manual retry logic
+          scrollToPrimaryVerseWithRetry(
+            primaryTargetVerse,
+            maxScrollRetries
+          ).then((success) => {
+            if (success) {
+              console.log("Scroll successful");
+            } else {
+              console.log("Scroll failed after retries");
+            }
+            shouldScrollToPrimaryVerse.current = false;
+          });
         }
-        return;
-      }
-      primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
+      }, delay);
+      return () => clearTimeout(timer);
+    } else if (
+      primaryTargetVerse === undefined &&
+      primaryFlatListRef.current &&
+      !primaryLoading
+    ) {
+      // Scroll to top if no target verse
+      primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
       lastScrollYRef.current = 0;
     }
   }, [
-    primaryLoading,
     primaryTargetVerse,
-    primaryFlatListRef,
+    primaryLoading,
+    primaryVerses,
     primaryProps.verseMeasurements,
+    scrollToPrimaryVerseWithRetry, // Add this to dependencies
+    maxScrollRetries,
+  ]);
+  // Effect to scroll to secondary target verse when it changes
+  useEffect(() => {
+    if (
+      secondaryTargetVerse &&
+      secondaryFlatListRef.current &&
+      !secondaryLoading &&
+      secondaryVerses.length > 0
+    ) {
+      const hasMeasurements =
+        Object.keys(secondaryVerseMeasurements).length > 0;
+      const delay = hasMeasurements ? 100 : 300;
+      const timer = setTimeout(() => {
+        if (shouldScrollToSecondaryVerse.current) {
+          console.log(
+            `Scrolling to secondary verse ${secondaryTargetVerse}, retry count: ${secondaryScrollRetryCount.current}`
+          );
+          const success = scrollToSecondaryVerse(secondaryTargetVerse);
+          if (
+            !success &&
+            secondaryScrollRetryCount.current < maxScrollRetries
+          ) {
+            // Retry with exponential backoff
+            secondaryScrollRetryCount.current += 1;
+            const retryDelay =
+              200 * Math.pow(2, secondaryScrollRetryCount.current);
+            setTimeout(() => {
+              scrollToSecondaryVerse(secondaryTargetVerse);
+            }, retryDelay);
+          } else if (success) {
+            secondaryScrollRetryCount.current = 0;
+          }
+          shouldScrollToSecondaryVerse.current = false;
+        }
+      }, delay);
+      return () => clearTimeout(timer);
+    } else if (
+      secondaryTargetVerse === undefined &&
+      secondaryFlatListRef.current &&
+      !secondaryLoading &&
+      secondaryVerses.length > 0
+    ) {
+      // Scroll to top if no target verse
+      secondaryFlatListRef.current.scrollToOffset({
+        offset: 0,
+        animated: true,
+      });
+    }
+  }, [
+    secondaryTargetVerse,
+    secondaryLoading,
+    secondaryVerses,
+    secondaryVerseMeasurements,
+    scrollToSecondaryVerse,
   ]);
   useEffect(() => {
     setSecondaryVerseMeasurements({});
   }, [secondaryVerses]);
-  useEffect(() => {
-    if (
-      showMultiVersion &&
-      !secondaryLoading &&
-      secondaryVerses.length > 0 &&
-      Object.keys(secondaryVerseMeasurements).length >= secondaryVerses.length &&
-      secondaryFlatListRef.current
-    ) {
-      const spacing = isFullScreen ? 2 : 6;
-      let totalHeight = 0;
-      secondaryVerses.forEach((verse, index) => {
-        totalHeight +=
-          secondaryVerseMeasurements[verse.verse] || defaultVerseHeight;
-        if (index < secondaryVerses.length - 1) totalHeight += spacing;
-      });
-      setSecondaryContentHeight(totalHeight);
-      const verseNum = getHighlightVerse(false);
-      if (verseNum) {
-        const verseIndex = secondaryVerses.findIndex((v) => v.verse === verseNum);
-        if (verseIndex === -1) return;
-        let cumulative = 0;
-        for (let i = 0; i < verseIndex; i++) {
-          cumulative += secondaryVerseMeasurements[secondaryVerses[i].verse] || defaultVerseHeight;
-          if (i < verseIndex - 1) cumulative += spacing;
-        }
-        const scrollPosition = Math.max(0, cumulative);
-        secondaryFlatListRef.current.scrollToOffset({ offset: scrollPosition, animated: false });
-      } else {
-        secondaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
-      }
-    }
-  }, [
-    showMultiVersion,
-    secondaryLoading,
-    secondaryVerses,
-    secondaryVerseMeasurements,
-    getHighlightVerse,
-    secondaryFlatListRef,
-    isFullScreen
-  ]);
-  
   const handlePrimaryContentSizeChange = useCallback(
     (width: number, height: number) => {
       primaryProps.handleContentSizeChange(width, height);
@@ -1303,7 +1770,7 @@ export default function ReaderScreen({
     [primaryProps.handleContentSizeChange]
   );
   const handleSecondaryContentSizeChange = useCallback(
-    (width: number, height: number) => {
+    (_width: number, height: number) => {
       setSecondaryContentHeight(height);
     },
     []
@@ -1429,10 +1896,172 @@ export default function ReaderScreen({
       }
     }
   }
-  
   const handleSetBgTextureOpacity = useCallback((value: number) => {
     setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
+  const handlePrimaryScrollBeginDrag = useCallback(() => {
+    isPrimaryUserScrolling.current = true;
+  }, []);
+
+  const handlePrimaryScrollEndDrag = useCallback(() => {
+    isPrimaryUserScrolling.current = false;
+  }, []);
+
+  const handlePrimaryMomentumBegin = useCallback(() => {
+    isPrimaryUserScrolling.current = true;
+  }, []);
+
+  const handlePrimaryMomentumEnd = useCallback(() => {
+    isPrimaryUserScrolling.current = false;
+  }, []);
+  const handleSecondaryScrollBeginDrag = useCallback(() => {
+    isSecondaryUserScrolling.current = true;
+  }, []);
+  const handleSecondaryScrollEndDrag = useCallback(() => {
+    isSecondaryUserScrolling.current = false;
+  }, []);
+  const handleSecondaryMomentumBegin = useCallback(() => {
+    isSecondaryUserScrolling.current = true;
+  }, []);
+  const handleSecondaryMomentumEnd = useCallback(() => {
+    isSecondaryUserScrolling.current = false;
+  }, []);
+
+  // Add this with your other refs
+  const scrollSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+
+  // Cleanup in useEffect
+  useEffect(() => {
+    return () => {
+      if (scrollSyncTimeoutRef.current) {
+        clearTimeout(scrollSyncTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Add these refs at the top with your other refs
+  const primaryScrollSyncTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const secondaryScrollSyncTimeoutRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+
+  // Update the handlePrimaryScroll function:
+  const handlePrimaryScroll = useCallback(
+    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const y = event.nativeEvent.contentOffset.y;
+      console.log(
+        `Primary scroll: ${y}, userScrolling: ${isPrimaryUserScrolling.current}, ignore: ${ignorePrimaryScroll.current}`
+      );
+
+      lastScrollYRef.current = y;
+
+      // Only sync if linked, multi-version is shown, and this is NOT an ignored scroll
+      if (isLinked && showMultiVersion && !ignorePrimaryScroll.current) {
+        console.log(`Syncing from primary to secondary: ${y}`);
+
+        // Set ignore flag to prevent feedback loop
+        ignoreSecondaryScroll.current = true;
+
+        // Scroll secondary list
+        if (secondaryFlatListRef.current) {
+          secondaryFlatListRef.current.scrollToOffset({
+            offset: y,
+            animated: false,
+          });
+        }
+
+        // Clear any existing timeout
+        if (secondaryScrollSyncTimeoutRef.current) {
+          clearTimeout(secondaryScrollSyncTimeoutRef.current);
+        }
+
+        // Reset ignore flag after delay
+        secondaryScrollSyncTimeoutRef.current = setTimeout(() => {
+          ignoreSecondaryScroll.current = false;
+          console.log("Secondary ignore flag reset");
+        }, 100);
+      }
+    },
+    [isLinked, showMultiVersion]
+  );
+
+  // Update the handleSecondaryScroll function:
+  const handleSecondaryScroll = useCallback(
+    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const y = event.nativeEvent.contentOffset.y;
+      console.log(
+        `Secondary scroll: ${y}, userScrolling: ${isSecondaryUserScrolling.current}, ignore: ${ignoreSecondaryScroll.current}`
+      );
+
+      // Only sync if linked, multi-version is shown, and this is NOT an ignored scroll
+      if (isLinked && showMultiVersion && !ignoreSecondaryScroll.current) {
+        console.log(`Syncing from secondary to primary: ${y}`);
+
+        // Set ignore flag to prevent feedback loop
+        ignorePrimaryScroll.current = true;
+
+        // Scroll primary list
+        if (primaryFlatListRef.current) {
+          primaryFlatListRef.current.scrollToOffset({
+            offset: y,
+            animated: false,
+          });
+        }
+
+        // Clear any existing timeout
+        if (primaryScrollSyncTimeoutRef.current) {
+          clearTimeout(primaryScrollSyncTimeoutRef.current);
+        }
+
+        // Reset ignore flag after delay
+        primaryScrollSyncTimeoutRef.current = setTimeout(() => {
+          ignorePrimaryScroll.current = false;
+          console.log("Primary ignore flag reset");
+        }, 100);
+      }
+    },
+    [isLinked, showMultiVersion]
+  );
+
+  // Add this useEffect for cleanup
+  useEffect(() => {
+    return () => {
+      if (primaryScrollSyncTimeoutRef.current) {
+        clearTimeout(primaryScrollSyncTimeoutRef.current);
+      }
+      if (secondaryScrollSyncTimeoutRef.current) {
+        clearTimeout(secondaryScrollSyncTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Fix the initial sync useEffect
+  useEffect(() => {
+    if (isLinked && showMultiVersion && secondaryFlatListRef.current) {
+      const currentY = lastScrollYRef.current;
+      console.log(`Initial sync: Setting secondary to Y: ${currentY}`);
+
+      // Use a small delay to ensure component is mounted
+      const timer = setTimeout(() => {
+        ignoreSecondaryScroll.current = true;
+        secondaryFlatListRef.current?.scrollToOffset({
+          offset: currentY,
+          animated: false,
+        });
+
+        setTimeout(() => {
+          ignoreSecondaryScroll.current = false;
+        }, 200);
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isLinked, showMultiVersion]);
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -1458,7 +2087,7 @@ export default function ReaderScreen({
               alignItems: "center",
               width: "100%",
               paddingHorizontal: 12,
-              marginBottom: 5
+              marginBottom: 5,
             }}
           >
             <TouchableOpacity
@@ -1642,12 +2271,18 @@ export default function ReaderScreen({
           if (navigationTarget === "primary") {
             setPrimaryLocation(newLocation);
             setPrimaryTargetVerse(newLocation.verse);
+            shouldScrollToPrimaryVerse.current = true;
+            primaryScrollRetryCount.current = 0;
           } else {
             setSecondaryLocation(newLocation);
             setSecondaryTargetVerse(newLocation.verse);
+            shouldScrollToSecondaryVerse.current = true;
+            secondaryScrollRetryCount.current = 0;
             if (showMultiVersion && isLinked) {
               setPrimaryLocation(newLocation);
               setPrimaryTargetVerse(newLocation.verse);
+              shouldScrollToPrimaryVerse.current = true;
+              primaryScrollRetryCount.current = 0;
               resetPrimaryScroll();
             }
           }
@@ -1685,9 +2320,7 @@ export default function ReaderScreen({
           colors={colors}
           fontSize={fontSize}
           primaryProps={primaryProps}
-          primaryHandleScroll={primaryHandleScroll}
           handlePrimaryContentSizeChange={handlePrimaryContentSizeChange}
-          secondaryHandleScrollCb={secondaryHandleScrollCb}
           primaryHeaderRef={primaryHeaderRef}
           secondaryHeaderRef={secondaryHeaderRef}
           setPrimaryHeaderX={setPrimaryHeaderX}
@@ -1721,6 +2354,19 @@ export default function ReaderScreen({
           resetButtonOpacity={resetButtonOpacity}
           setUiMode={setUiMode}
           handleSecondaryContentSizeChange={handleSecondaryContentSizeChange}
+          handleSecondaryVerseLayout={handleSecondaryVerseLayout}
+          primaryFlatListRef={primaryFlatListRef}
+          secondaryFlatListRef={secondaryFlatListRef}
+          onPrimaryScroll={handlePrimaryScroll}
+          onPrimaryScrollBeginDrag={handlePrimaryScrollBeginDrag}
+          onPrimaryScrollEndDrag={handlePrimaryScrollEndDrag}
+          onPrimaryMomentumScrollBegin={handlePrimaryMomentumBegin}
+          onPrimaryMomentumScrollEnd={handlePrimaryMomentumEnd}
+          onSecondaryScroll={handleSecondaryScroll}
+          onSecondaryScrollBeginDrag={handleSecondaryScrollBeginDrag}
+          onSecondaryScrollEndDrag={handleSecondaryScrollEndDrag}
+          onSecondaryMomentumScrollBegin={handleSecondaryMomentumBegin}
+          onSecondaryMomentumScrollEnd={handleSecondaryMomentumEnd}
         />
       </View>
       <DropdownMenu
@@ -1785,13 +2431,14 @@ export default function ReaderScreen({
               </Text>
             </View>
             <FlatList
+              key={`selector-${openSelector}`}
               showsVerticalScrollIndicator={true}
               style={{
                 maxHeight: 300,
                 width: "100%",
               }}
               data={versionsToShow}
-              keyExtractor={(v) => v}
+              keyExtractor={(item) => item}
               renderItem={({ item: v, index }) => {
                 const isActive =
                   (openSelector === "primary" && v === currentVersion) ||
@@ -1809,9 +2456,7 @@ export default function ReaderScreen({
                     style={{
                       paddingHorizontal: 16,
                       paddingVertical: 8,
-                      backgroundColor: isActive
-                        ? colors.secondary
-                        : undefined,
+                      backgroundColor: isActive ? colors.secondary : undefined,
                       borderBottomWidth:
                         index < versionsToShow.length - 1 ? 1 : 0,
                       borderBottomColor: colors.primary + "40",
