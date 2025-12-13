@@ -224,19 +224,9 @@ export const ChapterViewEnhanced = forwardRef<
     const modalRef = useRef<EnhancedModalRef>(null);
     const flatListRef = useRef<FlatList<Verse>>(null);
 
-    // Create a ref callback that updates both the local ref and the forwarded ref
     const setFlatListRef = useCallback(
       (node: FlatList<Verse> | null) => {
-        console.log("ChapterViewEnhanced: Setting FlatList ref", {
-          nodeExists: !!node,
-          forwardedRefExists: !!forwardedRef,
-          versesCount: verses.length,
-        });
-
-        // Update local ref
         flatListRef.current = node;
-
-        // Update forwarded ref if it exists
         if (forwardedRef) {
           if (typeof forwardedRef === "function") {
             forwardedRef(node);
@@ -273,15 +263,6 @@ export const ChapterViewEnhanced = forwardRef<
       () => [...verses].sort((a, b) => a.verse - b.verse),
       [verses]
     );
-
-    useEffect(() => {
-      console.log("ChapterViewEnhanced: Component mounted/updated", {
-        localRef: !!flatListRef.current,
-        forwardedRef: !!forwardedRef,
-        versesCount: verses.length,
-        sortedVersesCount: sortedVerses.length,
-      });
-    }, [flatListRef.current, verses.length, sortedVerses.length]);
 
     const handleVerseLayout = useCallback(
       (verseNumber: number, event: LayoutChangeEvent) => {

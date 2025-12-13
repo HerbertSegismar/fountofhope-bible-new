@@ -464,14 +464,6 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     [props.secondaryHighlightedVerses]
   );
 
-  // Fix: Use primaryProps.flatListRef instead of primaryFlatListRef
-  useEffect(() => {
-    console.log("ReaderContent: Ref passed to ChapterViewEnhanced", {
-      refExists: !!props.primaryProps?.flatListRef,
-      refType: typeof props.primaryProps?.flatListRef,
-    });
-  }, [props.primaryProps?.flatListRef]);
-
   useEffect(() => {
     setHasSecondaryFailed(false);
     if (timeoutRef.current) {
@@ -609,7 +601,6 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
           noBackground={bgHook.hasSource}
           scrollEnabled={props.scrollEnabled}
           onScroll={(event) => {
-            console.log("Primary scroll event triggered");
             props.onPrimaryScroll?.(event);
           }}
           onScrollBeginDrag={props.onPrimaryScrollBeginDrag}

@@ -449,43 +449,30 @@ export default function ReaderScreen({
   const isSecondaryUserScrolling = useRef(false);
   const scrollToPrimaryVerse = useCallback(
     (verseNum: number, animated = true) => {
-      // Check if FlatList ref exists and has current
       if (!primaryFlatListRef || !primaryFlatListRef.current) {
-        console.log("Primary scroll: FlatList ref is not available");
         return false;
       }
-      // Store ref in variable for TypeScript
       const flatList = primaryFlatListRef.current;
-      // Check if we have verses
       if (!primaryVerses || primaryVerses.length === 0) {
-        console.log("Primary scroll: No verses loaded yet");
         return false;
       }
       const verseIndex = primaryVerses.findIndex((v) => v.verse === verseNum);
       if (verseIndex === -1) {
-        console.log(`Primary scroll: Verse ${verseNum} not found`);
         return false;
       }
-      console.log(
-        `Primary: Scrolling to verse ${verseNum} at index ${verseIndex}`
-      );
       try {
-        // First try scrollToIndex
         flatList.scrollToIndex({
           index: verseIndex,
           animated,
           viewPosition: 0.1,
           viewOffset: 20,
         });
-        console.log("scrollToIndex called successfully");
         return true;
       } catch (error) {
         console.log("scrollToIndex failed, trying scrollToOffset:", error);
-        // Fallback: use scrollToOffset
         try {
           const spacing = isFullScreen ? 2 : 4;
           let cumulativeHeight = 0;
-          // Calculate cumulative height up to this verse
           for (let i = 0; i < verseIndex; i++) {
             const verse = primaryVerses[i];
             if (verse) {
@@ -495,16 +482,13 @@ export default function ReaderScreen({
               cumulativeHeight += verseHeight + spacing;
             }
           }
-          // Scroll to calculated offset
           flatList.scrollToOffset({
             offset: Math.max(0, cumulativeHeight - 50),
             animated: true,
           });
-          console.log("scrollToOffset called successfully");
           return true;
         } catch (offsetError) {
           console.log("scrollToOffset also failed:", offsetError);
-          // Last resort: scroll to item
           try {
             const targetVerseObj = primaryVerses[verseIndex];
             if (targetVerseObj) {
@@ -513,7 +497,6 @@ export default function ReaderScreen({
                 animated: true,
                 viewPosition: 0.1,
               });
-              console.log("scrollToItem called successfully");
               return true;
             }
           } catch (itemError) {
@@ -533,16 +516,12 @@ export default function ReaderScreen({
   );
   const scrollToVerseWhenReady = useCallback(
     async (verseNum: number, maxWaitTime = 5000) => {
-      console.log(`Waiting to scroll to verse ${verseNum}...`);
       const startTime = Date.now();
       let lastRetryTime = 0;
       const retryInterval = 200;
       const checkAndScroll = () => {
         const currentTime = Date.now();
-        // Check if timeout reached
         if (currentTime - startTime > maxWaitTime) {
-          console.log("Timeout reached, trying final scroll attempt...");
-          // Final attempt
           if (
             primaryFlatListRef &&
             primaryFlatListRef.current &&
@@ -557,20 +536,16 @@ export default function ReaderScreen({
                 animated: true,
                 viewPosition: 0.1,
               });
-              console.log("Final scroll attempt made");
               return true;
             }
           }
-          console.log("Failed to scroll after waiting");
           return false;
         }
-        // Only retry every retryInterval ms
         if (currentTime - lastRetryTime < retryInterval) {
           setTimeout(checkAndScroll, retryInterval);
           return false;
         }
         lastRetryTime = currentTime;
-        // Check conditions
         const conditions = {
           flatListRef: !!(primaryFlatListRef && primaryFlatListRef.current),
           verses: primaryVerses.length > 0,
@@ -579,9 +554,7 @@ export default function ReaderScreen({
             primaryProps.verseMeasurements &&
             Object.keys(primaryProps.verseMeasurements).length > 0,
         };
-        console.log("Waiting for:", conditions);
         if (conditions.flatListRef && conditions.verses && conditions.loading) {
-          console.log("Conditions met, attempting scroll...");
           const verseIndex = primaryVerses.findIndex(
             (v) => v.verse === verseNum
           );
@@ -592,14 +565,12 @@ export default function ReaderScreen({
                 animated: true,
                 viewPosition: 0.1,
               });
-              console.log("Scroll successful!");
               return true;
             } catch (error) {
               console.log("Scroll error:", error);
             }
           }
         }
-        // Continue waiting
         setTimeout(checkAndScroll, retryInterval);
         return false;
       };
@@ -612,25 +583,16 @@ export default function ReaderScreen({
       primaryProps.verseMeasurements,
     ]
   );
-  // Function to scroll to a specific verse in the secondary view
   const scrollToSecondaryVerse = useCallback(
     (verseNum: number, animated = true) => {
       if (!secondaryFlatListRef.current || !secondaryVerses.length) {
-        console.log("Secondary scroll: No list ref or verses available");
         return false;
       }
       const verseIndex = secondaryVerses.findIndex((v) => v.verse === verseNum);
       if (verseIndex === -1) {
-        console.log(
-          `Secondary scroll: Verse ${verseNum} not found in secondary verses`
-        );
         return false;
       }
-      console.log(
-        `Secondary: Scrolling to verse ${verseNum} at index ${verseIndex}`
-      );
       try {
-        // Use scrollToIndex with better parameters
         secondaryFlatListRef.current.scrollToIndex({
           index: verseIndex,
           animated,
@@ -640,10 +602,8 @@ export default function ReaderScreen({
         return true;
       } catch (error) {
         console.log("Secondary scroll error:", error);
-        // Fallback: use scrollToOffset with measurements
         const spacing = isFullScreen ? 2 : 4;
         let cumulativeHeight = 0;
-        // Calculate cumulative height up to this verse
         for (let i = 0; i < verseIndex; i++) {
           const verse = secondaryVerses[i];
           if (verse) {
@@ -652,7 +612,6 @@ export default function ReaderScreen({
             cumulativeHeight += verseHeight + spacing;
           }
         }
-        // Scroll to calculated offset
         secondaryFlatListRef.current.scrollToOffset({
           offset: Math.max(0, cumulativeHeight - 50),
           animated: true,
@@ -670,32 +629,23 @@ export default function ReaderScreen({
   );
   const scrollToPrimaryVerseWithRetry = useCallback(
     async (verseNum: number, maxRetries = 3) => {
-      console.log(`scrollToPrimaryVerseWithRetry called for verse ${verseNum}`);
       for (let attempt = 0; attempt < maxRetries; attempt++) {
-        // Check if FlatList is ready
         if (
           !primaryFlatListRef ||
           !primaryFlatListRef.current ||
           !primaryVerses.length
         ) {
-          console.log(`Attempt ${attempt + 1}: FlatList not ready, waiting...`);
           await new Promise((resolve) => setTimeout(resolve, 300));
           continue;
         }
-        console.log(`Attempt ${attempt + 1} to scroll to verse ${verseNum}`);
         const success = scrollToPrimaryVerse(verseNum);
         if (success) {
-          console.log(`Successfully scrolled to verse ${verseNum}`);
           return true;
         }
-        // Wait before retry with exponential backoff
         const retryDelay = 300 * Math.pow(2, attempt);
-        console.log(`Retrying in ${retryDelay}ms...`);
         await new Promise((resolve) => setTimeout(resolve, retryDelay));
       }
-      console.log(
-        `Failed to scroll to verse ${verseNum} after ${maxRetries} attempts`
-      );
+
       return false;
     },
     [scrollToPrimaryVerse, primaryVerses, primaryFlatListRef]
@@ -738,23 +688,6 @@ export default function ReaderScreen({
     },
     [secondaryVersion]
   );
-  // Add this useEffect to track when the ref becomes available
-  useEffect(() => {
-    console.log("Primary FlatList ref updated:", {
-      hasRef: !!primaryFlatListRef,
-      hasCurrent: !!primaryFlatListRef?.current,
-      refType: typeof primaryFlatListRef,
-      isRefObject: primaryFlatListRef && "current" in primaryFlatListRef,
-    });
-  }, [primaryFlatListRef?.current]);
-  // Add this to check when ChapterViewEnhanced mounts
-  useEffect(() => {
-    console.log("ChapterViewEnhanced mounted with ref:", {
-      refExists: !!primaryFlatListRef,
-      refCurrent: !!primaryFlatListRef?.current,
-      versesLength: primaryVerses.length,
-    });
-  }, [primaryFlatListRef, primaryVerses.length]);
   useEffect(() => {
     if (!showMultiVersion || !secondaryVersion) {
       setSecondaryReady(false);
@@ -1220,31 +1153,20 @@ export default function ReaderScreen({
   );
   const safeScrollToVerse = useCallback(
     (verseNum: number, isPrimary = true) => {
-      console.log(
-        `safeScrollToVerse called for verse ${verseNum}, primary: ${isPrimary}`
-      );
       if (isPrimary) {
-        // Check if ref exists and has current
         if (!primaryFlatListRef || !primaryFlatListRef.current) {
-          console.log("Primary FlatList ref is null, cannot scroll");
           return false;
         }
         const flatList = primaryFlatListRef.current;
         if (primaryVerses.length === 0) {
-          console.log("No primary verses loaded yet");
           return false;
         }
-        // Find the verse
         const verseIndex = primaryVerses.findIndex((v) => v.verse === verseNum);
         if (verseIndex === -1) {
-          console.log(`Verse ${verseNum} not found in primary verses`);
           return false;
         }
-        console.log(`Found verse ${verseNum} at index ${verseIndex}`);
-        // Try multiple scrolling methods
         const tryScroll = () => {
           try {
-            // Method 1: scrollToIndex
             flatList.scrollToIndex({
               index: verseIndex,
               animated: true,
@@ -1254,7 +1176,6 @@ export default function ReaderScreen({
           } catch (error1) {
             console.log("Method 1 failed:", error1);
             try {
-              // Method 2: scrollToOffset (calculate approximate offset)
               const estimatedOffset = verseIndex * (defaultVerseHeight + 4);
               flatList.scrollToOffset({
                 offset: Math.max(0, estimatedOffset - 100),
@@ -1263,7 +1184,6 @@ export default function ReaderScreen({
               return true;
             } catch (error2) {
               console.log("Method 2 failed:", error2);
-              // Method 3: scroll to item
               try {
                 const targetVerseObj = primaryVerses[verseIndex];
                 if (targetVerseObj) {
@@ -1283,7 +1203,6 @@ export default function ReaderScreen({
         };
         return tryScroll();
       }
-      // Handle secondary view scrolling similarly
       return false;
     },
     [primaryFlatListRef, primaryVerses, defaultVerseHeight]
@@ -1326,7 +1245,6 @@ export default function ReaderScreen({
           {
             text: "Scroll to Verse",
             onPress: () => {
-              console.log(`User requested scroll to verse ${verse.verse}`);
               const success = safeScrollToVerse(verse.verse, true);
               if (success) {
                 Alert.alert("Success", `Scrolled to verse ${verse.verse}`);
@@ -1516,29 +1434,7 @@ export default function ReaderScreen({
     resetButtonOpacity,
     resetPrimaryScroll,
   ]);
-  // In ReaderContent component
-  useEffect(() => {
-    console.log("ReaderContent: primaryFlatListRef received:", {
-      refExists: !!primaryFlatListRef,
-      refCurrent: !!primaryFlatListRef?.current,
-    });
-  }, [primaryFlatListRef]);
-  useEffect(() => {
-    console.log("Primary FlatList ref state:", {
-      refExists: !!primaryFlatListRef,
-      refCurrent: !!(primaryFlatListRef && primaryFlatListRef.current),
-      versesLength: primaryVerses.length,
-      loading: primaryLoading,
-      targetVerse: primaryTargetVerse,
-    });
-  }, [
-    primaryFlatListRef,
-    primaryFlatListRef?.current,
-    primaryVerses,
-    primaryLoading,
-    primaryTargetVerse,
-  ]);
-  // Update the useEffect for initial scroll:
+
   useEffect(() => {
     if (
       primaryTargetVerse &&
@@ -1546,24 +1442,16 @@ export default function ReaderScreen({
       !primaryLoading &&
       primaryVerses.length > 0
     ) {
-      // Wait for measurements if available
       const hasMeasurements =
         primaryProps.verseMeasurements &&
         Object.keys(primaryProps.verseMeasurements).length > 0;
       const delay = hasMeasurements ? 100 : 300;
       const timer = setTimeout(() => {
         if (shouldScrollToPrimaryVerse.current && primaryFlatListRef.current) {
-          console.log(`Scrolling to primary verse ${primaryTargetVerse}`);
-          // Use the retry function instead of manual retry logic
           scrollToPrimaryVerseWithRetry(
             primaryTargetVerse,
             maxScrollRetries
-          ).then((success) => {
-            if (success) {
-              console.log("Scroll successful");
-            } else {
-              console.log("Scroll failed after retries");
-            }
+          ).then(() => {
             shouldScrollToPrimaryVerse.current = false;
           });
         }
@@ -1574,7 +1462,6 @@ export default function ReaderScreen({
       primaryFlatListRef.current &&
       !primaryLoading
     ) {
-      // Scroll to top if no target verse
       primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
       lastScrollYRef.current = 0;
     }
@@ -1587,21 +1474,7 @@ export default function ReaderScreen({
     maxScrollRetries,
     primaryFlatListRef,
   ]);
-  useEffect(() => {
-    if (
-      primaryFlatListRef &&
-      primaryFlatListRef.current &&
-      primaryVerses.length > 0
-    ) {
-      console.log("Primary FlatList is READY! Ref and verses available");
-      console.log("Verse count:", primaryVerses.length);
-      console.log("First verse:", primaryVerses[0]?.verse);
-      console.log(
-        "Last verse:",
-        primaryVerses[primaryVerses.length - 1]?.verse
-      );
-    }
-  }, [primaryFlatListRef, primaryFlatListRef?.current, primaryVerses]);
+  
   useEffect(() => {
     const updateLayout = () => {
       const newDimensions = Dimensions.get("window");
@@ -1614,26 +1487,20 @@ export default function ReaderScreen({
     const subscription = Dimensions.addEventListener("change", updateLayout);
     return () => subscription?.remove();
   }, []);
-  // Effect to handle initial scroll to target verse
+
   useEffect(() => {
     if (
       targetVerse &&
       !hasScrolledToInitialVerse.current &&
       primaryVerses.length > 0
     ) {
-      console.log(`Attempting to scroll to verse ${targetVerse}`);
-      // Set a flag so we know we need to scroll
       shouldScrollToPrimaryVerse.current = true;
       setPrimaryTargetVerse(targetVerse);
-      // Start the scrolling process after a short delay
       const timer = setTimeout(() => {
         scrollToVerseWhenReady(targetVerse).then((success) => {
           if (success) {
             hasScrolledToInitialVerse.current = true;
-            console.log("Initial scroll completed successfully");
-          } else {
-            console.log("Initial scroll failed, will retry on next render");
-          }
+          } 
         });
       }, 500);
       return () => clearTimeout(timer);
@@ -1672,17 +1539,10 @@ export default function ReaderScreen({
       const delay = hasMeasurements ? 100 : 300;
       const timer = setTimeout(() => {
         if (shouldScrollToPrimaryVerse.current) {
-          console.log(`Scrolling to primary verse ${primaryTargetVerse}`);
-          // Use the retry function instead of manual retry logic
           scrollToPrimaryVerseWithRetry(
             primaryTargetVerse,
             maxScrollRetries
-          ).then((success) => {
-            if (success) {
-              console.log("Scroll successful");
-            } else {
-              console.log("Scroll failed after retries");
-            }
+          ).then(() => {
             shouldScrollToPrimaryVerse.current = false;
           });
         }
@@ -1693,7 +1553,6 @@ export default function ReaderScreen({
       primaryFlatListRef.current &&
       !primaryLoading
     ) {
-      // Scroll to top if no target verse
       primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
       lastScrollYRef.current = 0;
     }
@@ -1702,10 +1561,9 @@ export default function ReaderScreen({
     primaryLoading,
     primaryVerses,
     primaryProps.verseMeasurements,
-    scrollToPrimaryVerseWithRetry, // Add this to dependencies
+    scrollToPrimaryVerseWithRetry,
     maxScrollRetries,
   ]);
-  // Effect to scroll to secondary target verse when it changes
   useEffect(() => {
     if (
       secondaryTargetVerse &&
@@ -1718,15 +1576,11 @@ export default function ReaderScreen({
       const delay = hasMeasurements ? 100 : 300;
       const timer = setTimeout(() => {
         if (shouldScrollToSecondaryVerse.current) {
-          console.log(
-            `Scrolling to secondary verse ${secondaryTargetVerse}, retry count: ${secondaryScrollRetryCount.current}`
-          );
           const success = scrollToSecondaryVerse(secondaryTargetVerse);
           if (
             !success &&
             secondaryScrollRetryCount.current < maxScrollRetries
           ) {
-            // Retry with exponential backoff
             secondaryScrollRetryCount.current += 1;
             const retryDelay =
               200 * Math.pow(2, secondaryScrollRetryCount.current);
@@ -1746,7 +1600,6 @@ export default function ReaderScreen({
       !secondaryLoading &&
       secondaryVerses.length > 0
     ) {
-      // Scroll to top if no target verse
       secondaryFlatListRef.current.scrollToOffset({
         offset: 0,
         animated: true,
@@ -1953,81 +1806,49 @@ export default function ReaderScreen({
   const handlePrimaryScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
       const y = event.nativeEvent.contentOffset.y;
-      console.log(
-        `Primary scroll: ${y}, userScrolling: ${isPrimaryUserScrolling.current}, ignore: ${ignorePrimaryScroll.current}`
-      );
-
       lastScrollYRef.current = y;
 
-      // Only sync if linked, multi-version is shown, and this is NOT an ignored scroll
       if (isLinked && showMultiVersion && !ignorePrimaryScroll.current) {
-        console.log(`Syncing from primary to secondary: ${y}`);
-
-        // Set ignore flag to prevent feedback loop
         ignoreSecondaryScroll.current = true;
-
-        // Scroll secondary list
         if (secondaryFlatListRef.current) {
           secondaryFlatListRef.current.scrollToOffset({
             offset: y,
             animated: false,
           });
         }
-
-        // Clear any existing timeout
         if (secondaryScrollSyncTimeoutRef.current) {
           clearTimeout(secondaryScrollSyncTimeoutRef.current);
         }
-
-        // Reset ignore flag after delay
         secondaryScrollSyncTimeoutRef.current = setTimeout(() => {
           ignoreSecondaryScroll.current = false;
-          console.log("Secondary ignore flag reset");
         }, 100);
       }
     },
     [isLinked, showMultiVersion]
   );
 
-  // Update the handleSecondaryScroll function:
   const handleSecondaryScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
       const y = event.nativeEvent.contentOffset.y;
-      console.log(
-        `Secondary scroll: ${y}, userScrolling: ${isSecondaryUserScrolling.current}, ignore: ${ignoreSecondaryScroll.current}`
-      );
-
-      // Only sync if linked, multi-version is shown, and this is NOT an ignored scroll
       if (isLinked && showMultiVersion && !ignoreSecondaryScroll.current) {
-        console.log(`Syncing from secondary to primary: ${y}`);
-
-        // Set ignore flag to prevent feedback loop
         ignorePrimaryScroll.current = true;
-
-        // Scroll primary list
         if (primaryFlatListRef.current) {
           primaryFlatListRef.current.scrollToOffset({
             offset: y,
             animated: false,
           });
         }
-
-        // Clear any existing timeout
         if (primaryScrollSyncTimeoutRef.current) {
           clearTimeout(primaryScrollSyncTimeoutRef.current);
         }
-
-        // Reset ignore flag after delay
         primaryScrollSyncTimeoutRef.current = setTimeout(() => {
           ignorePrimaryScroll.current = false;
-          console.log("Primary ignore flag reset");
         }, 100);
       }
     },
     [isLinked, showMultiVersion]
   );
 
-  // Add this useEffect for cleanup
   useEffect(() => {
     return () => {
       if (primaryScrollSyncTimeoutRef.current) {
@@ -2039,13 +1860,9 @@ export default function ReaderScreen({
     };
   }, []);
 
-  // Fix the initial sync useEffect
   useEffect(() => {
     if (isLinked && showMultiVersion && secondaryFlatListRef.current) {
       const currentY = lastScrollYRef.current;
-      console.log(`Initial sync: Setting secondary to Y: ${currentY}`);
-
-      // Use a small delay to ensure component is mounted
       const timer = setTimeout(() => {
         ignoreSecondaryScroll.current = true;
         secondaryFlatListRef.current?.scrollToOffset({

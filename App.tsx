@@ -392,7 +392,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
         <NavigationModal
           visible={showNavigationModal}
           onClose={() => setShowNavigationModal(false)}
-          colors={colors} // Pass the full colors object
+          colors={colors}
           primaryTextColor={primaryTextColor}
           navigationTarget="primary"
           currentVersion={currentVersion}
