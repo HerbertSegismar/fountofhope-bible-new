@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback, useRef, memo, forwardRef, useEffect } from "react";
+import React, { useMemo, useCallback, useRef, memo, forwardRef } from "react";
 import {
   View,
   Text,
@@ -349,7 +349,7 @@ export const ChapterViewEnhanced = forwardRef<
 
     const getItemLayout = useCallback(
       (_data: ArrayLike<Verse> | null | undefined, index: number) => {
-        const itemHeight = fontSize * 4 + (isFullScreen ? 8 : 24);
+        const itemHeight = fontSize * 3 + (isFullScreen ? 8 : 24);
         return {
           length: itemHeight,
           offset: itemHeight * index,
@@ -393,13 +393,7 @@ export const ChapterViewEnhanced = forwardRef<
       () => ({
         paddingHorizontal: isFullScreen ? 8 : 16,
         paddingTop: isFullScreen ? 6 : 12,
-        paddingBottom: isLandscape
-          ? isFullScreen
-            ? 500
-            : 560
-          : isFullScreen
-            ? 40
-            : 100,
+        paddingBottom: 500,
         gap: isFullScreen ? 2 : 6,
       }),
       [isFullScreen, isLandscape]
@@ -422,11 +416,14 @@ export const ChapterViewEnhanced = forwardRef<
           ListFooterComponent={ListFooterComponent}
           contentContainerStyle={contentContainerStyle}
           showsVerticalScrollIndicator={true}
-          initialNumToRender={30}
-          maxToRenderPerBatch={60}
-          windowSize={30}
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={21}
           removeClippedSubviews={true}
+          updateCellsBatchingPeriod={50}
+          disableVirtualization={false}
           keyboardShouldPersistTaps="handled"
+          decelerationRate="normal"
           style={{ flex: 1 }}
           onScroll={onScroll}
           scrollEventThrottle={16}

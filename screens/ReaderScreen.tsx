@@ -447,6 +447,7 @@ export default function ReaderScreen({
   const ignoreSecondaryScroll = useRef(false);
   const isPrimaryUserScrolling = useRef(false);
   const isSecondaryUserScrolling = useRef(false);
+
   const scrollToPrimaryVerse = useCallback(
     (verseNum: number, animated = true) => {
       if (!primaryFlatListRef || !primaryFlatListRef.current) {
@@ -473,12 +474,20 @@ export default function ReaderScreen({
         try {
           const spacing = isFullScreen ? 2 : 4;
           let cumulativeHeight = 0;
+          // NEW: Calculate average from measured heights
+          let averageHeight = defaultVerseHeight;
+          const measuredHeights = Object.values(primaryProps.verseMeasurements);
+          if (measuredHeights.length > 0) {
+            averageHeight =
+              measuredHeights.reduce((a, b) => a + b, 0) /
+              measuredHeights.length;
+          }
           for (let i = 0; i < verseIndex; i++) {
             const verse = primaryVerses[i];
             if (verse) {
+              // NEW: Use measured or average
               const verseHeight =
-                primaryProps.verseMeasurements?.[verse.verse] ||
-                defaultVerseHeight;
+                primaryProps.verseMeasurements?.[verse.verse] || averageHeight;
               cumulativeHeight += verseHeight + spacing;
             }
           }
@@ -522,6 +531,7 @@ export default function ReaderScreen({
       const checkAndScroll = () => {
         const currentTime = Date.now();
         if (currentTime - startTime > maxWaitTime) {
+          // Fallback scroll even if not ideal
           if (
             primaryFlatListRef &&
             primaryFlatListRef.current &&
@@ -552,9 +562,15 @@ export default function ReaderScreen({
           loading: !primaryLoading,
           measurements:
             primaryProps.verseMeasurements &&
-            Object.keys(primaryProps.verseMeasurements).length > 0,
+            Object.keys(primaryProps.verseMeasurements).length > 10,
         };
-        if (conditions.flatListRef && conditions.verses && conditions.loading) {
+        
+        if (
+          conditions.flatListRef &&
+          conditions.verses &&
+          conditions.loading &&
+          conditions.measurements
+        ) {
           const verseIndex = primaryVerses.findIndex(
             (v) => v.verse === verseNum
           );
@@ -604,11 +620,19 @@ export default function ReaderScreen({
         console.log("Secondary scroll error:", error);
         const spacing = isFullScreen ? 2 : 4;
         let cumulativeHeight = 0;
+        // NEW: Calculate average from measured heights
+        let averageHeight = defaultVerseHeight;
+        const measuredHeights = Object.values(secondaryVerseMeasurements);
+        if (measuredHeights.length > 0) {
+          averageHeight =
+            measuredHeights.reduce((a, b) => a + b, 0) / measuredHeights.length;
+        }
         for (let i = 0; i < verseIndex; i++) {
           const verse = secondaryVerses[i];
           if (verse) {
+            // NEW: Use measured or average
             const verseHeight =
-              secondaryVerseMeasurements[verse.verse] || defaultVerseHeight;
+              secondaryVerseMeasurements[verse.verse] || averageHeight;
             cumulativeHeight += verseHeight + spacing;
           }
         }
@@ -924,14 +948,12 @@ export default function ReaderScreen({
         currentDimensions.width > currentDimensions.height;
       setDimensions(currentDimensions);
       setIsLandscape(currentIsLandscape);
-      // Reset scroll state when screen comes into focus
       hasScrolledToInitialVerse.current = false;
       shouldScrollToPrimaryVerse.current = true;
       shouldScrollToSecondaryVerse.current = false;
       initialScrollDone.current = false;
       primaryScrollRetryCount.current = 0;
       secondaryScrollRetryCount.current = 0;
-      // Set target verse from route params
       if (targetVerse) {
         setPrimaryTargetVerse(targetVerse);
       }
@@ -1821,7 +1843,7 @@ export default function ReaderScreen({
         }
         secondaryScrollSyncTimeoutRef.current = setTimeout(() => {
           ignoreSecondaryScroll.current = false;
-        }, 100);
+        }, 2000);
       }
     },
     [isLinked, showMultiVersion]
@@ -1843,7 +1865,7 @@ export default function ReaderScreen({
         }
         primaryScrollSyncTimeoutRef.current = setTimeout(() => {
           ignorePrimaryScroll.current = false;
-        }, 100);
+        }, 2000);
       }
     },
     [isLinked, showMultiVersion]
