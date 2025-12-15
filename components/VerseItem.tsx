@@ -102,19 +102,32 @@ export const VerseItem = memo(
         [onVerseRef, verse.verse]
       );
 
-      useEffect(() => {
-        return () => {
-          if (animationRef.current) {
-            animationRef.current.stop();
-          }
-        };
-      }, []);
-
-      useEffect(() => {
+      // Cleanup function for animations
+      const stopAnimation = useCallback(() => {
         if (animationRef.current) {
           animationRef.current.stop();
           animationRef.current = null;
         }
+      }, []);
+
+      // Handle scroll to verse
+      const handlePress = useCallback(() => {
+        if (scrollToVerse) {
+          scrollToVerse(verse.verse);
+        }
+      }, [scrollToVerse, verse.verse]);
+
+      // Cleanup on unmount
+      useEffect(() => {
+        return () => {
+          stopAnimation();
+        };
+      }, [stopAnimation]);
+
+      // Handle highlight animation
+      useEffect(() => {
+        // Clean up any running animation
+        stopAnimation();
 
         if (isHighlighted && !bookmarked) {
           wasHighlightedRef.current = true;
@@ -156,19 +169,19 @@ export const VerseItem = memo(
           fadeAnim.setValue(0);
         }
 
+        // Cleanup on dependency change
         return () => {
-          if (animationRef.current) {
-            animationRef.current.stop();
-          }
+          stopAnimation();
         };
-      }, [isHighlighted, bookmarked, fadeAnim]);
+      }, [isHighlighted, bookmarked, fadeAnim, stopAnimation]);
 
-      // Handle scroll to verse
-      const handlePress = useCallback(() => {
-        if (scrollToVerse) {
-          scrollToVerse(verse.verse);
+      // Reset animation state when component becomes highlighted again
+      useEffect(() => {
+        if (isHighlighted && !bookmarked) {
+          // Reset the flag when component becomes highlighted
+          wasHighlightedRef.current = false;
         }
-      }, [scrollToVerse, verse.verse]);
+      }, [isHighlighted, bookmarked]);
 
       return (
         <TouchableOpacity

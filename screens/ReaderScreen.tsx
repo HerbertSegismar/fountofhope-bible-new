@@ -564,7 +564,7 @@ export default function ReaderScreen({
             primaryProps.verseMeasurements &&
             Object.keys(primaryProps.verseMeasurements).length > 10,
         };
-        
+
         if (
           conditions.flatListRef &&
           conditions.verses &&
@@ -1496,7 +1496,7 @@ export default function ReaderScreen({
     maxScrollRetries,
     primaryFlatListRef,
   ]);
-  
+
   useEffect(() => {
     const updateLayout = () => {
       const newDimensions = Dimensions.get("window");
@@ -1522,7 +1522,7 @@ export default function ReaderScreen({
         scrollToVerseWhenReady(targetVerse).then((success) => {
           if (success) {
             hasScrolledToInitialVerse.current = true;
-          } 
+          }
         });
       }, 500);
       return () => clearTimeout(timer);
@@ -1843,7 +1843,7 @@ export default function ReaderScreen({
         }
         secondaryScrollSyncTimeoutRef.current = setTimeout(() => {
           ignoreSecondaryScroll.current = false;
-        }, 2000);
+        }, 300);
       }
     },
     [isLinked, showMultiVersion]
@@ -1865,7 +1865,7 @@ export default function ReaderScreen({
         }
         primaryScrollSyncTimeoutRef.current = setTimeout(() => {
           ignorePrimaryScroll.current = false;
-        }, 2000);
+        }, 300);
       }
     },
     [isLinked, showMultiVersion]

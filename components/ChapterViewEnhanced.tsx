@@ -232,7 +232,7 @@ export const ChapterViewEnhanced = forwardRef<
             forwardedRef(node);
           } else {
             (
-              forwardedRef as React.MutableRefObject<FlatList<Verse> | null>
+              forwardedRef as React.RefObject<FlatList<Verse> | null>
             ).current = node;
           }
         }
