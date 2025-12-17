@@ -27,21 +27,18 @@ import {
   Dimensions,
 } from "react-native";
 import * as Font from "expo-font";
-
 import HomeScreen from "./screens/HomeScreen";
 import SearchScreen from "./screens/SearchScreen";
 import BookmarksScreen from "./screens/BookmarksScreen";
 import ReaderScreen from "./screens/ReaderScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import "./global.css";
-
 import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
-
 import Oswald_VariableFont from "./assets/fonts/Oswald_VariableFont.ttf";
 import RubikGlitch_Regular from "./assets/fonts/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
@@ -155,7 +152,6 @@ function HeaderActions({ navigation }: { navigation: any }) {
 
   const routeMap: Record<string, string> = {
     home: "Home",
-    bible: "BookList",
     search: "Search",
     bookmarks: "Bookmarks",
     settings: "Settings",
@@ -348,6 +344,63 @@ function HeaderActions({ navigation }: { navigation: any }) {
           ))}
         </View>
         <ColorWheelPicker />
+        {bibleDB && (
+          <NavigationModal
+            visible={showNavigationModal}
+            onClose={() => setShowNavigationModal(false)}
+            colors={colors}
+            primaryTextColor={primaryTextColor}
+            navigationTarget="primary"
+            currentVersion={currentVersion}
+            onLocationSelect={handleLocationSelect}
+            bibleDB={bibleDB}
+            secondaryDB={secondaryDBRef}
+          />
+        )}
+
+        <Modal
+          visible={showDropdown}
+          transparent
+          animationType="fade"
+          onRequestClose={closeDropdown}
+        >
+          <TouchableWithoutFeedback onPress={closeDropdown}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback>
+                <View style={dropdownStyle}>
+                  {filteredMenuItems.map((item, index) => {
+                    const isActiveScreen =
+                      isFocused && currentRoute === routeMap[item.key];
+
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        onPress={() => handleMenuItemPress(item)}
+                        style={[
+                          styles.dropdownMenuItem,
+                          index === filteredMenuItems.length - 1
+                            ? undefined
+                            : borderBottomStyle,
+                          isActiveScreen && {
+                            backgroundColor: "#FFFFFF44",
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name={item.icon}
+                          size={20}
+                          color={iconColor}
+                          style={styles.dropdownIcon}
+                        />
+                        <Text style={textStyle}>{item.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
       </View>
     );
   }

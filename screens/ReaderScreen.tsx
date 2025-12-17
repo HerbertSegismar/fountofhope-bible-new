@@ -361,6 +361,7 @@ export default function ReaderScreen({
   const [dimensions, setDimensions] = useState(initialDimensions);
   const screenWidth = dimensions.width;
   const themeColors = useThemeColors();
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { colors, primaryTextColor, handleColorSchemePress, toggleTheme } =
     themeColors;
   const [primaryLocation, setPrimaryLocation] = useState<Location>({
@@ -408,14 +409,13 @@ export default function ReaderScreen({
   const [navigationTarget, setNavigationTarget] = useState<
     "primary" | "secondary"
   >("primary");
-  // Scroll state tracking
   const hasScrolledToInitialVerse = useRef(false);
   const shouldScrollToPrimaryVerse = useRef(false);
   const shouldScrollToSecondaryVerse = useRef(false);
   const initialScrollDone = useRef(false);
   const primaryScrollRetryCount = useRef(0);
   const secondaryScrollRetryCount = useRef(0);
-  const maxScrollRetries = 5;
+  const maxScrollRetries = 15;
   const handleSecondaryVerseLayout = useCallback(
     (verse: number, event: LayoutChangeEvent) => {
       const { height } = event.nativeEvent.layout;
@@ -448,6 +448,16 @@ export default function ReaderScreen({
   const isPrimaryUserScrolling = useRef(false);
   const isSecondaryUserScrolling = useRef(false);
 
+  const syncWithDelay = useCallback(
+    (targetRef: React.RefObject<FlatList<Verse> | null>, offset: number) => {
+      if (!targetRef.current) return;
+      setTimeout(() => {
+        targetRef.current?.scrollToOffset({ offset, animated: false });
+      }, 0);
+    },
+    []
+  );
+
   const scrollToPrimaryVerse = useCallback(
     (verseNum: number, animated = true) => {
       if (!primaryFlatListRef || !primaryFlatListRef.current) {
@@ -474,7 +484,6 @@ export default function ReaderScreen({
         try {
           const spacing = isFullScreen ? 2 : 4;
           let cumulativeHeight = 0;
-          // NEW: Calculate average from measured heights
           let averageHeight = defaultVerseHeight;
           const measuredHeights = Object.values(primaryProps.verseMeasurements);
           if (measuredHeights.length > 0) {
@@ -485,7 +494,6 @@ export default function ReaderScreen({
           for (let i = 0; i < verseIndex; i++) {
             const verse = primaryVerses[i];
             if (verse) {
-              // NEW: Use measured or average
               const verseHeight =
                 primaryProps.verseMeasurements?.[verse.verse] || averageHeight;
               cumulativeHeight += verseHeight + spacing;
@@ -531,7 +539,6 @@ export default function ReaderScreen({
       const checkAndScroll = () => {
         const currentTime = Date.now();
         if (currentTime - startTime > maxWaitTime) {
-          // Fallback scroll even if not ideal
           if (
             primaryFlatListRef &&
             primaryFlatListRef.current &&
@@ -620,7 +627,6 @@ export default function ReaderScreen({
         console.log("Secondary scroll error:", error);
         const spacing = isFullScreen ? 2 : 4;
         let cumulativeHeight = 0;
-        // NEW: Calculate average from measured heights
         let averageHeight = defaultVerseHeight;
         const measuredHeights = Object.values(secondaryVerseMeasurements);
         if (measuredHeights.length > 0) {
@@ -630,7 +636,6 @@ export default function ReaderScreen({
         for (let i = 0; i < verseIndex; i++) {
           const verse = secondaryVerses[i];
           if (verse) {
-            // NEW: Use measured or average
             const verseHeight =
               secondaryVerseMeasurements[verse.verse] || averageHeight;
             cumulativeHeight += verseHeight + spacing;
@@ -1816,7 +1821,6 @@ export default function ReaderScreen({
     };
   }, []);
 
-  // Add these refs at the top with your other refs
   const primaryScrollSyncTimeoutRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
@@ -1824,7 +1828,6 @@ export default function ReaderScreen({
     typeof setTimeout
   > | null>(null);
 
-  // Update the handlePrimaryScroll function:
   const handlePrimaryScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
       const y = event.nativeEvent.contentOffset.y;
@@ -1832,43 +1835,32 @@ export default function ReaderScreen({
 
       if (isLinked && showMultiVersion && !ignorePrimaryScroll.current) {
         ignoreSecondaryScroll.current = true;
-        if (secondaryFlatListRef.current) {
-          secondaryFlatListRef.current.scrollToOffset({
-            offset: y,
-            animated: false,
-          });
-        }
-        if (secondaryScrollSyncTimeoutRef.current) {
-          clearTimeout(secondaryScrollSyncTimeoutRef.current);
-        }
-        secondaryScrollSyncTimeoutRef.current = setTimeout(() => {
+        syncWithDelay(secondaryFlatListRef, y);
+
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = setTimeout(() => {
           ignoreSecondaryScroll.current = false;
-        }, 300);
+        }, 80);
       }
     },
-    [isLinked, showMultiVersion]
+    [isLinked, showMultiVersion, syncWithDelay]
   );
 
   const handleSecondaryScroll = useCallback(
     (event: { nativeEvent: { contentOffset: { y: number } } }) => {
       const y = event.nativeEvent.contentOffset.y;
+
       if (isLinked && showMultiVersion && !ignoreSecondaryScroll.current) {
         ignorePrimaryScroll.current = true;
-        if (primaryFlatListRef.current) {
-          primaryFlatListRef.current.scrollToOffset({
-            offset: y,
-            animated: false,
-          });
-        }
-        if (primaryScrollSyncTimeoutRef.current) {
-          clearTimeout(primaryScrollSyncTimeoutRef.current);
-        }
-        primaryScrollSyncTimeoutRef.current = setTimeout(() => {
+        syncWithDelay(primaryFlatListRef, y);
+
+        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = setTimeout(() => {
           ignorePrimaryScroll.current = false;
-        }, 300);
+        }, 80);
       }
     },
-    [isLinked, showMultiVersion]
+    [isLinked, showMultiVersion, syncWithDelay]
   );
 
   useEffect(() => {
@@ -1878,6 +1870,14 @@ export default function ReaderScreen({
       }
       if (secondaryScrollSyncTimeoutRef.current) {
         clearTimeout(secondaryScrollSyncTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
       }
     };
   }, []);
@@ -1939,61 +1939,65 @@ export default function ReaderScreen({
             >
               <Ionicons name="arrow-back" size={24} color={primaryTextColor} />
             </TouchableOpacity>
+
             <View
               style={{ flex: 1, alignItems: "center", paddingHorizontal: 10 }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                }}
-              >
-                <TouchableOpacity
-                  onPress={openPrimaryNavigation}
+              {!showMultiVersion && (
+                <View
                   style={{
-                    paddingHorizontal: 5,
-                    paddingVertical: 4,
-                    backgroundColor: "rgba(255,255,255,0.1)",
-                    borderRadius: 4,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 10,
                   }}
                 >
-                  <Text
+                  <TouchableOpacity
+                    onPress={openPrimaryNavigation}
                     style={{
-                      color: "white",
-                      fontWeight: "500",
-                      fontSize: 16,
+                      paddingHorizontal: 5,
+                      paddingVertical: 4,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 4,
                     }}
-                    numberOfLines={1}
                   >
-                    {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={openPrimaryVersionSelector}
-                  style={{
-                    paddingHorizontal: 5,
-                    paddingVertical: 4,
-                    backgroundColor: "rgba(255,255,255,0.1)",
-                    borderRadius: 4,
-                  }}
-                >
-                  <Text
+                    <Text
+                      style={{
+                        color: "white",
+                        fontWeight: "500",
+                        fontSize: 16,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {`${primaryDisplayBookName} ${primaryLocation.chapter}`}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={openPrimaryVersionSelector}
                     style={{
-                      color: "white",
-                      fontWeight: "500",
-                      fontSize: 16,
+                      paddingHorizontal: 5,
+                      paddingVertical: 4,
+                      backgroundColor: "rgba(255,255,255,0.1)",
+                      borderRadius: 4,
                     }}
-                    numberOfLines={1}
                   >
-                    {versionName}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontWeight: "500",
+                        fontSize: 16,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {versionName}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
+
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
             >
               {isLandscape ? (
                 <View
@@ -2049,6 +2053,7 @@ export default function ReaderScreen({
                       color={showMultiVersion ? "#f6f0f0ff" : primaryTextColor}
                     />
                   </TouchableOpacity>
+
                   {themeItem && (
                     <TouchableOpacity
                       onPress={themeItem.onPress}
@@ -2061,6 +2066,7 @@ export default function ReaderScreen({
                       />
                     </TouchableOpacity>
                   )}
+
                   {colorItem && (
                     <TouchableOpacity
                       onPress={colorItem.onPress}
@@ -2074,6 +2080,55 @@ export default function ReaderScreen({
                       />
                     </TouchableOpacity>
                   )}
+
+                  {showMultiVersion && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate("Home")}
+                        style={{ padding: 2 }}
+                      >
+                        <Ionicons
+                          name="home-outline"
+                          size={24}
+                          color={primaryTextColor}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate("Search")}
+                        style={{ padding: 2 }}
+                      >
+                        <Ionicons
+                          name="search-outline"
+                          size={24}
+                          color={primaryTextColor}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => navigation.navigate("Bookmarks")}
+                        style={{ padding: 2 }}
+                      >
+                        <Ionicons
+                          name="bookmark-outline"
+                          size={24}
+                          color={primaryTextColor}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => setIsLinked((prev) => !prev)}
+                        style={{ padding: 2 }}
+                      >
+                        <Ionicons
+                          name={isLinked ? "unlink-outline" : "link-outline"}
+                          size={24}
+                          color={primaryTextColor}
+                        />
+                      </TouchableOpacity>
+                    </>
+                  )}
+
                   <TouchableOpacity
                     onPress={() => setShowDropdown(true)}
                     style={{ padding: 2 }}

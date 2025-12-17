@@ -201,7 +201,11 @@ export const VerseItem = memo(
                 borderRadius: 4,
               },
             ]}
-            onLayout={(event) => onVerseLayout(verse.verse, event)}
+            onLayout={
+              onVerseLayout
+                ? (event) => onVerseLayout(verse.verse, event)
+                : undefined
+            }
             ref={handleRef}
           >
             <Animated.View

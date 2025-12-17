@@ -74,98 +74,33 @@ interface ChapterViewProps {
   onMomentumScrollEnd?: (
     event: NativeSyntheticEvent<NativeScrollEvent>
   ) => void;
-   scrollEventThrottle: number;
+  scrollEventThrottle?: number;
 }
 
-const MemoizedVerseItem = memo(
-  ({
-    verse,
-    fontSize,
-    themeColors,
-    fontFamily,
-    onTagPress,
-    onWordPress,
-    textColor,
-    showVerseNumbers,
-    isHighlighted,
-    bookmarked,
-    onVerseLayout,
-    onVerseRef,
-    onLongPress,
-    isFullScreen,
-  }: {
-    verse: Verse;
-    fontSize: number;
-    themeColors: any;
-    fontFamily?: string;
-    onTagPress: (content: string, verse: Verse) => void;
-    onWordPress: (word: string) => void;
-    textColor: string;
-    showVerseNumbers: boolean;
-    isHighlighted: boolean;
-    bookmarked: boolean;
-    onVerseLayout: (verseNumber: number, event: LayoutChangeEvent) => void;
-    onVerseRef: (verseNumber: number, ref: View | null) => void;
-    onLongPress: (verse: Verse) => void;
-    isFullScreen?: boolean;
-  }) => {
-    return (
-      <VerseItem
-        verse={verse}
-        fontSize={fontSize}
-        themeColors={themeColors}
-        fontFamily={fontFamily}
-        onTagPress={onTagPress}
-        onWordPress={onWordPress}
-        textColor={textColor}
-        showVerseNumbers={showVerseNumbers}
-        showHeader={true}
-        isHighlighted={isHighlighted}
-        bookmarked={bookmarked}
-        onVerseLayout={onVerseLayout}
-        onVerseRef={onVerseRef}
-        onLongPress={onLongPress}
-        isFullScreen={isFullScreen}
-      />
-    );
-  },
-  (prevProps, nextProps) => {
-    return (
-      prevProps.verse.verse === nextProps.verse.verse &&
-      prevProps.verse.text === nextProps.verse.text &&
-      prevProps.fontSize === nextProps.fontSize &&
-      prevProps.isHighlighted === nextProps.isHighlighted &&
-      prevProps.bookmarked === nextProps.bookmarked &&
-      prevProps.textColor === nextProps.textColor &&
-      prevProps.isFullScreen === nextProps.isFullScreen
-    );
-  }
-);
+const MemoizedVerseItem = memo(VerseItem);
 
 const MemoizedFooter = memo(
-  ({ themeColors, fontFamily }: { themeColors: any; fontFamily?: string }) => {
-    return (
-      <View
+  ({ themeColors, fontFamily }: { themeColors: any; fontFamily?: string }) => (
+    <View
+      style={{
+        marginTop: 16,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: themeColors.border,
+      }}
+    >
+      <Text
         style={{
-          marginTop: 16,
-          paddingTop: 12,
-          borderTopWidth: 1,
-          borderTopColor: themeColors.border,
+          textAlign: "center",
+          color: themeColors.textMuted,
+          fontSize: 10,
+          fontFamily,
         }}
       >
-        <Text
-          style={{
-            textAlign: "center",
-            color: themeColors.textMuted,
-            fontSize: 10,
-            fontFamily,
-          }}
-        >
-          End of Chapter
-        </Text>
-      </View>
-    );
-  }
+        End of Chapter
+      </Text>
+    </View>
+  )
 );
 
 export const ChapterViewEnhanced = forwardRef<
@@ -185,13 +120,18 @@ export const ChapterViewEnhanced = forwardRef<
       highlightedVerses = new Set(),
       bookmarkedVerses = new Set(),
       style,
-      isFullScreen,
+      isFullScreen = false,
       displayVersion,
-      bgImageIndex: propBgImageIndex,
-      bgTextureOpacity: propBgTextureOpacity,
-      noBackground,
+      bgImageIndex,
+      bgTextureOpacity,
+      noBackground = false,
       onScroll,
       scrollEnabled = true,
+      onScrollBeginDrag,
+      onScrollEndDrag,
+      onMomentumScrollBegin,
+      onMomentumScrollEnd,
+      scrollEventThrottle = 16,
     },
     forwardedRef
   ) => {
@@ -213,31 +153,29 @@ export const ChapterViewEnhanced = forwardRef<
       }
     }, [fontFamily]);
 
-    const effectiveNoBg = noBackground ?? false;
     const bgHook = useBackgroundTexture({
-      index: propBgImageIndex,
-      opacity: propBgTextureOpacity,
-      noBackground: effectiveNoBg,
+      index: bgImageIndex,
+      opacity: bgTextureOpacity,
+      noBackground,
     });
-    const hasBg = !effectiveNoBg && bgHook.hasSource;
+
+    const hasBg = !noBackground && bgHook.hasSource;
 
     const modalRef = useRef<EnhancedModalRef>(null);
-    const flatListRef = useRef<FlatList<Verse>>(null);
 
     const setFlatListRef = useCallback(
       (node: FlatList<Verse> | null) => {
-        flatListRef.current = node;
         if (forwardedRef) {
           if (typeof forwardedRef === "function") {
             forwardedRef(node);
           } else {
             (
-              forwardedRef as React.RefObject<FlatList<Verse> | null>
+              forwardedRef as React.MutableRefObject<FlatList<Verse> | null>
             ).current = node;
           }
         }
       },
-      [forwardedRef, verses.length]
+      [forwardedRef]
     );
 
     const { width, height } = useWindowDimensions();
@@ -251,9 +189,7 @@ export const ChapterViewEnhanced = forwardRef<
         map[short] = dbNum;
         const abbrevs = BOOK_ABBREVS[long] || [];
         abbrevs.forEach((abb) => {
-          if (!map[abb]) {
-            map[abb] = dbNum;
-          }
+          if (!map[abb]) map[abb] = dbNum;
         });
       });
       return map;
@@ -264,27 +200,12 @@ export const ChapterViewEnhanced = forwardRef<
       [verses]
     );
 
-    const handleVerseLayout = useCallback(
+    // Always provide a real function for onVerseLayout (required by VerseItem)
+    const safeOnVerseLayout = useCallback(
       (verseNumber: number, event: LayoutChangeEvent) => {
         onVerseLayout?.(verseNumber, event);
       },
       [onVerseLayout]
-    );
-
-    const handleVerseRef = useCallback(
-      (verseNumber: number, ref: View | null) => {
-        if (ref) {
-          onVerseRef?.(verseNumber, ref);
-        }
-      },
-      [onVerseRef]
-    );
-
-    const handleVersePress = useCallback(
-      (verse: Verse) => {
-        onVersePress?.(verse);
-      },
-      [onVersePress]
     );
 
     const handleTagPress = useCallback((content: string, verse: Verse) => {
@@ -299,8 +220,7 @@ export const ChapterViewEnhanced = forwardRef<
       ({ item: verse }: ListRenderItemInfo<Verse>) => {
         const isFullHighlighted = highlightedVerses.has(verse.verse);
         const isNavigationHighlighted = verse.verse === highlightVerse;
-        const shouldHighlightNumber =
-          isFullHighlighted || isNavigationHighlighted;
+        const shouldHighlight = isFullHighlighted || isNavigationHighlighted;
         const isBookmarked = bookmarkedVerses.has(verse.verse);
         const verseTextColor = isFullHighlighted
           ? themeColors.highlightText
@@ -316,11 +236,12 @@ export const ChapterViewEnhanced = forwardRef<
             onWordPress={handleWordPress}
             textColor={verseTextColor}
             showVerseNumbers={showVerseNumbers}
-            isHighlighted={shouldHighlightNumber}
+            showHeader={true}
+            isHighlighted={shouldHighlight}
             bookmarked={isBookmarked}
-            onVerseLayout={handleVerseLayout}
-            onVerseRef={handleVerseRef}
-            onLongPress={handleVersePress}
+            onVerseLayout={safeOnVerseLayout}
+            onVerseRef={onVerseRef}
+            onLongPress={onVersePress || (() => {})}
             isFullScreen={isFullScreen}
           />
         );
@@ -329,30 +250,32 @@ export const ChapterViewEnhanced = forwardRef<
         fontSize,
         themeColors,
         actualFontFamily,
-        handleTagPress,
-        handleWordPress,
         highlightedVerses,
         highlightVerse,
         bookmarkedVerses,
         showVerseNumbers,
-        handleVerseLayout,
-        handleVerseRef,
-        handleVersePress,
+        handleTagPress,
+        handleWordPress,
+        safeOnVerseLayout,
+        onVerseRef,
+        onVersePress,
         isFullScreen,
       ]
     );
 
-    const keyExtractor = useCallback(
-      (verse: Verse) => verse.verse.toString(),
-      []
-    );
+    const keyExtractor = useCallback((verse: Verse) => `${verse.verse}`, []);
 
+    // Accurate estimated height — increased to cover longer verses
     const getItemLayout = useCallback(
-      (_data: ArrayLike<Verse> | null | undefined, index: number) => {
-        const itemHeight = fontSize * 3 + (isFullScreen ? 8 : 24);
+      (data: ArrayLike<Verse> | null | undefined, index: number) => {
+        const lineHeight = fontSize * 1.6;
+        const estimatedLines = isFullScreen ? 3.5 : 3.2; // Key fix for long verses
+        const padding = isFullScreen ? 8 : 24;
+        const itemHeight = lineHeight * estimatedLines + padding;
+
         return {
-          length: itemHeight,
-          offset: itemHeight * index,
+          length: Math.ceil(itemHeight),
+          offset: Math.ceil(itemHeight) * index,
           index,
         };
       },
@@ -373,20 +296,20 @@ export const ChapterViewEnhanced = forwardRef<
       () => ({
         ...STYLES.container,
         flex: isFullScreen ? 1 : undefined,
-        backgroundColor: effectiveNoBg
+        backgroundColor: noBackground
           ? "transparent"
           : hasBg
             ? undefined
             : themeColors.card,
-        shadowOpacity: effectiveNoBg || hasBg ? 0 : 0.1,
-        shadowRadius: effectiveNoBg || hasBg ? 0 : 4,
+        shadowOpacity: noBackground || hasBg ? 0 : 0.1,
+        shadowRadius: noBackground || hasBg ? 0 : 4,
         shadowOffset:
-          effectiveNoBg || hasBg
+          noBackground || hasBg
             ? { width: 0, height: 0 }
             : { width: 0, height: 2 },
-        elevation: effectiveNoBg || hasBg ? 0 : 2,
+        elevation: noBackground || hasBg ? 0 : 2,
       }),
-      [isFullScreen, effectiveNoBg, hasBg, themeColors.card]
+      [isFullScreen, noBackground, hasBg, themeColors.card]
     );
 
     const contentContainerStyle = useMemo(
@@ -396,7 +319,7 @@ export const ChapterViewEnhanced = forwardRef<
         paddingBottom: 500,
         gap: isFullScreen ? 2 : 6,
       }),
-      [isFullScreen, isLandscape]
+      [isFullScreen]
     );
 
     const chapterContent = (
@@ -415,19 +338,28 @@ export const ChapterViewEnhanced = forwardRef<
           getItemLayout={getItemLayout}
           ListFooterComponent={ListFooterComponent}
           contentContainerStyle={contentContainerStyle}
-          showsVerticalScrollIndicator={true}
-          initialNumToRender={15}
-          maxToRenderPerBatch={10}
-          windowSize={21}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={25}
+          maxToRenderPerBatch={15}
+          windowSize={11}
           removeClippedSubviews={true}
-          updateCellsBatchingPeriod={50}
-          disableVirtualization={false}
+          updateCellsBatchingPeriod={100}
+          scrollEventThrottle={scrollEventThrottle}
+          onScroll={onScroll}
+          scrollEnabled={scrollEnabled}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onScrollEndDrag={onScrollEndDrag}
+          onMomentumScrollBegin={onMomentumScrollBegin}
+          onMomentumScrollEnd={onMomentumScrollEnd}
           keyboardShouldPersistTaps="handled"
           decelerationRate="normal"
           style={{ flex: 1 }}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          scrollEnabled={scrollEnabled}
+          extraData={{
+            highlightVerse,
+            fontSize,
+            isFullScreen,
+            themeColors,
+          }}
         />
       </BackgroundTexture>
     );

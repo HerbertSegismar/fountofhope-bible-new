@@ -43,38 +43,6 @@ const primaryColors: Record<ColorScheme, { light: string; dark: string }> = {
   custom: { light: "#A855F7", dark: "#9333EA" },
 };
 
-const BASE_LIGHT_THEME_COLORS = {
-  card: "#FFFFFF",
-  background: "#FFFFFF",
-  surface: "#F8F9FA",
-  textPrimary: "#1F2937",
-  textSecondary: "#374151",
-  textMuted: "#6C757D",
-  highlightBg: "#FFF3CD",
-  highlightBorder: "#FFD700",
-  highlightText: "#8B4513",
-  highlightIcon: "#B8860B",
-  tagBg: "rgba(0,255,0,0.1)",
-  searchHighlightBg: "#FFFF99",
-  border: "#E9ECEF",
-} as const;
-
-const BASE_DARK_THEME_COLORS = {
-  card: "#111827",
-  background: "#111827",
-  surface: "#1F2937",
-  textPrimary: "#F9FAFB",
-  textSecondary: "#D1D5DB",
-  textMuted: "#9CA3AF",
-  highlightBg: "#1F2937",
-  highlightBorder: "#FCD34D",
-  highlightText: "#FECACA",
-  highlightIcon: "#FCD34D",
-  tagBg: "rgba(255,255,255,0.1)",
-  searchHighlightBg: "#374151",
-  border: "#374151",
-} as const;
-
 const getFontFamily = (fontFamily: FontFamily): string | undefined => {
   switch (fontFamily) {
     case "serif":
