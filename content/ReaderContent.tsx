@@ -536,7 +536,7 @@ const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
     props.setSecondaryHeaderHeight,
   ]);
 
-  const handlePrimaryHeaderLayout = useCallback((event: any) => {
+  const handlePrimaryHeaderLayout = useCallback((_event: any) => {
     props.primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
       primaryHeaderCallbacksRef.current.setX(x);
       primaryHeaderCallbacksRef.current.setY(y);

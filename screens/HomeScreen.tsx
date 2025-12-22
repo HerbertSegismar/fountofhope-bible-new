@@ -81,11 +81,6 @@ export default function HomeScreen({ navigation }: Props) {
   const [_isLandscape, setIsLandscape] = useState(screenWidth > screenHeight);
 
   useEffect(() => {
-    if (bibleDB && !isInitializing) loadRandomVerse();
-    else setLoading(true);
-  }, [bibleDB, currentVersion, isInitializing]);
-
-  useEffect(() => {
     const updateLayout = () => {
       const { width: newWidth, height: newHeight } = Dimensions.get("window");
       setIsLandscape(newWidth > newHeight);

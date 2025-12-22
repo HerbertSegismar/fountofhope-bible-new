@@ -263,14 +263,8 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
             fontSize: 10,
             fontFamily: actualFontFamily,
           }}
-          numberOfLines={1}
-          ellipsizeMode="tail"
         >
-          {sortedVerses.length} verse{sortedVerses.length !== 1 ? "s" : ""}
-          {highlightedVerses.size > 0 &&
-            ` • ${highlightedVerses.size} highlighted`}
-          {bookmarkedVerses.size > 0 &&
-            ` • ${bookmarkedVerses.size} bookmarked`}
+          End of Chapter
         </Text>
       </View>
     </>
