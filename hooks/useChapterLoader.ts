@@ -3,12 +3,14 @@ import {
   LayoutChangeEvent,
   View,
   Alert,
-  FlatList,
+  ScrollView,
   Dimensions,
 } from "react-native";
 import { Verse } from "../types";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
+
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
+
 export const useChapterLoader = (
   bookId: number,
   chapter: number,
@@ -27,13 +29,13 @@ export const useChapterLoader = (
   const [scrollViewReady, setScrollViewReady] = useState(false);
   const isMounted = useRef(true);
   const abortController = useRef<AbortController | null>(null);
-  const flatListRef = useRef<FlatList<Verse>>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const chapterContainerRef = useRef<View>(null);
   const scrollAttemptsRef = useRef(0);
-  const maxScrollAttempts = 10;
+  const maxScrollAttempts = 5;
   const defaultVerseHeight = 80;
   const blankLineHeight = 12;
-  const estimatedItemSize = defaultVerseHeight + blankLineHeight;
+
   const loadChapter = useCallback(async () => {
     if (!bibleDB || !isMounted.current) return;
     abortController.current = new AbortController();
@@ -43,8 +45,10 @@ export const useChapterLoader = (
     setScrollViewReady(false);
     setVerseMeasurements({});
     scrollAttemptsRef.current = 0;
+
     const maxRetries = 3;
     let lastError: unknown;
+
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       if (signal.aborted) {
         return;
@@ -55,6 +59,7 @@ export const useChapterLoader = (
           if (signal.aborted) return;
           setBook(bookDetails);
         }
+
         const chapterVerses = await bibleDB.getVerses(bookId, chapter);
         if (signal.aborted) return;
         setVerses(chapterVerses);
@@ -73,6 +78,7 @@ export const useChapterLoader = (
       Alert.alert("Error", "Failed to load chapter");
     }
   }, [bibleDB, bookId, chapter, book]);
+
   useEffect(() => {
     isMounted.current = true;
     return () => {
@@ -80,23 +86,28 @@ export const useChapterLoader = (
       abortController.current?.abort();
     };
   }, []);
+
   useEffect(() => {
     if (bibleDB) loadChapter();
   }, [bibleDB, bookId, chapter, loadChapter]);
+
   useEffect(() => {
     if (targetVerse) {
       setHasScrolledToVerse(false);
       scrollAttemptsRef.current = 0;
     }
   }, [targetVerse, bookId, chapter]);
+
   const handleContentSizeChange = useCallback((_w: number, h: number) => {
     setContentHeight(h);
   }, []);
+
   const handleScrollViewLayout = useCallback((event: LayoutChangeEvent) => {
     const { height } = event.nativeEvent.layout;
     setScrollViewHeight(height);
     setScrollViewReady(true);
   }, []);
+
   const handleVerseLayout = useCallback(
     (verseNumber: number, event: LayoutChangeEvent) => {
       const { height } = event.nativeEvent.layout;
@@ -109,43 +120,37 @@ export const useChapterLoader = (
     },
     []
   );
-  const getItemLayout = useCallback(
-    (data: Verse[] | null, index: number) => {
-      if (!data || index > data.length - 1) {
-        return { length: defaultVerseHeight, offset: 0, index };
-      }
-      let offset = 0;
-      for (let i = 0; i < index; i++) {
-        offset += verseMeasurements[data[i].verse] || defaultVerseHeight;
-        if (i < index - 1) {
-          offset += blankLineHeight;
-        }
-      }
-      const length = verseMeasurements[data[index].verse] || defaultVerseHeight;
-      return { length, offset, index };
-    },
-    [verseMeasurements]
-  );
+
   const scrollToTargetVerse = useCallback(() => {
-    if (!targetVerse || verses.length === 0 || !flatListRef.current) {
+    if (!targetVerse || verses.length === 0 || !scrollViewRef.current) {
       return false;
     }
+
     const verseIndex = verses.findIndex((v) => v.verse === targetVerse);
     if (verseIndex === -1) return false;
+
     if (scrollAttemptsRef.current >= maxScrollAttempts) {
       setHasScrolledToVerse(true);
       return false;
     }
+
     scrollAttemptsRef.current += 1;
-    flatListRef.current.scrollToIndex({
-      animated: true,
-      index: verseIndex,
-      viewPosition: 0,
-      viewOffset: -SCREEN_HEIGHT / 2,
-    });
+
+    let cumulative = 0;
+    for (let i = 0; i < verseIndex; i++) {
+      cumulative += verseMeasurements[verses[i].verse] || defaultVerseHeight;
+      if (i < verseIndex - 1) {
+        cumulative += blankLineHeight;
+      }
+    }
+
+    const scrollPosition = Math.max(0, cumulative - SCREEN_HEIGHT / 2);
+
+    scrollViewRef.current.scrollTo({ y: scrollPosition, animated: true });
     setHasScrolledToVerse(true);
     return true;
-  }, [verses, targetVerse]);
+  }, [verses, verseMeasurements, targetVerse]);
+
   useEffect(() => {
     if (
       !targetVerse ||
@@ -155,13 +160,16 @@ export const useChapterLoader = (
     ) {
       return;
     }
+
     const verseIndex = verses.findIndex((v) => v.verse === targetVerse);
     if (verseIndex === -1) return;
+
     const timeoutId = setTimeout(() => {
       if (isMounted.current && !hasScrolledToVerse) {
         scrollToTargetVerse();
       }
     }, 100);
+
     return () => clearTimeout(timeoutId);
   }, [
     verses,
@@ -170,6 +178,7 @@ export const useChapterLoader = (
     hasScrolledToVerse,
     scrollToTargetVerse,
   ]);
+
   useEffect(() => {
     if (
       targetVerse &&
@@ -191,6 +200,7 @@ export const useChapterLoader = (
     scrollViewReady,
     verses.length,
   ]);
+
   return {
     verses,
     book,
@@ -200,15 +210,12 @@ export const useChapterLoader = (
     contentHeight,
     scrollViewHeight,
     scrollViewReady,
-    flatListRef,
+    scrollViewRef,
     chapterContainerRef,
     handleContentSizeChange,
     handleScrollViewLayout,
     handleVerseLayout,
     scrollToTargetVerse,
     loadChapter,
-    getItemLayout,
-    estimatedItemSize,
-    blankLineHeight,
   };
 };

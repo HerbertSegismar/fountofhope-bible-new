@@ -10,10 +10,10 @@ import {
   View,
   Text,
   TouchableOpacity,
+  ScrollView,
   ActivityIndicator,
-  Animated,
   LayoutChangeEvent,
-  FlatList,
+  Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ChapterViewEnhanced } from "../components/ChapterViewEnhanced";
@@ -52,7 +52,15 @@ interface ReaderContentProps {
   colors: any;
   fontSize: number;
   primaryProps: any;
+  primaryHandleScroll: (event: any) => void;
   handlePrimaryContentSizeChange: (width: number, height: number) => void;
+  secondaryHandleScrollCb: (event: any) => void;
+  handleSecondaryContentSizeChange: (width: number, height: number) => void;
+  handleSecondaryScrollViewLayout: (event: any) => void;
+  handleSecondaryVerseLayout: (
+    verseNumber: number,
+    event: LayoutChangeEvent
+  ) => void;
   primaryHeaderRef: React.RefObject<View | null>;
   secondaryHeaderRef: React.RefObject<View | null>;
   setPrimaryHeaderX: (x: number) => void;
@@ -72,6 +80,8 @@ interface ReaderContentProps {
   effectiveLayout: "horizontal" | "vertical";
   showMultiVersion: boolean;
   isLandscape: boolean;
+  primaryScrollViewRef: React.RefObject<ScrollView | null>;
+  secondaryScrollViewRef: React.RefObject<ScrollView | null>;
   bgTextureOpacity: number;
   scrollEnabled: boolean;
   bgImageIndex: number;
@@ -85,24 +95,6 @@ interface ReaderContentProps {
   buttonOpacity: Animated.Value;
   resetButtonOpacity: () => void;
   setUiMode: (value: number) => void;
-  handleSecondaryContentSizeChange: (width: number, height: number) => void;
-  handleSecondaryVerseLayout: (verse: number, event: LayoutChangeEvent) => void;
-  primaryFlatListRef?: React.RefObject<FlatList<VerseType> | null>;
-  secondaryFlatListRef?: React.RefObject<FlatList<VerseType> | null>;
-  onPrimaryScroll?: (event: {
-    nativeEvent: { contentOffset: { y: any } };
-  }) => void;
-  onPrimaryScrollBeginDrag: () => void;
-  onPrimaryScrollEndDrag: () => void;
-  onPrimaryMomentumScrollBegin: () => void;
-  onPrimaryMomentumScrollEnd: () => void;
-  onSecondaryScroll: (event: {
-    nativeEvent: { contentOffset: { y: any } };
-  }) => void;
-  onSecondaryScrollBeginDrag: () => void;
-  onSecondaryScrollEndDrag: () => void;
-  onSecondaryMomentumScrollBegin: () => void;
-  onSecondaryMomentumScrollEnd: () => void;
 }
 
 const PrimaryHeader = memo(
@@ -239,7 +231,6 @@ const ChevronButtons = memo(
     const pairGap = isLandscape ? 200 : 48;
     const buttonSize = 35;
     const iconSize = 24;
-
     if (!showMultiVersion || isLinked) {
       return (
         <>
@@ -262,7 +253,6 @@ const ChevronButtons = memo(
           <View style={{ flex: 1, alignItems: "center" }} />
           <TouchableOpacity
             onPress={goToPrimaryNextChapter}
-            disabled={primaryChapter >= primaryMaxChapter}
             style={{
               width: buttonSize,
               height: buttonSize,
@@ -271,7 +261,6 @@ const ChevronButtons = memo(
               justifyContent: "center",
               alignItems: "center",
               marginRight: 28,
-              opacity: primaryChapter >= primaryMaxChapter ? 0.3 : 1,
             }}
           >
             <Ionicons name="chevron-forward" size={iconSize} color="white" />
@@ -283,7 +272,6 @@ const ChevronButtons = memo(
       const secondaryPrevDisabled = secondaryChapter <= 1;
       const primaryNextDisabled = primaryChapter >= primaryMaxChapter;
       const secondaryNextDisabled = secondaryChapter >= secondaryMaxChapter;
-
       return (
         <View
           style={{
@@ -373,7 +361,6 @@ const ToggleButton = memo(
     onPress,
     resetButtonOpacity,
     colors,
-    isLandscape,
   }: {
     isFullScreen: boolean;
     onPress: () => void;
@@ -451,9 +438,10 @@ const ErrorView = memo(
   )
 );
 
-const MemoizedReaderContent = memo((props: ReaderContentProps) => {
+const MemoizedReaderContent = memo(({ ...props }: ReaderContentProps) => {
   const [hasSecondaryFailed, setHasSecondaryFailed] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const primaryHighlightedSet = useMemo(
     () => new Set(props.primaryHighlightedVerses),
     [props.primaryHighlightedVerses]
@@ -462,6 +450,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     () => new Set(props.secondaryHighlightedVerses),
     [props.secondaryHighlightedVerses]
   );
+
   useEffect(() => {
     setHasSecondaryFailed(false);
     if (timeoutRef.current) {
@@ -469,11 +458,13 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
       timeoutRef.current = null;
     }
   }, [props.secondaryVersion]);
+
   useEffect(() => {
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+
     if (!props.secondaryLoading && props.secondaryVerses.length === 0) {
       timeoutRef.current = setTimeout(() => {
         setHasSecondaryFailed(true);
@@ -481,6 +472,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     } else {
       setHasSecondaryFailed(false);
     }
+
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
@@ -488,6 +480,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
       }
     };
   }, [props.secondaryLoading, props.secondaryVerses.length]);
+
   const bgHook = useBackgroundTexture({
     opacity: props.bgTextureOpacity,
     index: props.bgImageIndex,
@@ -496,10 +489,12 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
   const headerBgColor = props.colors.primary;
   const headerTextColor = "white";
   const headerButtonBg = "rgba(255,255,255,0.15)";
+
   const primaryDisplay = props.getVersionDisplayName(props.currentVersion);
   const secondaryDisplay = props.getVersionDisplayName(
     props.secondaryVersion || ""
   );
+
   const primaryHeaderCallbacksRef = useRef({
     setX: props.setPrimaryHeaderX,
     setY: props.setPrimaryHeaderY,
@@ -512,6 +507,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     setWidth: props.setSecondaryHeaderWidth,
     setHeight: props.setSecondaryHeaderHeight,
   });
+
   useEffect(() => {
     primaryHeaderCallbacksRef.current = {
       setX: props.setPrimaryHeaderX,
@@ -525,6 +521,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     props.setPrimaryHeaderWidth,
     props.setPrimaryHeaderHeight,
   ]);
+
   useEffect(() => {
     secondaryHeaderCallbacksRef.current = {
       setX: props.setSecondaryHeaderX,
@@ -538,17 +535,16 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     props.setSecondaryHeaderWidth,
     props.setSecondaryHeaderHeight,
   ]);
-  const handlePrimaryHeaderLayout = useCallback(
-    (event: any) => {
-      props.primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
-        primaryHeaderCallbacksRef.current.setX(x);
-        primaryHeaderCallbacksRef.current.setY(y);
-        primaryHeaderCallbacksRef.current.setWidth(w);
-        primaryHeaderCallbacksRef.current.setHeight(h);
-      });
-    },
-    [props.primaryHeaderRef]
-  );
+
+  const handlePrimaryHeaderLayout = useCallback((event: any) => {
+    props.primaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
+      primaryHeaderCallbacksRef.current.setX(x);
+      primaryHeaderCallbacksRef.current.setY(y);
+      primaryHeaderCallbacksRef.current.setWidth(w);
+      primaryHeaderCallbacksRef.current.setHeight(h);
+    });
+  }, []);
+
   const handleSecondaryHeaderLayout = useCallback(() => {
     props.secondaryHeaderRef.current?.measureInWindow((x, y, w, h) => {
       secondaryHeaderCallbacksRef.current.setX(x);
@@ -556,7 +552,8 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
       secondaryHeaderCallbacksRef.current.setWidth(w);
       secondaryHeaderCallbacksRef.current.setHeight(h);
     });
-  }, [props.secondaryHeaderRef]);
+  }, []);
+
   const renderPrimaryContent = useCallback(() => {
     if (props.primaryLoading) {
       return <LoadingView colors={props.colors} />;
@@ -565,46 +562,58 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
       return <ErrorView display={primaryDisplay} colors={props.colors} />;
     }
     return (
-      <View style={{ flex: 1, paddingBottom: 40, overflow: 'hidden' }}>
-        <ChapterViewEnhanced
-          ref={props.primaryFlatListRef || props.primaryProps?.flatListRef}
-          verses={props.primaryVerses}
-          bookName={props.primaryLocation.bookName}
-          chapterNumber={props.primaryLocation.chapter}
-          bookId={props.primaryLocation.bookId}
-          showVerseNumbers
-          fontSize={props.fontSize}
-          onVersePress={props.primaryOnVersePress}
-          onVerseLayout={props.primaryProps.handleVerseLayout}
-          highlightVerse={props.getHighlightVerse(true)}
-          highlightedVerses={primaryHighlightedSet}
-          bookmarkedVerses={props.primaryBookmarkedVerses}
-          isFullScreen={props.isFullScreen}
-          displayVersion={primaryDisplay}
-          colors={props.colors}
-          bgImageIndex={bgHook.effectiveIndex}
-          bgTextureOpacity={bgHook.effectiveOpacity}
-          noBackground={bgHook.hasSource}
-          scrollEnabled={props.scrollEnabled}
-          onScroll={(event) => {
-            props.onPrimaryScroll?.(event);
-          }}
-          onScrollBeginDrag={props.onPrimaryScrollBeginDrag}
-          onScrollEndDrag={props.onPrimaryScrollEndDrag}
-          onMomentumScrollBegin={props.onPrimaryMomentumScrollBegin}
-          onMomentumScrollEnd={props.onPrimaryMomentumScrollEnd}
-          scrollEventThrottle={16}
-        />
-      </View>
+      <ScrollView
+        style={{ flex: 1 }}
+        ref={props.primaryScrollViewRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom: 40,
+          paddingTop: 0,
+        }}
+        onScroll={props.primaryHandleScroll}
+        scrollEventThrottle={16}
+        onContentSizeChange={props.handlePrimaryContentSizeChange}
+        onLayout={props.primaryProps.handleScrollViewLayout}
+        scrollEnabled={props.scrollEnabled}
+      >
+        <View
+          ref={props.primaryProps.chapterContainerRef}
+          onLayout={props.primaryProps.handleChapterContainerLayout}
+          style={{}}
+        >
+          <ChapterViewEnhanced
+            verses={props.primaryVerses}
+            bookName={props.primaryLocation.bookName}
+            chapterNumber={props.primaryLocation.chapter}
+            bookId={props.primaryLocation.bookId}
+            showVerseNumbers
+            fontSize={props.fontSize}
+            onVersePress={props.primaryOnVersePress}
+            onVerseLayout={props.primaryProps.handleVerseLayout}
+            highlightVerse={props.getHighlightVerse(true)}
+            highlightedVerses={primaryHighlightedSet}
+            bookmarkedVerses={props.primaryBookmarkedVerses}
+            isFullScreen={props.isFullScreen}
+            displayVersion={primaryDisplay}
+            colors={props.colors}
+            bgImageIndex={bgHook.effectiveIndex}
+            bgTextureOpacity={bgHook.effectiveOpacity}
+            noBackground={bgHook.hasSource}
+          />
+        </View>
+      </ScrollView>
     );
   }, [
     props.primaryLoading,
-    props.primaryVerses,
+    props.primaryVerses.length,
     props.primaryLocation,
     primaryDisplay,
+    props.primaryScrollViewRef,
+    props.primaryHandleScroll,
+    props.handlePrimaryContentSizeChange,
+    props.primaryProps,
     props.fontSize,
     props.primaryOnVersePress,
-    props.primaryProps.handleVerseLayout,
     props.getHighlightVerse,
     primaryHighlightedSet,
     props.primaryBookmarkedVerses,
@@ -614,15 +623,9 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     bgHook.effectiveOpacity,
     bgHook.hasSource,
     props.scrollEnabled,
-    props.primaryFlatListRef,
-    props.primaryProps?.flatListRef,
-    props.onPrimaryScroll,
-    props.onPrimaryScrollBeginDrag,
-    props.onPrimaryScrollEndDrag,
-    props.onPrimaryMomentumScrollBegin,
-    props.onPrimaryMomentumScrollEnd,
   ]);
-  const renderSecondaryContent = useCallback(() => {
+
+  const renderSecondaryContent = useMemo(() => {
     const isPostLoadEmpty =
       !props.secondaryLoading && props.secondaryVerses.length === 0;
     if (props.secondaryLoading || (isPostLoadEmpty && !hasSecondaryFailed)) {
@@ -632,9 +635,21 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
       return <ErrorView display={secondaryDisplay} colors={props.colors} />;
     }
     return (
-      <View style={{ flex: 1, paddingBottom: 40, overflow: 'hidden' }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        ref={props.secondaryScrollViewRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom: 40,
+          paddingTop: 0,
+        }}
+        onScroll={props.secondaryHandleScrollCb}
+        scrollEventThrottle={16}
+        onContentSizeChange={props.handleSecondaryContentSizeChange}
+        onLayout={props.handleSecondaryScrollViewLayout}
+        scrollEnabled={props.scrollEnabled}
+      >
         <ChapterViewEnhanced
-          ref={props.secondaryFlatListRef || null}
           verses={props.secondaryVerses}
           bookName={props.secondaryLocation.bookName}
           chapterNumber={props.secondaryLocation.chapter}
@@ -652,25 +667,21 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
           bgImageIndex={bgHook.effectiveIndex}
           bgTextureOpacity={bgHook.effectiveOpacity}
           noBackground={bgHook.hasSource}
-          scrollEnabled={props.scrollEnabled}
-          onScroll={props.onSecondaryScroll}
-          onScrollBeginDrag={props.onSecondaryScrollBeginDrag}
-          onScrollEndDrag={props.onSecondaryScrollEndDrag}
-          onMomentumScrollBegin={props.onSecondaryMomentumScrollBegin}
-          onMomentumScrollEnd={props.onSecondaryMomentumScrollEnd}
-          scrollEventThrottle={16}
         />
-      </View>
+      </ScrollView>
     );
   }, [
     props.secondaryLoading,
-    props.secondaryVerses,
     hasSecondaryFailed,
-    secondaryDisplay,
+    props.secondaryVerses.length,
     props.secondaryLocation,
+    secondaryDisplay,
+    props.secondaryScrollViewRef,
+    props.secondaryHandleScrollCb,
+    props.handleSecondaryContentSizeChange,
+    props.handleSecondaryScrollViewLayout,
     props.fontSize,
     props.secondaryOnVersePress,
-    props.handleSecondaryVerseLayout,
     props.getHighlightVerse,
     secondaryHighlightedSet,
     props.secondaryBookmarkedVerses,
@@ -680,20 +691,17 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     bgHook.effectiveOpacity,
     bgHook.hasSource,
     props.scrollEnabled,
-    props.secondaryFlatListRef,
-    props.onSecondaryScroll,
-    props.onSecondaryScrollBeginDrag,
-    props.onSecondaryScrollEndDrag,
-    props.onSecondaryMomentumScrollBegin,
-    props.onSecondaryMomentumScrollEnd,
   ]);
+
   const togglePress = useCallback(() => {
     props.setUiMode(props.isFullScreen ? 0 : 1);
   }, [props.isFullScreen, props.setUiMode]);
+
   const innerContent = useMemo(() => {
     if (!props.showMultiVersion) {
       return renderPrimaryContent();
     }
+
     if (props.effectiveLayout === "horizontal") {
       return (
         <View style={{ flex: 1, flexDirection: "row" }}>
@@ -702,7 +710,6 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
               flex: 1,
               borderRightWidth: 1,
               borderRightColor: props.colors.border?.default,
-              overflow: 'hidden',
             }}
           >
             <PrimaryHeader
@@ -726,7 +733,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
             />
             {renderPrimaryContent()}
           </View>
-          <View style={{ flex: 1, overflow: 'hidden' }}>
+          <View style={{ flex: 1 }}>
             <PrimaryHeader
               ref={props.secondaryHeaderRef}
               onLayout={handleSecondaryHeaderLayout}
@@ -746,14 +753,14 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
               colors={props.colors}
               isFullScreen={false}
             />
-            {renderSecondaryContent()}
+            {renderSecondaryContent}
           </View>
         </View>
       );
     } else {
       return (
         <View style={{ flex: 1, flexDirection: "column" }}>
-          <View style={{ flex: 1, overflow: 'hidden' }}>
+          <View style={{ flex: 1 }}>
             {props.isFullScreen && (
               <PrimaryHeader
                 ref={props.primaryHeaderRef}
@@ -782,7 +789,6 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
               flex: 1,
               borderTopWidth: 1,
               borderTopColor: props.colors.border?.default,
-              overflow: 'hidden',
             }}
           >
             <PrimaryHeader
@@ -804,7 +810,7 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
               colors={props.colors}
               isFullScreen={true}
             />
-            {renderSecondaryContent()}
+            {renderSecondaryContent}
           </View>
         </View>
       );
@@ -833,9 +839,11 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     handlePrimaryHeaderLayout,
     handleSecondaryHeaderLayout,
   ]);
+
   const chevronBottom = 20;
   const toggleBottom = 22;
   const toggleSize = 48;
+
   return (
     <View style={{ flex: 1, position: "relative" }}>
       <BackgroundTexture
@@ -919,4 +927,5 @@ const MemoizedReaderContent = memo((props: ReaderContentProps) => {
     </View>
   );
 });
+
 export const ReaderContent = MemoizedReaderContent;

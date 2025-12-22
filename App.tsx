@@ -27,22 +27,26 @@ import {
   Dimensions,
 } from "react-native";
 import * as Font from "expo-font";
+
 import HomeScreen from "./screens/HomeScreen";
 import SearchScreen from "./screens/SearchScreen";
 import BookmarksScreen from "./screens/BookmarksScreen";
 import ReaderScreen from "./screens/ReaderScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import "./global.css";
+
 import { Book } from "./types";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { BibleDatabaseProvider } from "./context/BibleDatabaseContext";
 import { BookmarksProvider } from "./context/BookmarksContext";
 import { HighlightsProvider } from "./context/HighlightsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
+
 import Oswald_VariableFont from "./assets/fonts/Oswald_VariableFont.ttf";
 import RubikGlitch_Regular from "./assets/fonts/RubikGlitch_Regular.ttf";
 import FontLoader from "./components/FontLoader";
 import { getBookInfo } from "./utils/testamentUtils";
+import { ChapterMeasurementsProvider } from "./context/ChapterMeasurementsContext";
 import { NavigationModal } from "./components/NavigationModal";
 import { useBibleDatabase } from "./context/BibleDatabaseContext";
 
@@ -142,7 +146,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
     colorSchemes,
     setShowColorPicker,
     navTheme,
-  } = useTheme(); 
+  } = useTheme();
   const { bibleDB, currentVersion } = useBibleDatabase();
   const secondaryDBRef = useRef(null);
 
@@ -245,10 +249,7 @@ function HeaderActions({ navigation }: { navigation: any }) {
 
   const filteredMenuItems = useMemo(
     () =>
-      menuItems.filter(
-        (item) =>
-          item.key !== "theme" && item.key !== "colors"
-      ),
+      menuItems.filter((item) => item.key !== "theme" && item.key !== "colors"),
     [menuItems]
   );
 
@@ -641,6 +642,7 @@ export default function App() {
     <SafeAreaProvider>
       <FontLoader>
         <HighlightsProvider>
+          <ChapterMeasurementsProvider>
             <BibleDatabaseProvider>
               <ThemeProvider>
                 <BookmarksProvider>
@@ -648,6 +650,7 @@ export default function App() {
                 </BookmarksProvider>
               </ThemeProvider>
             </BibleDatabaseProvider>
+          </ChapterMeasurementsProvider>
         </HighlightsProvider>
       </FontLoader>
     </SafeAreaProvider>

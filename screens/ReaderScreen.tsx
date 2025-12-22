@@ -14,8 +14,8 @@ import {
   Animated,
   ActivityIndicator,
   Alert,
-  FlatList,
   LayoutChangeEvent,
+  ScrollView,
   TextInput,
 } from "react-native";
 import {
@@ -31,13 +31,16 @@ import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BibleDatabase } from "../services/BibleDatabase";
 import { NavigationModal } from "../components/NavigationModal";
 import { useChapterLoader } from "../hooks/useChapterLoader";
+import { useScrollSync } from "../hooks/useScrollSync";
 import { useThemeColors } from "../hooks/useThemeColors";
 import { getVersionDisplayName } from "../utils/bibleVersionUtils";
 import { Verse } from "../types";
 import { getBookInfo } from "../utils/testamentUtils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
+import { useChapterMeasurements } from "../context/ChapterMeasurementsContext";
 import { ReaderContent } from "../content/ReaderContent";
+
 const initialDimensions = Dimensions.get("window");
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 type SelectorType = "primary" | "secondary" | null;
@@ -84,10 +87,13 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   isLandscape,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
+
   useEffect(() => {
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
+
   if (!visible) return null;
+
   const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
@@ -95,18 +101,22 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     );
     onClose();
   };
+
   const handleOpacityChange = (text: string) => {
     const num = parseInt(text.replace(/[^0-9]/g, "")) || 0;
     const clampedNum = Math.min(100, Math.max(0, num));
     setTempOpacity(clampedNum / 100);
   };
+
   const handleOpacitySubmit = () => {
     onSetBgTextureOpacity(tempOpacity);
     AsyncStorage.setItem("bgTextureOpacity", tempOpacity.toString()).catch(
       console.error
     );
   };
+
   const maxBgIndex = 33;
+
   const handlePrevTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(maxBgIndex);
@@ -114,6 +124,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex - 1);
     }
   };
+
   const handleNextTexture = () => {
     if (bgImageIndex === maxBgIndex) {
       onSetBgImageIndex(0);
@@ -121,6 +132,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
       onSetBgImageIndex(bgImageIndex + 1);
     }
   };
+
   return (
     <TouchableOpacity
       style={{
@@ -152,8 +164,10 @@ const DropdownMenu: React.FC<DropdownProps> = ({
           elevation: 5,
         }}
       >
+        {/* ==================== MENU ITEMS ==================== */}
         {filteredMenuItems.slice(0, -1).map((item, index) => {
           const isBibleItem = item.key === "bible";
+
           return (
             <TouchableOpacity
               key={item.key}
@@ -190,6 +204,8 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             </TouchableOpacity>
           );
         })}
+
+        {/* ==================== BG & OPACITY SECTION ==================== */}
         <View
           style={{
             paddingHorizontal: 12,
@@ -233,6 +249,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
                 color={primaryTextColor}
               />
             </TouchableOpacity>
+
             <View
               style={{
                 flexDirection: "row",
@@ -269,6 +286,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
                 %
               </Text>
             </View>
+
             <TouchableOpacity
               onPress={handleNextTexture}
               style={{
@@ -288,7 +306,10 @@ const DropdownMenu: React.FC<DropdownProps> = ({
             </TouchableOpacity>
           </View>
         </View>
+
         <View className="h-[1px] bg-white mx-3" />
+
+        {/* ==================== CLOSE BUTTON ==================== */}
         <TouchableOpacity
           onPress={handleClose}
           style={{
@@ -361,7 +382,6 @@ export default function ReaderScreen({
   const [dimensions, setDimensions] = useState(initialDimensions);
   const screenWidth = dimensions.width;
   const themeColors = useThemeColors();
-  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { colors, primaryTextColor, handleColorSchemePress, toggleTheme } =
     themeColors;
   const [primaryLocation, setPrimaryLocation] = useState<Location>({
@@ -382,21 +402,18 @@ export default function ReaderScreen({
     verses: primaryVerses,
     book: primaryBook,
     loading: primaryLoading,
-    flatListRef: primaryFlatListRef,
+    scrollViewRef: primaryScrollViewRef,
     ...primaryProps
   } = primaryLoader;
-  const defaultVerseHeight = 80;
   const [showMultiVersion, setShowMultiVersion] = useState(false);
   const [secondaryVersion, setSecondaryVersion] = useState<string | null>(null);
   const [secondaryReady, setSecondaryReady] = useState(false);
   const [secondaryVerses, setSecondaryVerses] = useState<Verse[]>([]);
   const [secondaryLoading, setSecondaryLoading] = useState(false);
-  const [, setPrimaryContentHeight] = useState(0);
-  const [, setSecondaryContentHeight] = useState(0);
-  const [secondaryVerseMeasurements, setSecondaryVerseMeasurements] = useState<
-    Record<number, number>
-  >({});
-  const secondaryFlatListRef = useRef<FlatList<Verse>>(null);
+  const [secondaryContentHeight, setSecondaryContentHeight] = useState(0);
+  const secondaryVerseMeasurementsRef = useRef<{ [key: number]: number }>({});
+  const [secondaryScrollViewHeight, setSecondaryScrollViewHeight] = useState(0);
+  const secondaryScrollViewRef = useRef<ScrollView>(null);
   const [_isSwitchingVersion, setIsSwitchingVersion] = useState(false);
   const secondaryDB = useRef<BibleDatabase | null>(null);
   const [fontSize, setFontSize] = useState(16);
@@ -404,36 +421,24 @@ export default function ReaderScreen({
   const [isLandscape, setIsLandscape] = useState(
     initialDimensions.width > initialDimensions.height
   );
+  const [_showEnd, setShowEnd] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showNavigationModal, setShowNavigationModal] = useState(false);
   const [navigationTarget, setNavigationTarget] = useState<
     "primary" | "secondary"
   >("primary");
-  const hasScrolledToInitialVerse = useRef(false);
-  const shouldScrollToPrimaryVerse = useRef(false);
-  const shouldScrollToSecondaryVerse = useRef(false);
-  const initialScrollDone = useRef(false);
-  const primaryScrollRetryCount = useRef(0);
-  const secondaryScrollRetryCount = useRef(0);
-  const maxScrollRetries = 15;
-  const handleSecondaryVerseLayout = useCallback(
-    (verse: number, event: LayoutChangeEvent) => {
-      const { height } = event.nativeEvent.layout;
-      setSecondaryVerseMeasurements((prev) => ({
-        ...prev,
-        [verse]: height,
-      }));
-    },
-    []
-  );
   const [bgTextureOpacity, setBgTextureOpacity] = useState(0.1);
   const [bgImageIndex, setBgImageIndex] = useState(0);
   const lastScrollYRef = useRef(0);
+  const [scrollThreshold] = useState(50);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const secondaryScrollY = useRef(new Animated.Value(0)).current;
   const buttonOpacity = useRef(new Animated.Value(1)).current;
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const showMultiVersionRef = useRef(false);
   const isLinkedRef = useRef(true);
+  const handleScrollRef = useRef<(event: any) => void>(() => {});
+  const handleSecondaryScrollRef = useRef<(event: any) => void>(() => {});
   const effectiveLayout = useMemo(
     () => (isLandscape ? "horizontal" : multiViewLayout),
     [isLandscape, multiViewLayout]
@@ -442,242 +447,50 @@ export default function ReaderScreen({
     null
   );
   const isFullScreen = uiMode === 1;
+
+  const isProgrammaticScrollRef = useRef(false);
+
+  const scrollSync = useScrollSync(
+    showMultiVersion && isLinked,
+    primaryProps.scrollViewHeight,
+    primaryProps.contentHeight,
+    secondaryContentHeight,
+    primaryVerses,
+    secondaryVerses,
+    isLandscape,
+    isFullScreen,
+    () => {},
+    scrollThreshold,
+    lastScrollYRef,
+    scrollY,
+    setShowEnd,
+    primaryScrollViewRef,
+    secondaryScrollViewRef
+  );
+  const {
+    handleScroll,
+    handleSecondaryScroll,
+    updatePrimaryOffset,
+    updateSecondaryOffset,
+  } = scrollSync;
   const { setShowColorPicker } = useTheme();
-  const ignorePrimaryScroll = useRef(false);
-  const ignoreSecondaryScroll = useRef(false);
-  const isPrimaryUserScrolling = useRef(false);
-  const isSecondaryUserScrolling = useRef(false);
-
-  const syncWithDelay = useCallback(
-    (targetRef: React.RefObject<FlatList<Verse> | null>, offset: number) => {
-      if (!targetRef.current) return;
-      setTimeout(() => {
-        targetRef.current?.scrollToOffset({ offset, animated: false });
-      }, 0);
-    },
-    []
+  const { storeChapterMeasurement, getChapterMeasurement } =
+    useChapterMeasurements();
+  const primaryProgress = useMemo(
+    () =>
+      Animated.divide(
+        scrollY,
+        Math.max(primaryProps.contentHeight - primaryProps.scrollViewHeight, 1)
+      ),
+    [scrollY, primaryProps.contentHeight, primaryProps.scrollViewHeight]
   );
-
-  const scrollToPrimaryVerse = useCallback(
-    (verseNum: number, animated = true) => {
-      if (!primaryFlatListRef || !primaryFlatListRef.current) {
-        return false;
-      }
-      const flatList = primaryFlatListRef.current;
-      if (!primaryVerses || primaryVerses.length === 0) {
-        return false;
-      }
-      const verseIndex = primaryVerses.findIndex((v) => v.verse === verseNum);
-      if (verseIndex === -1) {
-        return false;
-      }
-      try {
-        flatList.scrollToIndex({
-          index: verseIndex,
-          animated,
-          viewPosition: 0.1,
-          viewOffset: 20,
-        });
-        return true;
-      } catch (error) {
-        console.log("scrollToIndex failed, trying scrollToOffset:", error);
-        try {
-          const spacing = isFullScreen ? 2 : 4;
-          let cumulativeHeight = 0;
-          let averageHeight = defaultVerseHeight;
-          const measuredHeights = Object.values(primaryProps.verseMeasurements);
-          if (measuredHeights.length > 0) {
-            averageHeight =
-              measuredHeights.reduce((a, b) => a + b, 0) /
-              measuredHeights.length;
-          }
-          for (let i = 0; i < verseIndex; i++) {
-            const verse = primaryVerses[i];
-            if (verse) {
-              const verseHeight =
-                primaryProps.verseMeasurements?.[verse.verse] || averageHeight;
-              cumulativeHeight += verseHeight + spacing;
-            }
-          }
-          flatList.scrollToOffset({
-            offset: Math.max(0, cumulativeHeight - 50),
-            animated: true,
-          });
-          return true;
-        } catch (offsetError) {
-          console.log("scrollToOffset also failed:", offsetError);
-          try {
-            const targetVerseObj = primaryVerses[verseIndex];
-            if (targetVerseObj) {
-              flatList.scrollToItem({
-                item: targetVerseObj,
-                animated: true,
-                viewPosition: 0.1,
-              });
-              return true;
-            }
-          } catch (itemError) {
-            console.log("All scroll methods failed:", itemError);
-          }
-          return false;
-        }
-      }
-    },
-    [
-      primaryFlatListRef,
-      primaryVerses,
-      primaryProps.verseMeasurements,
-      isFullScreen,
-      defaultVerseHeight,
-    ]
-  );
-  const scrollToVerseWhenReady = useCallback(
-    async (verseNum: number, maxWaitTime = 5000) => {
-      const startTime = Date.now();
-      let lastRetryTime = 0;
-      const retryInterval = 200;
-      const checkAndScroll = () => {
-        const currentTime = Date.now();
-        if (currentTime - startTime > maxWaitTime) {
-          if (
-            primaryFlatListRef &&
-            primaryFlatListRef.current &&
-            primaryVerses.length > 0
-          ) {
-            const verseIndex = primaryVerses.findIndex(
-              (v) => v.verse === verseNum
-            );
-            if (verseIndex !== -1) {
-              primaryFlatListRef.current.scrollToIndex({
-                index: verseIndex,
-                animated: true,
-                viewPosition: 0.1,
-              });
-              return true;
-            }
-          }
-          return false;
-        }
-        if (currentTime - lastRetryTime < retryInterval) {
-          setTimeout(checkAndScroll, retryInterval);
-          return false;
-        }
-        lastRetryTime = currentTime;
-        const conditions = {
-          flatListRef: !!(primaryFlatListRef && primaryFlatListRef.current),
-          verses: primaryVerses.length > 0,
-          loading: !primaryLoading,
-          measurements:
-            primaryProps.verseMeasurements &&
-            Object.keys(primaryProps.verseMeasurements).length > 10,
-        };
-
-        if (
-          conditions.flatListRef &&
-          conditions.verses &&
-          conditions.loading &&
-          conditions.measurements
-        ) {
-          const verseIndex = primaryVerses.findIndex(
-            (v) => v.verse === verseNum
-          );
-          if (verseIndex !== -1 && primaryFlatListRef.current) {
-            try {
-              primaryFlatListRef.current.scrollToIndex({
-                index: verseIndex,
-                animated: true,
-                viewPosition: 0.1,
-              });
-              return true;
-            } catch (error) {
-              console.log("Scroll error:", error);
-            }
-          }
-        }
-        setTimeout(checkAndScroll, retryInterval);
-        return false;
-      };
-      return checkAndScroll();
-    },
-    [
-      primaryFlatListRef,
-      primaryVerses,
-      primaryLoading,
-      primaryProps.verseMeasurements,
-    ]
-  );
-  const scrollToSecondaryVerse = useCallback(
-    (verseNum: number, animated = true) => {
-      if (!secondaryFlatListRef.current || !secondaryVerses.length) {
-        return false;
-      }
-      const verseIndex = secondaryVerses.findIndex((v) => v.verse === verseNum);
-      if (verseIndex === -1) {
-        return false;
-      }
-      try {
-        secondaryFlatListRef.current.scrollToIndex({
-          index: verseIndex,
-          animated,
-          viewPosition: 0.1,
-          viewOffset: 20,
-        });
-        return true;
-      } catch (error) {
-        console.log("Secondary scroll error:", error);
-        const spacing = isFullScreen ? 2 : 4;
-        let cumulativeHeight = 0;
-        let averageHeight = defaultVerseHeight;
-        const measuredHeights = Object.values(secondaryVerseMeasurements);
-        if (measuredHeights.length > 0) {
-          averageHeight =
-            measuredHeights.reduce((a, b) => a + b, 0) / measuredHeights.length;
-        }
-        for (let i = 0; i < verseIndex; i++) {
-          const verse = secondaryVerses[i];
-          if (verse) {
-            const verseHeight =
-              secondaryVerseMeasurements[verse.verse] || averageHeight;
-            cumulativeHeight += verseHeight + spacing;
-          }
-        }
-        secondaryFlatListRef.current.scrollToOffset({
-          offset: Math.max(0, cumulativeHeight - 50),
-          animated: true,
-        });
-        return true;
-      }
-    },
-    [
-      secondaryFlatListRef,
-      secondaryVerses,
-      secondaryVerseMeasurements,
-      isFullScreen,
-      defaultVerseHeight,
-    ]
-  );
-  const scrollToPrimaryVerseWithRetry = useCallback(
-    async (verseNum: number, maxRetries = 3) => {
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        if (
-          !primaryFlatListRef ||
-          !primaryFlatListRef.current ||
-          !primaryVerses.length
-        ) {
-          await new Promise((resolve) => setTimeout(resolve, 300));
-          continue;
-        }
-        const success = scrollToPrimaryVerse(verseNum);
-        if (success) {
-          return true;
-        }
-        const retryDelay = 300 * Math.pow(2, attempt);
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      }
-
-      return false;
-    },
-    [scrollToPrimaryVerse, primaryVerses, primaryFlatListRef]
+  const secondaryProgress = useMemo(
+    () =>
+      Animated.divide(
+        secondaryScrollY,
+        Math.max(secondaryContentHeight - secondaryScrollViewHeight, 1)
+      ),
+    [secondaryScrollY, secondaryContentHeight, secondaryScrollViewHeight]
   );
   const reloadSecondaryDB = useCallback(
     async (retries = 10): Promise<boolean> => {
@@ -754,6 +567,12 @@ export default function ReaderScreen({
   useEffect(() => {
     isLinkedRef.current = isLinked;
   }, [isLinked]);
+  useEffect(() => {
+    handleScrollRef.current = handleScroll;
+  }, [handleScroll]);
+  useEffect(() => {
+    handleSecondaryScrollRef.current = handleSecondaryScroll;
+  }, [handleSecondaryScroll]);
   const getHighlightVerse = useCallback(
     (isPrimary: boolean): number | undefined => {
       if (isLinked || !showMultiVersion) {
@@ -780,21 +599,31 @@ export default function ReaderScreen({
       }).start();
     }, 5000);
   }, [buttonOpacity]);
+
   const resetPrimaryScroll = useCallback(() => {
+    isProgrammaticScrollRef.current = true;
     scrollY.setValue(0);
     lastScrollYRef.current = 0;
-    if (primaryFlatListRef && primaryFlatListRef.current) {
-      primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: false });
+    if (primaryScrollViewRef.current) {
+      primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updatePrimaryOffset(0);
     }
-  }, [scrollY, primaryFlatListRef]);
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 1000);
+  }, [scrollY, primaryScrollViewRef, updatePrimaryOffset]);
+
   const resetSecondaryScroll = useCallback(() => {
-    if (secondaryFlatListRef.current) {
-      secondaryFlatListRef.current.scrollToOffset({
-        offset: 0,
-        animated: false,
-      });
+    isProgrammaticScrollRef.current = true;
+    if (secondaryScrollViewRef.current) {
+      secondaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updateSecondaryOffset(0);
     }
-  }, [secondaryFlatListRef]);
+    setTimeout(() => {
+      isProgrammaticScrollRef.current = false;
+    }, 1000);
+  }, [secondaryScrollViewRef, updateSecondaryOffset]);
+
   useEffect(() => {
     resetButtonOpacity();
     return () => {
@@ -953,21 +782,7 @@ export default function ReaderScreen({
         currentDimensions.width > currentDimensions.height;
       setDimensions(currentDimensions);
       setIsLandscape(currentIsLandscape);
-      hasScrolledToInitialVerse.current = false;
-      shouldScrollToPrimaryVerse.current = true;
-      shouldScrollToSecondaryVerse.current = false;
-      initialScrollDone.current = false;
-      primaryScrollRetryCount.current = 0;
-      secondaryScrollRetryCount.current = 0;
-      if (targetVerse) {
-        setPrimaryTargetVerse(targetVerse);
-      }
-    }, [
-      loadPreferences,
-      loadReaderSettings,
-      loadBackgroundSettings,
-      targetVerse,
-    ])
+    }, [loadPreferences, loadReaderSettings, loadBackgroundSettings])
   );
   useEffect(() => {
     AsyncStorage.setItem("multiViewLayout", multiViewLayout).catch((e) =>
@@ -1051,6 +866,7 @@ export default function ReaderScreen({
     },
     [currentVersion, switchVersion]
   );
+
   const toggleMultiVersion = useCallback(() => {
     setShowMultiVersion((prev) => !prev);
     resetButtonOpacity();
@@ -1178,62 +994,6 @@ export default function ReaderScreen({
       linkItem,
     ]
   );
-  const safeScrollToVerse = useCallback(
-    (verseNum: number, isPrimary = true) => {
-      if (isPrimary) {
-        if (!primaryFlatListRef || !primaryFlatListRef.current) {
-          return false;
-        }
-        const flatList = primaryFlatListRef.current;
-        if (primaryVerses.length === 0) {
-          return false;
-        }
-        const verseIndex = primaryVerses.findIndex((v) => v.verse === verseNum);
-        if (verseIndex === -1) {
-          return false;
-        }
-        const tryScroll = () => {
-          try {
-            flatList.scrollToIndex({
-              index: verseIndex,
-              animated: true,
-              viewPosition: 0.1,
-            });
-            return true;
-          } catch (error1) {
-            console.log("Method 1 failed:", error1);
-            try {
-              const estimatedOffset = verseIndex * (defaultVerseHeight + 4);
-              flatList.scrollToOffset({
-                offset: Math.max(0, estimatedOffset - 100),
-                animated: true,
-              });
-              return true;
-            } catch (error2) {
-              console.log("Method 2 failed:", error2);
-              try {
-                const targetVerseObj = primaryVerses[verseIndex];
-                if (targetVerseObj) {
-                  flatList.scrollToItem({
-                    item: targetVerseObj,
-                    animated: true,
-                    viewPosition: 0.1,
-                  });
-                  return true;
-                }
-              } catch (error3) {
-                console.log("Method 3 failed:", error3);
-              }
-              return false;
-            }
-          }
-        };
-        return tryScroll();
-      }
-      return false;
-    },
-    [primaryFlatListRef, primaryVerses, defaultVerseHeight]
-  );
   const filteredMenuItems = useMemo(
     () =>
       menuItems.filter(
@@ -1253,94 +1013,55 @@ export default function ReaderScreen({
   const handleVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = primaryHighlightedVerses.includes(verse.verse);
-      Alert.alert(
-        `${primaryLocation.bookName} ${verse.chapter}:${verse.verse}`,
-        "Options:",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: isHighlighted ? "Remove Highlight" : "Highlight",
-            onPress: () => toggleVerseHighlight(verse),
+      Alert.alert(`${bookName} ${verse.chapter}:${verse.verse}`, "Options:", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isHighlighted ? "Remove Highlight" : "Highlight",
+          onPress: () => toggleVerseHighlight(verse),
+        },
+        {
+          text: "Bookmark",
+          onPress: () => {
+            addBookmark(verse);
+            Alert.alert("Bookmarked!", "Verse added to bookmarks.");
           },
-          {
-            text: "Bookmark",
-            onPress: () => {
-              addBookmark(verse);
-              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
-            },
-          },
-          {
-            text: "Scroll to Verse",
-            onPress: () => {
-              const success = safeScrollToVerse(verse.verse, true);
-              if (success) {
-                Alert.alert("Success", `Scrolled to verse ${verse.verse}`);
-              } else {
-                Alert.alert(
-                  "Error",
-                  "Could not scroll to verse. Please try again."
-                );
-              }
-            },
-          },
-          {
-            text: "Share",
-            onPress: () => Alert.alert("Share", "Coming soon!"),
-          },
-        ]
-      );
+        },
+        {
+          text: "Share",
+          onPress: () => Alert.alert("Share", "Coming soon!"),
+        },
+      ]);
     },
     [
       primaryHighlightedVerses,
-      primaryLocation.bookName,
       toggleVerseHighlight,
       addBookmark,
-      safeScrollToVerse,
+      setPrimaryTargetVerse,
     ]
   );
   const handleSecondaryVersePress = useCallback(
     (verse: Verse) => {
       const isHighlighted = secondaryHighlightedVerses.includes(verse.verse);
-      Alert.alert(
-        `${secondaryLocation.bookName} ${verse.chapter}:${verse.verse}`,
-        "Options:",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: isHighlighted ? "Remove Highlight" : "Highlight",
-            onPress: () => toggleVerseHighlight(verse),
+      Alert.alert(`${bookName} ${verse.chapter}:${verse.verse}`, "Options:", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isHighlighted ? "Remove Highlight" : "Highlight",
+          onPress: () => toggleVerseHighlight(verse),
+        },
+        {
+          text: "Bookmark",
+          onPress: () => {
+            addBookmark(verse);
+            Alert.alert("Bookmarked!", "Verse added to bookmarks.");
           },
-          {
-            text: "Bookmark",
-            onPress: () => {
-              addBookmark(verse);
-              Alert.alert("Bookmarked!", "Verse added to bookmarks.");
-            },
-          },
-          {
-            text: "Scroll to Verse",
-            onPress: () => {
-              setSecondaryTargetVerse(verse.verse);
-              setTimeout(() => {
-                scrollToSecondaryVerse(verse.verse, true);
-              }, 0);
-            },
-          },
-          {
-            text: "Share",
-            onPress: () => Alert.alert("Share", "Coming soon!"),
-          },
-        ]
-      );
+        },
+        {
+          text: "Share",
+          onPress: () => Alert.alert("Share", "Coming soon!"),
+        },
+      ]);
     },
-    [
-      secondaryHighlightedVerses,
-      secondaryLocation.bookName,
-      toggleVerseHighlight,
-      addBookmark,
-      setSecondaryTargetVerse,
-      scrollToSecondaryVerse,
-    ]
+    [secondaryHighlightedVerses, toggleVerseHighlight, addBookmark]
   );
   const primaryOnVersePress = handleVersePress;
   const secondaryOnVersePress =
@@ -1410,15 +1131,18 @@ export default function ReaderScreen({
     if (secondaryLocation.chapter > 1) {
       resetSecondaryScroll();
       const newChapter = secondaryLocation.chapter - 1;
-      const newLocation = {
-        ...secondaryLocation,
+      setSecondaryLocation((prev) => ({
+        ...prev,
         chapter: newChapter,
         verse: undefined,
-      };
-      setSecondaryLocation(newLocation);
+      }));
       setSecondaryTargetVerse(undefined);
       if (showMultiVersion && isLinked) {
-        setPrimaryLocation(newLocation);
+        setPrimaryLocation((prev) => ({
+          ...prev,
+          chapter: newChapter,
+          verse: undefined,
+        }));
         setPrimaryTargetVerse(undefined);
         resetPrimaryScroll();
       }
@@ -1430,21 +1154,23 @@ export default function ReaderScreen({
     showMultiVersion,
     isLinked,
     resetButtonOpacity,
-    resetPrimaryScroll,
   ]);
   const goToSecondaryNextChapter = useCallback(() => {
     if (secondaryLocation.chapter < secondaryMaxChapter) {
       resetSecondaryScroll();
       const newChapter = secondaryLocation.chapter + 1;
-      const newLocation = {
-        ...secondaryLocation,
+      setSecondaryLocation((prev) => ({
+        ...prev,
         chapter: newChapter,
         verse: undefined,
-      };
-      setSecondaryLocation(newLocation);
+      }));
       setSecondaryTargetVerse(undefined);
       if (showMultiVersion && isLinked) {
-        setPrimaryLocation(newLocation);
+        setPrimaryLocation((prev) => ({
+          ...prev,
+          chapter: newChapter,
+          verse: undefined,
+        }));
         setPrimaryTargetVerse(undefined);
         resetPrimaryScroll();
       }
@@ -1459,48 +1185,40 @@ export default function ReaderScreen({
     showMultiVersion,
     isLinked,
     resetButtonOpacity,
-    resetPrimaryScroll,
   ]);
 
-  useEffect(() => {
-    if (
-      primaryTargetVerse &&
-      primaryFlatListRef.current &&
-      !primaryLoading &&
-      primaryVerses.length > 0
-    ) {
-      const hasMeasurements =
-        primaryProps.verseMeasurements &&
-        Object.keys(primaryProps.verseMeasurements).length > 0;
-      const delay = hasMeasurements ? 100 : 300;
-      const timer = setTimeout(() => {
-        if (shouldScrollToPrimaryVerse.current && primaryFlatListRef.current) {
-          scrollToPrimaryVerseWithRetry(
-            primaryTargetVerse,
-            maxScrollRetries
-          ).then(() => {
-            shouldScrollToPrimaryVerse.current = false;
-          });
-        }
-      }, delay);
-      return () => clearTimeout(timer);
-    } else if (
-      primaryTargetVerse === undefined &&
-      primaryFlatListRef.current &&
-      !primaryLoading
-    ) {
-      primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
-      lastScrollYRef.current = 0;
-    }
-  }, [
-    primaryTargetVerse,
-    primaryLoading,
-    primaryVerses,
-    primaryProps.verseMeasurements,
-    scrollToPrimaryVerseWithRetry,
-    maxScrollRetries,
-    primaryFlatListRef,
-  ]);
+  const primaryHandleScroll = useCallback(
+    (event: any) => {
+      const y = event.nativeEvent.contentOffset.y;
+      lastScrollYRef.current = y;
+      scrollY.setValue(y);
+
+      if (
+        showMultiVersionRef.current &&
+        isLinkedRef.current &&
+        !isProgrammaticScrollRef.current
+      ) {
+        handleScrollRef.current(event);
+      }
+    },
+    [scrollY]
+  );
+
+  const secondaryHandleScrollCb = useCallback(
+    (event: any) => {
+      if (
+        showMultiVersionRef.current &&
+        isLinkedRef.current &&
+        !isProgrammaticScrollRef.current
+      ) {
+        handleSecondaryScrollRef.current(event);
+      } else if (showMultiVersionRef.current) {
+        const y = event.nativeEvent.contentOffset.y;
+        secondaryScrollY.setValue(y);
+      }
+    },
+    [secondaryScrollY]
+  );
 
   useEffect(() => {
     const updateLayout = () => {
@@ -1514,144 +1232,203 @@ export default function ReaderScreen({
     const subscription = Dimensions.addEventListener("change", updateLayout);
     return () => subscription?.remove();
   }, []);
-
   useEffect(() => {
-    if (
-      targetVerse &&
-      !hasScrolledToInitialVerse.current &&
-      primaryVerses.length > 0
-    ) {
-      shouldScrollToPrimaryVerse.current = true;
-      setPrimaryTargetVerse(targetVerse);
-      const timer = setTimeout(() => {
-        scrollToVerseWhenReady(targetVerse).then((success) => {
-          if (success) {
-            hasScrolledToInitialVerse.current = true;
-          }
-        });
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [
-    targetVerse,
-    primaryVerses,
-    scrollToVerseWhenReady,
-    setPrimaryTargetVerse,
-  ]);
+    setPrimaryTargetVerse(targetVerse);
+  }, [targetVerse]);
   useEffect(() => {
     if (showMultiVersion && isLinked) {
-      if (
-        primaryLocation.bookId !== secondaryLocation.bookId ||
-        primaryLocation.chapter !== secondaryLocation.chapter
-      ) {
-        setSecondaryLocation(primaryLocation);
-        setSecondaryTargetVerse(primaryTargetVerse);
-      }
+      setSecondaryLocation(primaryLocation);
+      setSecondaryTargetVerse(primaryTargetVerse);
     } else if (!showMultiVersion) {
       setSecondaryTargetVerse(undefined);
     }
   }, [showMultiVersion, isLinked, primaryTargetVerse, primaryLocation]);
-  // Effect to scroll to primary target verse when it changes
+
   useEffect(() => {
-    if (
-      primaryTargetVerse &&
-      primaryFlatListRef.current &&
-      !primaryLoading &&
-      primaryVerses.length > 0
-    ) {
-      // Wait for measurements if available
-      const hasMeasurements =
-        primaryProps.verseMeasurements &&
-        Object.keys(primaryProps.verseMeasurements).length > 0;
-      const delay = hasMeasurements ? 100 : 300;
-      const timer = setTimeout(() => {
-        if (shouldScrollToPrimaryVerse.current) {
-          scrollToPrimaryVerseWithRetry(
-            primaryTargetVerse,
-            maxScrollRetries
-          ).then(() => {
-            shouldScrollToPrimaryVerse.current = false;
-          });
+    if (!primaryLoading && primaryScrollViewRef.current) {
+      isProgrammaticScrollRef.current = true;
+      const verseNum = primaryTargetVerse;
+      if (verseNum) {
+        const meas = primaryProps.verseMeasurements[verseNum];
+        if (meas !== undefined) {
+          const y = Math.max(0, meas - 100);
+          primaryScrollViewRef.current.scrollTo({ y, animated: false });
+          updatePrimaryOffset(y);
+          lastScrollYRef.current = y;
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false;
+          }, 1000);
+          return;
         }
-      }, delay);
-      return () => clearTimeout(timer);
-    } else if (
-      primaryTargetVerse === undefined &&
-      primaryFlatListRef.current &&
-      !primaryLoading
-    ) {
-      primaryFlatListRef.current.scrollToOffset({ offset: 0, animated: true });
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 1000);
+        return;
+      }
+      primaryScrollViewRef.current.scrollTo({ y: 0, animated: false });
+      updatePrimaryOffset(0);
       lastScrollYRef.current = 0;
+      setTimeout(() => {
+        isProgrammaticScrollRef.current = false;
+      }, 1000);
     }
   }, [
-    primaryTargetVerse,
     primaryLoading,
-    primaryVerses,
+    primaryTargetVerse,
+    primaryScrollViewRef,
+    updatePrimaryOffset,
     primaryProps.verseMeasurements,
-    scrollToPrimaryVerseWithRetry,
-    maxScrollRetries,
   ]);
+
+  const [secondaryMeasuredVerses, setSecondaryMeasuredVerses] = useState<
+    Set<number>
+  >(new Set());
+  useEffect(() => {
+    secondaryVerseMeasurementsRef.current = {};
+    setSecondaryMeasuredVerses(new Set());
+  }, [secondaryVerses]);
+
   useEffect(() => {
     if (
-      secondaryTargetVerse &&
-      secondaryFlatListRef.current &&
+      showMultiVersion &&
       !secondaryLoading &&
-      secondaryVerses.length > 0
+      secondaryScrollViewRef.current &&
+      secondaryMeasuredVerses.size >= secondaryVerses.length
     ) {
-      const hasMeasurements =
-        Object.keys(secondaryVerseMeasurements).length > 0;
-      const delay = hasMeasurements ? 100 : 300;
-      const timer = setTimeout(() => {
-        if (shouldScrollToSecondaryVerse.current) {
-          const success = scrollToSecondaryVerse(secondaryTargetVerse);
-          if (
-            !success &&
-            secondaryScrollRetryCount.current < maxScrollRetries
-          ) {
-            secondaryScrollRetryCount.current += 1;
-            const retryDelay =
-              200 * Math.pow(2, secondaryScrollRetryCount.current);
-            setTimeout(() => {
-              scrollToSecondaryVerse(secondaryTargetVerse);
-            }, retryDelay);
-          } else if (success) {
-            secondaryScrollRetryCount.current = 0;
-          }
-          shouldScrollToSecondaryVerse.current = false;
+      const verseNum = getHighlightVerse(false);
+      if (verseNum) {
+        const meas = secondaryVerseMeasurementsRef.current[verseNum];
+        if (meas !== undefined) {
+          const y = Math.max(0, meas - secondaryScrollViewHeight / 2);
+
+          isProgrammaticScrollRef.current = true;
+          secondaryScrollViewRef.current?.scrollTo({ y, animated: false });
+          updateSecondaryOffset(y);
+
+          setTimeout(() => {
+            isProgrammaticScrollRef.current = false;
+          }, 1000);
         }
-      }, delay);
-      return () => clearTimeout(timer);
-    } else if (
-      secondaryTargetVerse === undefined &&
-      secondaryFlatListRef.current &&
-      !secondaryLoading &&
-      secondaryVerses.length > 0
-    ) {
-      secondaryFlatListRef.current.scrollToOffset({
-        offset: 0,
-        animated: true,
-      });
+      } else {
+        isProgrammaticScrollRef.current = true;
+        secondaryScrollViewRef.current?.scrollTo({ y: 0, animated: false });
+        updateSecondaryOffset(0);
+
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 1000);
+      }
     }
   }, [
-    secondaryTargetVerse,
+    showMultiVersion,
     secondaryLoading,
-    secondaryVerses,
-    secondaryVerseMeasurements,
-    scrollToSecondaryVerse,
+    secondaryScrollViewRef,
+    updateSecondaryOffset,
+    secondaryMeasuredVerses.size,
+    secondaryVerses.length,
+    getHighlightVerse,
+    secondaryScrollViewHeight,
   ]);
+
   useEffect(() => {
-    setSecondaryVerseMeasurements({});
-  }, [secondaryVerses]);
+    if (
+      showMultiVersion &&
+      !isLinked &&
+      secondaryTargetVerse &&
+      secondaryVerses.length > 0 &&
+      !secondaryLoading &&
+      secondaryScrollViewRef.current &&
+      secondaryMeasuredVerses.size === 0
+    ) {
+      const version = secondaryVersion || currentVersion;
+      const cached = getChapterMeasurement(
+        version,
+        secondaryLocation.bookId,
+        secondaryLocation.chapter,
+        fontSize
+      );
+      if (cached) {
+        const approxY =
+          ((secondaryTargetVerse - 0.5) / secondaryVerses.length) *
+          cached.height;
+        const centerOffset = approxY - secondaryScrollViewHeight / 2;
+        const scrollPos = Math.max(0, centerOffset);
+
+        isProgrammaticScrollRef.current = true;
+        secondaryScrollViewRef.current.scrollTo({
+          y: scrollPos,
+          animated: false,
+        });
+        updateSecondaryOffset(scrollPos);
+
+        setTimeout(() => {
+          isProgrammaticScrollRef.current = false;
+        }, 1000);
+      }
+    }
+  }, [
+    showMultiVersion,
+    isLinked,
+    secondaryTargetVerse,
+    secondaryVerses.length,
+    secondaryLoading,
+    secondaryScrollViewRef,
+    secondaryMeasuredVerses.size,
+    secondaryScrollViewHeight,
+    getChapterMeasurement,
+    secondaryLocation.bookId,
+    secondaryLocation.chapter,
+    fontSize,
+    secondaryVersion,
+    currentVersion,
+    updateSecondaryOffset,
+  ]);
+
+  useEffect(() => {
+    if (secondaryContentHeight > 0 && showMultiVersion && secondaryVersion) {
+      const version = secondaryVersion;
+      storeChapterMeasurement(
+        version,
+        secondaryLocation.bookId,
+        secondaryLocation.chapter,
+        { y: 0, height: secondaryContentHeight, fontSize }
+      );
+    }
+  }, [
+    secondaryContentHeight,
+    showMultiVersion,
+    secondaryVersion,
+    secondaryLocation.bookId,
+    secondaryLocation.chapter,
+    fontSize,
+    storeChapterMeasurement,
+  ]);
   const handlePrimaryContentSizeChange = useCallback(
     (width: number, height: number) => {
       primaryProps.handleContentSizeChange(width, height);
-      setPrimaryContentHeight(height);
     },
     [primaryProps.handleContentSizeChange]
   );
   const handleSecondaryContentSizeChange = useCallback(
-    (_width: number, height: number) => {
+    (width: number, height: number) => {
       setSecondaryContentHeight(height);
+    },
+    []
+  );
+  const handleSecondaryScrollViewLayout = useCallback((event: any) => {
+    setSecondaryScrollViewHeight(event.nativeEvent.layout.height);
+  }, []);
+  const handleSecondaryVerseLayout = useCallback(
+    (verseNumber: number, event: LayoutChangeEvent) => {
+      const { y } = event.nativeEvent.layout;
+      if (y >= 0) {
+        secondaryVerseMeasurementsRef.current[verseNumber] = y;
+        setSecondaryMeasuredVerses((prev) => {
+          const newSet = new Set(prev);
+          newSet.add(verseNumber);
+          return newSet;
+        });
+      }
     },
     []
   );
@@ -1680,7 +1457,7 @@ export default function ReaderScreen({
       return;
     }
     setSecondaryLoading(true);
-    setSecondaryVerseMeasurements({});
+    secondaryVerseMeasurementsRef.current = {};
     try {
       const verses = await secondaryDB.current.getVerses(
         secondaryLocation.bookId,
@@ -1738,7 +1515,9 @@ export default function ReaderScreen({
   const versionHeaderPaddingVertical = isLandscape ? 4 : 8;
   const headerContentHeight = 60;
   const headerTotalHeight = insets.top + headerContentHeight;
+
   const versionsToShow = availableBibleVersions;
+
   if (!bibleDB || highlightedVersesLoading) {
     return (
       <SafeAreaView
@@ -1776,131 +1555,97 @@ export default function ReaderScreen({
       }
     }
   }
+
+  const renderProgressBar = useCallback(() => {
+    if (!showMultiVersion || isLinked) {
+      return (
+        <View
+          style={{
+            marginTop: 8,
+            marginHorizontal: 16,
+            width: screenWidth - 32,
+            height: 6,
+            backgroundColor: colors.primary + "40",
+            borderRadius: 2,
+          }}
+        >
+          <Animated.View
+            style={{
+              height: 6,
+              backgroundColor: "#FFFFFF80",
+              borderRadius: 3,
+              width: primaryProgress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ["0%", "100%"],
+                extrapolate: "clamp",
+              }),
+            }}
+          />
+        </View>
+      );
+    } else {
+      const PrimaryBar = (
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: 6,
+            backgroundColor: "#FFFFFF80",
+            borderRadius: 3,
+            width: primaryProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0%", "100%"],
+              extrapolate: "clamp",
+            }),
+          }}
+        />
+      );
+      const SecondaryBar = (
+        <Animated.View
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            height: 6,
+            backgroundColor: "#31134480",
+            borderRadius: 3,
+            width: secondaryProgress.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0%", "100%"],
+              extrapolate: "clamp",
+            }),
+          }}
+        />
+      );
+      return (
+        <View
+          style={{
+            marginTop: 8,
+            marginHorizontal: 16,
+            width: screenWidth - 32,
+            height: 6,
+            backgroundColor: colors.primary + "40",
+            borderRadius: 2,
+            position: "relative",
+          }}
+        >
+          {SecondaryBar}
+          {PrimaryBar}
+        </View>
+      );
+    }
+  }, [
+    showMultiVersion,
+    isLinked,
+    screenWidth,
+    colors.primary,
+    primaryProgress,
+    secondaryProgress,
+  ]);
   const handleSetBgTextureOpacity = useCallback((value: number) => {
     setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
-  const handlePrimaryScrollBeginDrag = useCallback(() => {
-    isPrimaryUserScrolling.current = true;
-  }, []);
-
-  const handlePrimaryScrollEndDrag = useCallback(() => {
-    isPrimaryUserScrolling.current = false;
-  }, []);
-
-  const handlePrimaryMomentumBegin = useCallback(() => {
-    isPrimaryUserScrolling.current = true;
-  }, []);
-
-  const handlePrimaryMomentumEnd = useCallback(() => {
-    isPrimaryUserScrolling.current = false;
-  }, []);
-  const handleSecondaryScrollBeginDrag = useCallback(() => {
-    isSecondaryUserScrolling.current = true;
-  }, []);
-  const handleSecondaryScrollEndDrag = useCallback(() => {
-    isSecondaryUserScrolling.current = false;
-  }, []);
-  const handleSecondaryMomentumBegin = useCallback(() => {
-    isSecondaryUserScrolling.current = true;
-  }, []);
-  const handleSecondaryMomentumEnd = useCallback(() => {
-    isSecondaryUserScrolling.current = false;
-  }, []);
-
-  // Add this with your other refs
-  const scrollSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
-
-  // Cleanup in useEffect
-  useEffect(() => {
-    return () => {
-      if (scrollSyncTimeoutRef.current) {
-        clearTimeout(scrollSyncTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const primaryScrollSyncTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const secondaryScrollSyncTimeoutRef = useRef<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-
-  const handlePrimaryScroll = useCallback(
-    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-      const y = event.nativeEvent.contentOffset.y;
-      lastScrollYRef.current = y;
-
-      if (isLinked && showMultiVersion && !ignorePrimaryScroll.current) {
-        ignoreSecondaryScroll.current = true;
-        syncWithDelay(secondaryFlatListRef, y);
-
-        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = setTimeout(() => {
-          ignoreSecondaryScroll.current = false;
-        }, 80);
-      }
-    },
-    [isLinked, showMultiVersion, syncWithDelay]
-  );
-
-  const handleSecondaryScroll = useCallback(
-    (event: { nativeEvent: { contentOffset: { y: number } } }) => {
-      const y = event.nativeEvent.contentOffset.y;
-
-      if (isLinked && showMultiVersion && !ignoreSecondaryScroll.current) {
-        ignorePrimaryScroll.current = true;
-        syncWithDelay(primaryFlatListRef, y);
-
-        if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
-        syncTimeoutRef.current = setTimeout(() => {
-          ignorePrimaryScroll.current = false;
-        }, 80);
-      }
-    },
-    [isLinked, showMultiVersion, syncWithDelay]
-  );
-
-  useEffect(() => {
-    return () => {
-      if (primaryScrollSyncTimeoutRef.current) {
-        clearTimeout(primaryScrollSyncTimeoutRef.current);
-      }
-      if (secondaryScrollSyncTimeoutRef.current) {
-        clearTimeout(secondaryScrollSyncTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (isLinked && showMultiVersion && secondaryFlatListRef.current) {
-      const currentY = lastScrollYRef.current;
-      const timer = setTimeout(() => {
-        ignoreSecondaryScroll.current = true;
-        secondaryFlatListRef.current?.scrollToOffset({
-          offset: currentY,
-          animated: false,
-        });
-
-        setTimeout(() => {
-          ignoreSecondaryScroll.current = false;
-        }, 200);
-      }, 300);
-
-      return () => clearTimeout(timer);
-    }
-  }, [isLinked, showMultiVersion]);
-
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -1926,7 +1671,6 @@ export default function ReaderScreen({
               alignItems: "center",
               width: "100%",
               paddingHorizontal: 12,
-              marginBottom: 5,
             }}
           >
             <TouchableOpacity
@@ -1939,7 +1683,6 @@ export default function ReaderScreen({
             >
               <Ionicons name="arrow-back" size={24} color={primaryTextColor} />
             </TouchableOpacity>
-
             <View
               style={{ flex: 1, alignItems: "center", paddingHorizontal: 10 }}
             >
@@ -1995,9 +1738,8 @@ export default function ReaderScreen({
                 </View>
               )}
             </View>
-
             <View
-              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4 }}
             >
               {isLandscape ? (
                 <View
@@ -2038,49 +1780,6 @@ export default function ReaderScreen({
                 <View
                   style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
                 >
-                  <TouchableOpacity
-                    onPress={toggleMultiVersion}
-                    onLongPress={handleToggleLongPress}
-                    style={{ padding: 2 }}
-                  >
-                    <Ionicons
-                      name={
-                        effectiveLayout === "horizontal"
-                          ? "copy-outline"
-                          : "copy"
-                      }
-                      size={24}
-                      color={showMultiVersion ? "#f6f0f0ff" : primaryTextColor}
-                    />
-                  </TouchableOpacity>
-
-                  {themeItem && (
-                    <TouchableOpacity
-                      onPress={themeItem.onPress}
-                      style={{ padding: 2 }}
-                    >
-                      <Ionicons
-                        name={themeItem.icon}
-                        size={24}
-                        color={themeItem.color}
-                      />
-                    </TouchableOpacity>
-                  )}
-
-                  {colorItem && (
-                    <TouchableOpacity
-                      onPress={colorItem.onPress}
-                      onLongPress={() => setShowColorPicker(true)}
-                      style={{ padding: 2 }}
-                    >
-                      <Ionicons
-                        name={colorItem.icon}
-                        size={24}
-                        color={colorItem.color}
-                      />
-                    </TouchableOpacity>
-                  )}
-
                   {showMultiVersion && (
                     <>
                       <TouchableOpacity
@@ -2128,7 +1827,46 @@ export default function ReaderScreen({
                       </TouchableOpacity>
                     </>
                   )}
-
+                  <TouchableOpacity
+                    onPress={toggleMultiVersion}
+                    onLongPress={handleToggleLongPress}
+                    style={{ padding: 2 }}
+                  >
+                    <Ionicons
+                      name={
+                        effectiveLayout === "horizontal"
+                          ? "copy-outline"
+                          : "copy"
+                      }
+                      size={24}
+                      color={showMultiVersion ? "#f6f0f0ff" : primaryTextColor}
+                    />
+                  </TouchableOpacity>
+                  {themeItem && (
+                    <TouchableOpacity
+                      onPress={themeItem.onPress}
+                      style={{ padding: 2 }}
+                    >
+                      <Ionicons
+                        name={themeItem.icon}
+                        size={24}
+                        color={themeItem.color}
+                      />
+                    </TouchableOpacity>
+                  )}
+                  {colorItem && (
+                    <TouchableOpacity
+                      onPress={colorItem.onPress}
+                      onLongPress={() => setShowColorPicker(true)}
+                      style={{ padding: 2 }}
+                    >
+                      <Ionicons
+                        name={colorItem.icon}
+                        size={24}
+                        color={colorItem.color}
+                      />
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     onPress={() => setShowDropdown(true)}
                     style={{ padding: 2 }}
@@ -2143,6 +1881,7 @@ export default function ReaderScreen({
               )}
             </View>
           </View>
+          {renderProgressBar()}
         </View>
       )}
       <NavigationModal
@@ -2165,20 +1904,9 @@ export default function ReaderScreen({
           if (navigationTarget === "primary") {
             setPrimaryLocation(newLocation);
             setPrimaryTargetVerse(newLocation.verse);
-            shouldScrollToPrimaryVerse.current = true;
-            primaryScrollRetryCount.current = 0;
           } else {
             setSecondaryLocation(newLocation);
             setSecondaryTargetVerse(newLocation.verse);
-            shouldScrollToSecondaryVerse.current = true;
-            secondaryScrollRetryCount.current = 0;
-            if (showMultiVersion && isLinked) {
-              setPrimaryLocation(newLocation);
-              setPrimaryTargetVerse(newLocation.verse);
-              shouldScrollToPrimaryVerse.current = true;
-              primaryScrollRetryCount.current = 0;
-              resetPrimaryScroll();
-            }
           }
         }}
         bibleDB={bibleDB}
@@ -2214,7 +1942,12 @@ export default function ReaderScreen({
           colors={colors}
           fontSize={fontSize}
           primaryProps={primaryProps}
+          primaryHandleScroll={primaryHandleScroll}
           handlePrimaryContentSizeChange={handlePrimaryContentSizeChange}
+          secondaryHandleScrollCb={secondaryHandleScrollCb}
+          handleSecondaryContentSizeChange={handleSecondaryContentSizeChange}
+          handleSecondaryScrollViewLayout={handleSecondaryScrollViewLayout}
+          handleSecondaryVerseLayout={handleSecondaryVerseLayout}
           primaryHeaderRef={primaryHeaderRef}
           secondaryHeaderRef={secondaryHeaderRef}
           setPrimaryHeaderX={setPrimaryHeaderX}
@@ -2234,6 +1967,8 @@ export default function ReaderScreen({
           effectiveLayout={effectiveLayout}
           showMultiVersion={showMultiVersion}
           isLandscape={isLandscape}
+          primaryScrollViewRef={primaryScrollViewRef}
+          secondaryScrollViewRef={secondaryScrollViewRef}
           bgTextureOpacity={bgTextureOpacity}
           bgImageIndex={bgImageIndex}
           scrollEnabled={contentScrollEnabled}
@@ -2247,20 +1982,6 @@ export default function ReaderScreen({
           buttonOpacity={buttonOpacity}
           resetButtonOpacity={resetButtonOpacity}
           setUiMode={setUiMode}
-          handleSecondaryContentSizeChange={handleSecondaryContentSizeChange}
-          handleSecondaryVerseLayout={handleSecondaryVerseLayout}
-          primaryFlatListRef={primaryFlatListRef}
-          secondaryFlatListRef={secondaryFlatListRef}
-          onPrimaryScroll={handlePrimaryScroll}
-          onPrimaryScrollBeginDrag={handlePrimaryScrollBeginDrag}
-          onPrimaryScrollEndDrag={handlePrimaryScrollEndDrag}
-          onPrimaryMomentumScrollBegin={handlePrimaryMomentumBegin}
-          onPrimaryMomentumScrollEnd={handlePrimaryMomentumEnd}
-          onSecondaryScroll={handleSecondaryScroll}
-          onSecondaryScrollBeginDrag={handleSecondaryScrollBeginDrag}
-          onSecondaryScrollEndDrag={handleSecondaryScrollEndDrag}
-          onSecondaryMomentumScrollBegin={handleSecondaryMomentumBegin}
-          onSecondaryMomentumScrollEnd={handleSecondaryMomentumEnd}
         />
       </View>
       <DropdownMenu
@@ -2324,64 +2045,65 @@ export default function ReaderScreen({
                 {selectorTitle}
               </Text>
             </View>
-            <FlatList
-              key={`selector-${openSelector}`}
+            <ScrollView
               showsVerticalScrollIndicator={true}
               style={{
                 maxHeight: 300,
                 width: "100%",
               }}
-              data={versionsToShow}
-              keyExtractor={(item) => item}
-              renderItem={({ item: v, index }) => {
-                const isActive =
-                  (openSelector === "primary" && v === currentVersion) ||
-                  (openSelector === "secondary" && v === secondaryVersion);
-                return (
-                  <TouchableOpacity
-                    onPress={async () => {
-                      if (openSelector === "primary") {
-                        await handleVersionSelect(v);
-                      } else {
-                        handleSecondaryVersionSelect(v);
-                      }
-                      closeSelector();
-                    }}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      backgroundColor: isActive ? colors.secondary : undefined,
-                      borderBottomWidth:
-                        index < versionsToShow.length - 1 ? 1 : 0,
-                      borderBottomColor: colors.primary + "40",
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={{
-                        color: primaryTextColor,
-                        fontWeight: "500",
-                        fontSize: 16,
+            >
+              {selectorLoading ? (
+                <View
+                  style={{
+                    paddingVertical: 20,
+                    alignItems: "center",
+                  }}
+                >
+                  <ActivityIndicator size="small" color={primaryTextColor} />
+                </View>
+              ) : openSelector ? (
+                versionsToShow.map((v, index) => {
+                  const isActive =
+                    (openSelector === "primary" && v === currentVersion) ||
+                    (openSelector === "secondary" && v === secondaryVersion);
+
+                  return (
+                    <TouchableOpacity
+                      key={v}
+                      onPress={async () => {
+                        if (openSelector === "primary") {
+                          await handleVersionSelect(v);
+                        } else {
+                          handleSecondaryVersionSelect(v);
+                        }
+                        closeSelector();
                       }}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        backgroundColor: isActive
+                          ? colors.secondary
+                          : undefined,
+                        borderBottomWidth:
+                          index < versionsToShow.length - 1 ? 1 : 0,
+                        borderBottomColor: colors.primary + "40",
+                      }}
+                      activeOpacity={0.7}
                     >
-                      {getVersionDisplayName(v)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                selectorLoading ? (
-                  <View
-                    style={{
-                      paddingVertical: 20,
-                      alignItems: "center",
-                    }}
-                  >
-                    <ActivityIndicator size="small" color={primaryTextColor} />
-                  </View>
-                ) : null
-              }
-            />
+                      <Text
+                        style={{
+                          color: primaryTextColor,
+                          fontWeight: "500",
+                          fontSize: 16,
+                        }}
+                      >
+                        {getVersionDisplayName(v)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : null}
+            </ScrollView>
           </View>
         </TouchableOpacity>
       )}

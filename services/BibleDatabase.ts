@@ -480,11 +480,6 @@ class BibleDatabase {
       } catch (migError) {
         console.warn(`Skipping migrations for ${this.dbName}:`, migError);
       }
-      try {
-        await this.verifyDatabase();
-      } catch (verr) {
-        console.warn(`Skipping verification for ${this.dbName}:`, verr);
-      }
       this.isInitialized = true;
     } catch (error) {
       console.error(`Detailed init failure for ${this.dbName}:`, {
@@ -493,7 +488,6 @@ class BibleDatabase {
         operation: "initializeDatabase",
       });
       this.initializationPromise = null;
-      // Ensure cleanup on failure
       if (this.db) {
         try {
           await this.db.closeAsync();
@@ -712,25 +706,6 @@ class BibleDatabase {
     } catch (error) {
       console.error("Unexpected error in runMigrations:", error);
       throw new BibleDatabaseError("Migration failed", error, "runMigrations");
-    }
-  }
-
-  private async verifyDatabase(): Promise<void> {
-    if (!this.db)
-      throw new BibleDatabaseError("Database not open", null, "verifyDatabase");
-
-    try {
-      if (this.isCommentaryDatabase()) {
-        await this.verifyCommentaryDatabase();
-      } else {
-        await this.verifyMainDatabase();
-      }
-    } catch (error) {
-      throw new BibleDatabaseError(
-        "Database verification failed",
-        error,
-        "verifyDatabase"
-      );
     }
   }
 

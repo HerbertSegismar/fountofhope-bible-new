@@ -98,9 +98,7 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
   ].sort();
 
   const openDatabases = useRef<Map<string, BibleDatabase>>(new Map());
-  const pendingInits = useRef<Map<string, Promise<BibleDatabase>>>(
-    new Map()
-  );
+  const pendingInits = useRef<Map<string, Promise<BibleDatabase>>>(new Map());
 
   const initializeDatabase = useCallback(
     async (
@@ -186,16 +184,16 @@ export const BibleDatabaseProvider: React.FC<BibleDatabaseProviderProps> = ({
     const commentaryVersion = BIBLE_TO_COMMENTARY_MAP[version];
 
     if (commentaryVersion) {
-        try {
-          const db = new BibleDatabase(commentaryVersion);
-          await db.init();
-          openDatabases.current.set(commentaryVersion, db);
-        } catch (error) {
-          console.warn(
-            `Failed to preload commentary ${commentaryVersion}:`,
-            error
-          );
-        }
+      try {
+        const db = new BibleDatabase(commentaryVersion);
+        await db.init();
+        openDatabases.current.set(commentaryVersion, db);
+      } catch (error) {
+        console.warn(
+          `Failed to preload commentary ${commentaryVersion}:`,
+          error
+        );
+      }
     }
 
     if (version.includes("+")) {
