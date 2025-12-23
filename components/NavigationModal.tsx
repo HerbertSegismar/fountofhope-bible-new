@@ -590,9 +590,7 @@ export const NavigationModal: React.FC<NavigationModalProps> = ({
                       marginBottom: 12,
                     }}
                   >
-                    {selectedVerse
-                      ? `Navigating to ${selectedBook.long_name} ${selectedChapter}:${selectedVerse}...`
-                      : "Choose any verse to navigate directly"}
+                    "Choose any verse to navigate directly"
                   </Text>
                   <View className="flex-row flex-wrap gap-1">
                     {versesList.map((verse) => (
