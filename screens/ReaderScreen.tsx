@@ -1908,6 +1908,10 @@ export default function ReaderScreen({
             setSecondaryLocation(newLocation);
             setSecondaryTargetVerse(newLocation.verse);
           }
+          if (showMultiVersion && isLinked) {
+            setPrimaryLocation(newLocation);
+            setPrimaryTargetVerse(newLocation.verse);
+          }
         }}
         bibleDB={bibleDB}
         secondaryDB={secondaryDB}
