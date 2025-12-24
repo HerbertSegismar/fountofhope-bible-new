@@ -23,12 +23,10 @@ import { VerseViewEnhanced } from "../components/VerseViewEnhanced";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { BookmarksContext } from "../context/BookmarksContext";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import {
-  useTheme,
-  type FontFamily,
-} from "../context/ThemeContext";
+import { useTheme, type FontFamily } from "../context/ThemeContext";
 import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import { getBookInfo } from "../utils/testamentUtils";
+import { BibleDatabaseError } from "../services/BibleDatabase";
 
 type BookmarksScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
@@ -123,6 +121,7 @@ export default function BookmarksScreen({ navigation }: Props) {
   const [bookLongNames, setBookLongNames] = useState<BookLongNamesState>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingRandomVerse, setLoadingRandomVerse] = useState(false);
 
   const previousBookmarksRef = useRef<string>("");
   const isMountedRef = useRef(true);
@@ -141,6 +140,87 @@ export default function BookmarksScreen({ navigation }: Props) {
       ),
     [bookmarks]
   );
+
+  const getRandomBookChapter = useCallback(async (): Promise<{
+    bookId: number;
+    chapter: number;
+  }> => {
+    if (!bibleDB) throw new Error("Database not available");
+    try {
+      const books = await bibleDB.getBooks();
+      const randomBook = books[Math.floor(Math.random() * books.length)];
+      const chapterCount = await bibleDB.getChapterCount(
+        randomBook.book_number
+      );
+      const chapter =
+        chapterCount > 0
+          ? Math.floor(Math.random() * chapterCount) + 1
+          : Math.floor(Math.random() * 50) + 1;
+      return { bookId: randomBook.book_number, chapter };
+    } catch {
+      // Fallback to popular books if there's an error
+      const popularBooks = [
+        { id: 19, chapters: 150 }, // Psalms
+        { id: 20, chapters: 31 }, // Proverbs
+        { id: 40, chapters: 28 }, // Matthew
+        { id: 43, chapters: 21 }, // John
+        { id: 1, chapters: 50 }, // Genesis
+      ];
+      const book =
+        popularBooks[Math.floor(Math.random() * popularBooks.length)];
+      return {
+        bookId: book.id,
+        chapter: Math.floor(Math.random() * book.chapters) + 1,
+      };
+    }
+  }, [bibleDB]);
+
+  // Function to load random verse and navigate to Reader
+  const loadRandomVerseAndNavigate = useCallback(async () => {
+    if (!bibleDB) {
+      Alert.alert("Error", "Database not available. Please try again.");
+      return;
+    }
+
+    try {
+      setLoadingRandomVerse(true);
+
+      const { bookId, chapter } = await getRandomBookChapter();
+      const verses = await bibleDB.getVerses(bookId, chapter);
+
+      if (verses.length === 0) {
+        Alert.alert("Error", "Could not load a verse. Please try again.");
+        return;
+      }
+
+      // Pick a random verse from the chapter
+      const startIndex = Math.floor(Math.random() * verses.length);
+      const maxRange = Math.min(5, verses.length - startIndex);
+      const rangeLength = Math.floor(Math.random() * maxRange) + 1;
+      const range = verses.slice(startIndex, startIndex + rangeLength);
+      const verse = range[0]; // Use first verse of the range
+
+      const bookInfo = getBookInfo(bookId);
+      const longName = bookInfo?.long || "Unknown Book";
+
+      // Navigate to Reader with the random verse
+      navigation.navigate("Reader", {
+        bookId: verse.book_number,
+        chapter: verse.chapter,
+        verse: verse.verse,
+        bookName: longName,
+      });
+    } catch (err) {
+      console.error("Failed to load random verse:", err);
+      if (err instanceof BibleDatabaseError) {
+        Alert.alert("Error", `Database error: ${err.message}`);
+      } else {
+        Alert.alert("Error", "Failed to load random verse. Please try again.");
+      }
+    } finally {
+      setLoadingRandomVerse(false);
+    }
+  }, [bibleDB, getRandomBookChapter, navigation]);
 
   const handleBookmarkPress = useCallback(
     (verse: Verse) => {
@@ -180,10 +260,6 @@ export default function BookmarksScreen({ navigation }: Props) {
     initialLoadRef.current = false;
     loadBookmarks();
   }, [loadBookmarks]);
-
-  const handleGoToBible = useCallback(() => {
-    navigation.navigate("BookList");
-  }, [navigation]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -438,7 +514,8 @@ export default function BookmarksScreen({ navigation }: Props) {
         Save your favorite verses to access them quickly
       </Text>
       <TouchableOpacity
-        onPress={handleGoToBible}
+        onPress={loadRandomVerseAndNavigate}
+        disabled={loadingRandomVerse}
         style={{
           backgroundColor: themeColors.primary,
           paddingHorizontal: 24,
@@ -446,13 +523,14 @@ export default function BookmarksScreen({ navigation }: Props) {
           borderRadius: 8,
           flexDirection: "row",
           alignItems: "center",
+          opacity: loadingRandomVerse ? 0.7 : 1,
         }}
       >
-        <Ionicons
-          name="book"
-          size={18}
-          color='white'
-        />
+        {loadingRandomVerse ? (
+          <ActivityIndicator size="small" color="white" />
+        ) : (
+          <Ionicons name="book" size={18} color="white" />
+        )}
         <Text
           style={{
             color: "white",
@@ -461,7 +539,7 @@ export default function BookmarksScreen({ navigation }: Props) {
             fontFamily: actualFontFamily,
           }}
         >
-          Read Bible
+          {loadingRandomVerse ? "Loading Random Verse..." : "Read Bible"}
         </Text>
       </TouchableOpacity>
     </View>
@@ -627,11 +705,7 @@ export default function BookmarksScreen({ navigation }: Props) {
                   borderRadius: 999,
                 }}
               >
-                <Ionicons
-                  name="eye"
-                  size={12}
-                  color="white"
-                />
+                <Ionicons name="eye" size={12} color="white" />
                 <Text
                   style={{
                     color: "white",

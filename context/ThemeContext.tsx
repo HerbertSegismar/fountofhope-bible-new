@@ -128,6 +128,7 @@ interface ThemeContextType {
   setColorScheme: (scheme: ColorScheme) => void;
   setFontFamily: (family: FontFamily) => void;
   setCustomColor: (color: string) => void;
+  resetThemeToDefault: () => void;
   showColorPicker: boolean;
   setShowColorPicker: (show: boolean) => void;
 }
@@ -307,6 +308,31 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     setCustomColorState(color);
   };
 
+  const resetThemeToDefault = async () => {
+    try {
+      // Reset to default values
+      setTheme("light");
+      setColorScheme("green");
+      setFontFamily("system");
+      setCustomColorState("#A855F7");
+
+      // Reset the dynamic maps for custom color
+      const customVariants = calculateCustomColorVariants("#A855F7");
+      dynamicPrimaryColors.custom = customVariants.variants;
+      dynamicGradientMap.custom = customVariants.gradients;
+
+      // Save to AsyncStorage
+      await Promise.all([
+        AsyncStorage.setItem("theme", "light"),
+        AsyncStorage.setItem("colorScheme", "green"),
+        AsyncStorage.setItem("fontFamily", "system"),
+        AsyncStorage.setItem("customColor", "#A855F7"),
+      ]);
+    } catch (error) {
+      console.error("Failed to reset theme to default:", error);
+    }
+  };
+
   const value: ThemeContextType = {
     theme,
     colorScheme,
@@ -319,6 +345,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     setColorScheme: setColorSchemeInternal,
     setFontFamily,
     setCustomColor,
+    resetThemeToDefault,
     showColorPicker,
     setShowColorPicker,
   };

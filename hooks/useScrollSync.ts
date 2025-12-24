@@ -236,7 +236,7 @@ export const useScrollSync = (
           if (!isSyncing.current) {
             syncToPrimary();
           }
-        }, 1500);
+        }, 150);
       }
     },
     [

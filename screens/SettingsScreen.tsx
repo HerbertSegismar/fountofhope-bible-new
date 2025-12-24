@@ -49,6 +49,7 @@ const SettingsScreen = () => {
     toggleTheme,
     setColorScheme,
     setFontFamily,
+    resetThemeToDefault,
   } = useTheme();
 
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
@@ -133,8 +134,6 @@ const SettingsScreen = () => {
     setSelectedVersion(currentVersion);
   }, [currentVersion]);
 
-  // REMOVED: The useEffect that filtered versions for multiview
-
   useEffect(() => {
     setTempFontInput(fontSize.toString());
   }, [fontSize]);
@@ -182,13 +181,9 @@ const SettingsScreen = () => {
     [currentVersion, isSwitching, switchVersion]
   );
 
-  const handleSecondaryVersionSelect = useCallback(
-    (version: string) => {
-      // REMOVED: The check that prevented same version selection
-      setSecondaryVersion(version);
-    },
-    [] // REMOVED: currentVersion dependency
-  );
+  const handleSecondaryVersionSelect = useCallback((version: string) => {
+    setSecondaryVersion(version);
+  }, []);
 
   const commitFontSize = useCallback(() => {
     const text = tempFontInputRef.current;
@@ -236,6 +231,71 @@ const SettingsScreen = () => {
     setBgImageIndex(index);
     setShowBgModal(false);
   }, []);
+
+  const resetAllSettings = useCallback(async () => {
+    Alert.alert(
+      "Reset Settings",
+      "Are you sure you want to reset all settings to default?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Reset theme to default (light theme, default color scheme)
+              resetThemeToDefault();
+
+              // Reset font family to system default
+              setFontFamily("system");
+
+              // Reset font size to 16
+              setFontSize(16);
+              setTempFontInput("16");
+
+              // Reset background to none (index 0)
+              setBgImageIndex(0);
+
+              // Reset to single view
+              setShowMultiVersion(false);
+              setSecondaryVersion(null);
+
+              // Reset Bible version to default (KJ2)
+              if (availableBibleVersions.length > 0) {
+                const defaultVersion = availableBibleVersions[7];
+                await switchVersion(defaultVersion);
+                setSelectedVersion(defaultVersion);
+              }
+
+              // Clear all AsyncStorage settings
+              await AsyncStorage.multiRemove([
+                "fontSize",
+                "showMultiVersion",
+                "secondaryVersion",
+                "bgImageIndex",
+              ]);
+
+              Alert.alert(
+                "Success",
+                "All settings have been reset to default."
+              );
+            } catch (error) {
+              console.error("Failed to reset settings:", error);
+              Alert.alert(
+                "Error",
+                "Failed to reset settings. Please try again."
+              );
+            }
+          },
+        },
+      ]
+    );
+  }, [
+    availableBibleVersions,
+    resetThemeToDefault,
+    setFontFamily,
+    switchVersion,
+  ]);
 
   const memoizedBgTextures = useMemo(() => bgTextures, []);
 
@@ -585,8 +645,6 @@ const SettingsScreen = () => {
     );
   };
 
-  // REMOVED: Version filtering for primary and secondary versions
-  // Now both selectors can show all available versions including the current one
   const primaryAvailableVersions = availableBibleVersions;
   const secondaryAvailableVersions = availableBibleVersions;
 
@@ -950,12 +1008,7 @@ const SettingsScreen = () => {
             <TouchableOpacity
               className="m-1 flex-1 min-w-[45%] p-4 rounded-xl items-center"
               style={{ backgroundColor: themeColors.primary }}
-              onPress={() =>
-                Alert.alert(
-                  "Reset Settings",
-                  "This will reset all settings to default."
-                )
-              }
+              onPress={resetAllSettings}
             >
               <Ionicons name="refresh" size={20} color="white" />
               <Text
