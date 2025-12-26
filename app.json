@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Fount of Hope Bible",
-    "slug": "wave-treader-bible",
+    "slug": "fount-of-hope-bible-and-devotional",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/fountofhope-512x512.png",
@@ -12,15 +12,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.fountofhope.fountofhopebible",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "supportsTablet": true
     },
     "android": {
       "softwareKeyboardLayoutMode": "resize",
@@ -47,9 +41,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "46e92e02-4821-46a2-a319-1cdeaee78ad6"
+        "projectId": "624d0992-840c-4da4-a055-90480e1612e3"
       }
     },
-    "owner": "wavetreader"
+    "owner": "fount-of-hope"
   }
 }

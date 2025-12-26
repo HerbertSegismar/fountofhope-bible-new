@@ -1,2 +1,110 @@
 eas build -p android --profile production
 eas build -p ios --profile production
+
+{
+  "expo": {
+    "name": "Fount of Hope Bible",
+    "slug": "wave-treader-bible",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/images/fountofhope-512x512.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/fountofhope-512x512.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fountofhope.fountofhopebible",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/fountofhope-512x512.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.fountofhope.fountofhopebible",
+      "versionCode": 1,
+      "permissions": []
+    },
+    "androidNavigationBar": {
+      "visible": "sticky-immersive",
+      "backgroundColor": "#1e40af"
+    },
+    "web": {
+      "favicon": "./assets/images/fountofhope-512x512.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-asset",
+      "expo-font",
+      "./enableLargeHeap.js"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "46e92e02-4821-46a2-a319-1cdeaee78ad6"
+      }
+    },
+    "owner": "wavetreader"
+  }
+}
+
+
+
+ {
+  "expo": {
+    "name": "Fount of Hope Bible",
+    "slug": "fount-of-hope-bible-and-devotional",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/images/fountofhope-512x512.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/fountofhope-512x512.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/fountofhope-512x512.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.fountofhope.fountofhopebible",
+      "versionCode": 1,
+      "permissions": []
+    },
+    "androidNavigationBar": {
+      "visible": "sticky-immersive",
+      "backgroundColor": "#1e40af"
+    },
+    "web": {
+      "favicon": "./assets/images/fountofhope-512x512.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-asset",
+      "expo-font",
+      "./enableLargeHeap.js"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "624d0992-840c-4da4-a055-90480e1612e3"
+      }
+    },
+    "owner": "fount-of-hope"
+  }
+}
