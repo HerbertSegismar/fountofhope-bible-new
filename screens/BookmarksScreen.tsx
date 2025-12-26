@@ -526,11 +526,7 @@ export default function BookmarksScreen({ navigation }: Props) {
           opacity: loadingRandomVerse ? 0.7 : 1,
         }}
       >
-        {loadingRandomVerse ? (
-          <ActivityIndicator size="small" color="white" />
-        ) : (
-          <Ionicons name="book" size={18} color="white" />
-        )}
+        <Ionicons name="book" size={18} color="white" />
         <Text
           style={{
             color: "white",
@@ -539,7 +535,7 @@ export default function BookmarksScreen({ navigation }: Props) {
             fontFamily: actualFontFamily,
           }}
         >
-          {loadingRandomVerse ? "Loading Random Verse..." : "Read Bible"}
+          Read Bible
         </Text>
       </TouchableOpacity>
     </View>

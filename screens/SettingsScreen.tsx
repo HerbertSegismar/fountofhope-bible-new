@@ -30,6 +30,7 @@ import { Fonts } from "../utils/fonts";
 import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import Footer from "../components/Footer";
 import { bgTextures } from "../assets/textures/bgTextures";
+import ColorWheelPicker from "../components/ColorWheelPicker";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -50,6 +51,8 @@ const SettingsScreen = () => {
     setColorScheme,
     setFontFamily,
     resetThemeToDefault,
+    showColorPicker,
+    setShowColorPicker,
   } = useTheme();
 
   const [selectedVersion, setSelectedVersion] = useState(currentVersion);
@@ -563,9 +566,25 @@ const SettingsScreen = () => {
     const previewText = previewThemeColors.textPrimary;
     const contrastColor = getContrastColor(previewPrimary, previewThemeColors);
 
+    // Custom handler for custom color scheme
+    const handlePress = () => {
+      if (scheme.name === "custom") {
+        // Open color picker for custom color
+        if (setShowColorPicker) {
+          setShowColorPicker(true);
+        } else {
+          // Fallback if setShowColorPicker is not available
+          // You might need to add state management here
+          console.log("Custom color scheme clicked - color picker should open");
+        }
+      } else {
+        onPress(); // Call original onPress for other schemes
+      }
+    };
+
     return (
       <TouchableOpacity
-        onPress={onPress}
+        onPress={handlePress} // Use custom handler
         className={`mr-3 p-3 rounded-xl border-2 items-center`}
         style={{
           minWidth: 90,
@@ -573,6 +592,7 @@ const SettingsScreen = () => {
           backgroundColor: previewBg,
         }}
       >
+        {/* Rest of your ColorButton JSX remains the same */}
         <View
           className="w-full h-8 rounded mb-2"
           style={{ backgroundColor: previewPrimary }}
@@ -1053,6 +1073,8 @@ const SettingsScreen = () => {
         </SettingSection>
         <Footer />
       </ScrollView>
+
+      {showColorPicker && <ColorWheelPicker />}
 
       <Modal visible={showBgModal} transparent animationType="slide">
         <View
