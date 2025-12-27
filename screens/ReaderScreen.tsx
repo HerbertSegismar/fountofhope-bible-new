@@ -74,6 +74,7 @@ interface DropdownProps {
   isLandscape: boolean;
   customTextureUri?: string | null;
 }
+
 const DropdownMenu: React.FC<DropdownProps> = ({
   visible,
   onClose,
@@ -94,7 +95,29 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     setTempOpacity(bgTextureOpacity);
   }, [bgTextureOpacity]);
 
-  if (!visible) return null;
+  // Get available texture indices - ALWAYS call hooks unconditionally
+  const availableTextureIndices = useMemo(() => {
+    const indices = [0]; // Always include "None"
+
+    // Add built-in textures (1-33)
+    for (let i = 1; i <= 33; i++) {
+      indices.push(i);
+    }
+
+    // Add custom texture if available
+    if (customTextureUri) {
+      indices.push(34);
+    }
+
+    return indices;
+  }, [customTextureUri]);
+
+  // Function to get texture display name
+  const getTextureDisplayName = (index: number): string => {
+    if (index === 0) return "None";
+    if (index === 34) return "Custom";
+    return `Texture ${index}`;
+  };
 
   const handleClose = () => {
     onSetBgTextureOpacity(tempOpacity);
@@ -117,31 +140,46 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     );
   };
 
-  const maxBgIndex = customTextureUri ? 34 : 33;
-
   const handlePrevTexture = () => {
-    if (bgImageIndex === 0) {
-      onSetBgImageIndex(maxBgIndex);
-    } else {
-      if (bgImageIndex === 34 && !customTextureUri) {
-        onSetBgImageIndex(33);
-      } else {
-        onSetBgImageIndex(bgImageIndex - 1);
-      }
+    // Find current index position in available indices
+    const currentPosition = availableTextureIndices.indexOf(bgImageIndex);
+
+    // If current index is not in available indices, go to 0
+    if (currentPosition === -1) {
+      onSetBgImageIndex(0);
+      return;
     }
+
+    // Calculate previous position with wrap-around
+    const prevPosition =
+      currentPosition === 0
+        ? availableTextureIndices.length - 1 // Wrap to last
+        : currentPosition - 1; // Previous
+
+    onSetBgImageIndex(availableTextureIndices[prevPosition]);
   };
 
   const handleNextTexture = () => {
-    if (bgImageIndex === maxBgIndex) {
+    // Find current index position in available indices
+    const currentPosition = availableTextureIndices.indexOf(bgImageIndex);
+
+    // If current index is not in available indices, go to 0
+    if (currentPosition === -1) {
       onSetBgImageIndex(0);
-    } else {
-      if (bgImageIndex === 33 && !customTextureUri) {
-        onSetBgImageIndex(0);
-      } else {
-        onSetBgImageIndex(bgImageIndex + 1);
-      }
+      return;
     }
+
+    // Calculate next position with wrap-around
+    const nextPosition =
+      currentPosition === availableTextureIndices.length - 1
+        ? 0 // Wrap to first
+        : currentPosition + 1; // Next
+
+    onSetBgImageIndex(availableTextureIndices[nextPosition]);
   };
+
+  // Now conditionally return at the end, after all hooks have been called
+  if (!visible) return null;
 
   return (
     <TouchableOpacity
@@ -229,8 +267,20 @@ const DropdownMenu: React.FC<DropdownProps> = ({
           <Text
             style={{
               color: primaryTextColor,
-              fontSize: 14,
+              fontSize: 16,
               marginVertical: 8,
+              textAlign: "center",
+              fontWeight: "bold",
+            }}
+          >
+            {getTextureDisplayName(bgImageIndex)}
+          </Text>
+          <Text
+            style={{
+              color: primaryTextColor,
+              fontSize: 12,
+              marginBottom: 8,
+              textAlign: "center",
             }}
           >
             BG & Overlay Opacity
@@ -343,6 +393,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     </TouchableOpacity>
   );
 };
+
 export default function ReaderScreen({
   navigation,
   route,
