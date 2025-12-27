@@ -72,6 +72,7 @@ interface DropdownProps {
   bgImageIndex: number;
   onSetBgImageIndex: (value: number) => void;
   isLandscape: boolean;
+  customTextureUri?: string | null;
 }
 const DropdownMenu: React.FC<DropdownProps> = ({
   visible,
@@ -85,6 +86,7 @@ const DropdownMenu: React.FC<DropdownProps> = ({
   bgImageIndex,
   onSetBgImageIndex,
   isLandscape,
+  customTextureUri,
 }) => {
   const [tempOpacity, setTempOpacity] = useState(bgTextureOpacity);
 
@@ -115,13 +117,17 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     );
   };
 
-  const maxBgIndex = 33;
+  const maxBgIndex = customTextureUri ? 34 : 33;
 
   const handlePrevTexture = () => {
     if (bgImageIndex === 0) {
       onSetBgImageIndex(maxBgIndex);
     } else {
-      onSetBgImageIndex(bgImageIndex - 1);
+      if (bgImageIndex === 34 && !customTextureUri) {
+        onSetBgImageIndex(33);
+      } else {
+        onSetBgImageIndex(bgImageIndex - 1);
+      }
     }
   };
 
@@ -129,7 +135,11 @@ const DropdownMenu: React.FC<DropdownProps> = ({
     if (bgImageIndex === maxBgIndex) {
       onSetBgImageIndex(0);
     } else {
-      onSetBgImageIndex(bgImageIndex + 1);
+      if (bgImageIndex === 33 && !customTextureUri) {
+        onSetBgImageIndex(0);
+      } else {
+        onSetBgImageIndex(bgImageIndex + 1);
+      }
     }
   };
 
@@ -1646,6 +1656,7 @@ export default function ReaderScreen({
   const handleSetBgTextureOpacity = useCallback((value: number) => {
     setBgTextureOpacity(Math.round(value * 100) / 100);
   }, []);
+  const { customTextureUri } = useTheme();
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: colors.background?.default }}
@@ -2001,6 +2012,7 @@ export default function ReaderScreen({
         bgImageIndex={bgImageIndex}
         onSetBgImageIndex={setBgImageIndex}
         isLandscape={isLandscape}
+        customTextureUri={customTextureUri}
       />
       {openSelector && (
         <TouchableOpacity

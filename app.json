@@ -37,7 +37,13 @@
       "expo-sqlite",
       "expo-asset",
       "expo-font",
-      "./enableLargeHeap.js"
+      "./enableLargeHeap.js",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to let you set custom backgrounds."
+        }
+      ]
     ],
     "extra": {
       "eas": {

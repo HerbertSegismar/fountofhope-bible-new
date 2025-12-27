@@ -1,12 +1,15 @@
+// hooks/useBackgroundTexture.ts
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme } from "../context/ThemeContext";
 import { bgImages } from "../utils/bgImages";
+import { ImageSourcePropType } from "react-native";
 
 interface UseBackgroundTextureOverrides {
   index?: number;
   opacity?: number;
+  customTextureUri?: string | null;
 }
 
 interface UseBackgroundTextureOptions extends UseBackgroundTextureOverrides {
@@ -19,29 +22,23 @@ export const useBackgroundTexture = (
   const {
     index: overrideIndex,
     opacity: overrideOpacity,
+    customTextureUri: overrideCustomTextureUri,
     noBackground = false,
   } = options;
 
   const [internalIndex, setInternalIndex] = useState(0);
   const [internalOpacity, setInternalOpacity] = useState(0.5);
+  const [internalCustomTextureUri, setInternalCustomTextureUri] = useState<
+    string | null
+  >(null);
 
   const { theme } = useTheme();
 
   const hasIndexOverride = overrideIndex !== undefined;
   const hasOpacityOverride = overrideOpacity !== undefined;
+  const hasCustomTextureOverride = overrideCustomTextureUri !== undefined;
 
-  useEffect(() => {
-    if (hasIndexOverride) {
-      setInternalIndex(overrideIndex);
-    }
-  }, [overrideIndex, hasIndexOverride]);
-
-  useEffect(() => {
-    if (hasOpacityOverride) {
-      setInternalOpacity(overrideOpacity);
-    }
-  }, [overrideOpacity, hasOpacityOverride]);
-
+  // Load settings from AsyncStorage when no override is provided
   useEffect(() => {
     if (hasIndexOverride || noBackground) return;
 
@@ -66,6 +63,19 @@ export const useBackgroundTexture = (
       .catch(console.error);
   }, [hasOpacityOverride, noBackground]);
 
+  useEffect(() => {
+    if (hasCustomTextureOverride || noBackground) return;
+
+    AsyncStorage.getItem("customTextureUri")
+      .then((uri) => {
+        if (uri !== null) {
+          setInternalCustomTextureUri(uri);
+        }
+      })
+      .catch(console.error);
+  }, [hasCustomTextureOverride, noBackground]);
+
+  // Use focus effect to refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       if (hasIndexOverride || noBackground) return;
@@ -96,18 +106,48 @@ export const useBackgroundTexture = (
     }, [hasOpacityOverride, noBackground])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      if (hasCustomTextureOverride || noBackground) return;
+
+      AsyncStorage.getItem("customTextureUri")
+        .then((uri) => {
+          if (uri !== null) {
+            setInternalCustomTextureUri(uri);
+          }
+        })
+        .catch(console.error);
+    }, [hasCustomTextureOverride, noBackground])
+  );
+
+  // Determine effective values
   const effectiveIndex = hasIndexOverride ? overrideIndex! : internalIndex;
   const effectiveOpacity = hasOpacityOverride
     ? overrideOpacity!
     : internalOpacity;
+  const effectiveCustomTextureUri = hasCustomTextureOverride
+    ? overrideCustomTextureUri
+    : internalCustomTextureUri;
 
-  const source = useMemo(
-    () => (effectiveIndex > 0 ? bgImages[effectiveIndex] : undefined),
-    [effectiveIndex]
-  );
+  // Determine the image source based on index
+  const source = useMemo((): ImageSourcePropType | undefined => {
+    if (effectiveIndex === 0) {
+      return undefined; // No background
+    } else if (effectiveIndex === 34) {
+      // Custom texture
+      return effectiveCustomTextureUri
+        ? { uri: effectiveCustomTextureUri }
+        : undefined;
+    } else if (bgImages[effectiveIndex]) {
+      // Built-in texture
+      return bgImages[effectiveIndex];
+    }
+    return undefined;
+  }, [effectiveIndex, effectiveCustomTextureUri]);
 
   const hasSource = !!source;
 
+  // Calculate overlay style based on theme and opacity
   const overlayStyle = useMemo(
     () => ({
       flex: 1,
@@ -119,7 +159,7 @@ export const useBackgroundTexture = (
     [theme, hasSource, effectiveOpacity]
   );
 
-  const overlayKey = `overlay-${Math.floor(effectiveOpacity * 1000)}`;
+  const overlayKey = `overlay-${effectiveIndex}-${Math.floor(effectiveOpacity * 1000)}-${effectiveCustomTextureUri || "builtin"}`;
 
   return {
     source,
@@ -128,5 +168,6 @@ export const useBackgroundTexture = (
     overlayKey,
     effectiveIndex,
     effectiveOpacity,
+    effectiveCustomTextureUri,
   };
 };

@@ -121,6 +121,7 @@ interface ThemeContextType {
   colorScheme: ColorScheme;
   fontFamily: FontFamily;
   customColor: string;
+  customTextureUri: string | null;
   colorSchemes: typeof colorSchemes;
   navTheme: NavTheme;
   gradientColors: GradientColorsTuple;
@@ -128,6 +129,7 @@ interface ThemeContextType {
   setColorScheme: (scheme: ColorScheme) => void;
   setFontFamily: (family: FontFamily) => void;
   setCustomColor: (color: string) => void;
+  setCustomTextureUri: (uri: string | null) => void;
   resetThemeToDefault: () => void;
   showColorPicker: boolean;
   setShowColorPicker: (show: boolean) => void;
@@ -154,19 +156,26 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   const [colorScheme, setColorScheme] = useState<ColorScheme>("green");
   const [fontFamily, setFontFamily] = useState<FontFamily>("system");
   const [customColor, setCustomColorState] = useState<string>("#A855F7");
+  const [customTextureUri, setCustomTextureUriState] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
 
   useEffect(() => {
     const loadSavedValues = async () => {
       try {
-        const [savedTheme, savedScheme, savedFont, savedCustomColor] =
-          await Promise.all([
-            AsyncStorage.getItem("theme"),
-            AsyncStorage.getItem("colorScheme"),
-            AsyncStorage.getItem("fontFamily"),
-            AsyncStorage.getItem("customColor"),
-          ]);
+        const [
+          savedTheme,
+          savedScheme,
+          savedFont,
+          savedCustomColor,
+          savedCustomTextureUri,
+        ] = await Promise.all([
+          AsyncStorage.getItem("theme"),
+          AsyncStorage.getItem("colorScheme"),
+          AsyncStorage.getItem("fontFamily"),
+          AsyncStorage.getItem("customColor"),
+          AsyncStorage.getItem("customTextureUri"),
+        ]);
 
         if (savedTheme) setTheme(savedTheme as Theme);
         if (savedScheme) setColorScheme(savedScheme as ColorScheme);
@@ -176,6 +185,9 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
           const customVariants = calculateCustomColorVariants(savedCustomColor);
           dynamicPrimaryColors.custom = customVariants.variants;
           dynamicGradientMap.custom = customVariants.gradients;
+        }
+        if (savedCustomTextureUri) {
+          setCustomTextureUriState(savedCustomTextureUri);
         }
       } catch (error) {
         console.error("Failed to load theme settings:", error);
@@ -187,65 +199,44 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     loadSavedValues();
   }, []);
 
-  useEffect(() => {
-    if (!isReady) return;
 
-    const saveTheme = async () => {
-      try {
-        await AsyncStorage.setItem("theme", theme);
-      } catch (error) {
-        console.error("Failed to save theme:", error);
-      }
-    };
+   useEffect(() => {
+     if (!isReady) return;
+     AsyncStorage.setItem("theme", theme).catch(console.error);
+   }, [theme, isReady]);
 
-    saveTheme();
-  }, [theme, isReady]);
+   useEffect(() => {
+     if (!isReady) return;
+     AsyncStorage.setItem("colorScheme", colorScheme).catch(console.error);
+   }, [colorScheme, isReady]);
 
-  useEffect(() => {
-    if (!isReady) return;
+   useEffect(() => {
+     if (!isReady) return;
+     AsyncStorage.setItem("fontFamily", fontFamily).catch(console.error);
+   }, [fontFamily, isReady]);
 
-    const saveColorScheme = async () => {
-      try {
-        await AsyncStorage.setItem("colorScheme", colorScheme);
-      } catch (error) {
-        console.error("Failed to save color scheme:", error);
-      }
-    };
+   useEffect(() => {
+     if (!isReady) return;
+     AsyncStorage.setItem("customColor", customColor).catch(console.error);
+     const customVariants = calculateCustomColorVariants(customColor);
+     dynamicPrimaryColors.custom = customVariants.variants;
+     dynamicGradientMap.custom = customVariants.gradients;
+   }, [customColor, isReady]);
 
-    saveColorScheme();
-  }, [colorScheme, isReady]);
+   useEffect(() => {
+     if (!isReady) return;
+     if (customTextureUri) {
+       AsyncStorage.setItem("customTextureUri", customTextureUri).catch(
+         console.error
+       );
+     } else {
+       AsyncStorage.removeItem("customTextureUri").catch(console.error);
+     }
+   }, [customTextureUri, isReady]);
 
-  useEffect(() => {
-    if (!isReady) return;
-
-    const saveFontFamily = async () => {
-      try {
-        await AsyncStorage.setItem("fontFamily", fontFamily);
-      } catch (error) {
-        console.error("Failed to save font family:", error);
-      }
-    };
-
-    saveFontFamily();
-  }, [fontFamily, isReady]);
-
-  useEffect(() => {
-    if (!isReady) return;
-
-    const saveCustomColor = async () => {
-      try {
-        await AsyncStorage.setItem("customColor", customColor);
-
-        const customVariants = calculateCustomColorVariants(customColor);
-        dynamicPrimaryColors.custom = customVariants.variants;
-        dynamicGradientMap.custom = customVariants.gradients;
-      } catch (error) {
-        console.error("Failed to save custom color:", error);
-      }
-    };
-
-    saveCustomColor();
-  }, [customColor, isReady]);
+   const setCustomTextureUri = (uri: string | null) => {
+     setCustomTextureUriState(uri);
+   };
 
   const getPrimaryColor = () => {
     if (colorScheme === "custom") {
@@ -338,6 +329,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     colorScheme,
     fontFamily,
     customColor,
+    customTextureUri,
     colorSchemes,
     navTheme,
     gradientColors,
@@ -345,6 +337,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     setColorScheme: setColorSchemeInternal,
     setFontFamily,
     setCustomColor,
+    setCustomTextureUri,
     resetThemeToDefault,
     showColorPicker,
     setShowColorPicker,

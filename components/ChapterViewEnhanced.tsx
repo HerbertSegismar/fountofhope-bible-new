@@ -72,6 +72,7 @@ interface ChapterViewProps {
   bgImageIndex?: number;
   bgTextureOpacity?: number;
   noBackground?: boolean;
+  customTextureUri?: string | null;
 }
 
 export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
@@ -91,9 +92,17 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
   bgImageIndex: propBgImageIndex,
   bgTextureOpacity: propBgTextureOpacity,
   noBackground,
+  customTextureUri: propCustomTextureUri,
 }) => {
-  const { theme, colorScheme, fontFamily, customColor } = useTheme();
+  const {
+    theme,
+    colorScheme,
+    fontFamily,
+    customColor,
+    customTextureUri: contextCustomTextureUri,
+  } = useTheme();
   const themeColors = getThemeColors(theme, colorScheme, customColor);
+
   const actualFontFamily = useMemo((): string | undefined => {
     switch (fontFamily) {
       case "system":
@@ -108,10 +117,12 @@ export const ChapterViewEnhanced: React.FC<ChapterViewProps> = ({
         return undefined;
     }
   }, [fontFamily]);
+
   const effectiveNoBg = noBackground ?? false;
   const bgHook = useBackgroundTexture({
     index: propBgImageIndex,
     opacity: propBgTextureOpacity,
+    customTextureUri: propCustomTextureUri ?? contextCustomTextureUri,
     noBackground: effectiveNoBg,
   });
   const hasBg = !effectiveNoBg && bgHook.hasSource;

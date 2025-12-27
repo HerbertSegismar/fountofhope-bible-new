@@ -22,6 +22,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImagePicker from "expo-image-picker";
+import { File } from "expo-file-system";
 import { useBibleDatabase } from "../context/BibleDatabaseContext";
 import { useTheme, ColorScheme, FontFamily } from "../context/ThemeContext";
 import { VersionSelector } from "../components/VersionSelector";
@@ -65,6 +67,7 @@ const SettingsScreen = () => {
   const [bgImageIndex, setBgImageIndex] = useState(0);
   const [showBgModal, setShowBgModal] = useState(false);
   const [showFontModal, setShowFontModal] = useState(false);
+  const [customTextureUri, setCustomTextureUri] = useState<string | null>(null);
   const tempFontInputRef = useRef(tempFontInput);
 
   useEffect(() => {
@@ -88,12 +91,15 @@ const SettingsScreen = () => {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [fontStr, multiStr, secVer, bgStr] = await Promise.all([
-          AsyncStorage.getItem("fontSize"),
-          AsyncStorage.getItem("showMultiVersion"),
-          AsyncStorage.getItem("secondaryVersion"),
-          AsyncStorage.getItem("bgImageIndex"),
-        ]);
+        const [fontStr, multiStr, secVer, bgStr, customUri] = await Promise.all(
+          [
+            AsyncStorage.getItem("fontSize"),
+            AsyncStorage.getItem("showMultiVersion"),
+            AsyncStorage.getItem("secondaryVersion"),
+            AsyncStorage.getItem("bgImageIndex"),
+            AsyncStorage.getItem("customTextureUri"),
+          ]
+        );
         if (fontStr) {
           const fs = Math.max(8, Math.min(50, parseInt(fontStr, 10) || 16));
           setFontSize(fs);
@@ -102,6 +108,7 @@ const SettingsScreen = () => {
         if (multiStr === "true") setShowMultiVersion(true);
         if (secVer) setSecondaryVersion(secVer);
         if (bgStr) setBgImageIndex(parseInt(bgStr, 10) || 0);
+        if (customUri) setCustomTextureUri(customUri);
       } catch (e) {
         console.error("Failed to load settings", e);
       }
@@ -134,12 +141,95 @@ const SettingsScreen = () => {
   }, [bgImageIndex]);
 
   useEffect(() => {
+    if (customTextureUri) {
+      AsyncStorage.setItem("customTextureUri", customTextureUri).catch(
+        console.error
+      );
+    }
+  }, [customTextureUri]);
+
+  useEffect(() => {
     setSelectedVersion(currentVersion);
   }, [currentVersion]);
 
   useEffect(() => {
     setTempFontInput(fontSize.toString());
   }, [fontSize]);
+
+  const pickCustomTexture = async () => {
+    try {
+      const { status } =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert(
+          "Permission Required",
+          "Please allow access to your photo library to select a custom background."
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+
+        setCustomTextureUri(uri);
+
+        setBgImageIndex(34);
+        await AsyncStorage.setItem("bgImageIndex", "34");
+
+        Alert.alert(
+          "Custom Texture Added",
+          "Your custom background has been added and selected."
+        );
+      }
+    } catch (error) {
+      console.error("Error picking image:", error);
+      Alert.alert("Error", "Failed to select image. Please try again.");
+    }
+  };
+
+  const removeCustomTexture = async () => {
+    Alert.alert(
+      "Remove Custom Texture",
+      "Are you sure you want to remove your custom background texture?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              if (bgImageIndex === 34) {
+                setBgImageIndex(0);
+                await AsyncStorage.setItem("bgImageIndex", "0");
+              }
+
+              await AsyncStorage.removeItem("customTextureUri");
+              setCustomTextureUri(null);
+
+              if (customTextureUri && customTextureUri.startsWith("file://")) {
+                try {
+                  const file = new File(customTextureUri);
+                  file.delete();
+                } catch (deleteError) {
+                  console.log("File deletion skipped or failed:", deleteError);
+                }
+              }
+            } catch (error) {
+              console.error("Error removing custom texture:", error);
+              Alert.alert("Error", "Failed to remove custom texture.");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleVersionSelect = useCallback(
     async (version: string) => {
@@ -235,6 +325,16 @@ const SettingsScreen = () => {
     setShowBgModal(false);
   }, []);
 
+  const handleCustomTextureSelect = useCallback(() => {
+    if (customTextureUri) {
+      setBgImageIndex(34);
+      setShowBgModal(false);
+    } else {
+      setShowBgModal(false); 
+      setTimeout(() => pickCustomTexture(), 300); 
+    }
+  }, [customTextureUri]);
+
   const resetAllSettings = useCallback(async () => {
     Alert.alert(
       "Reset Settings",
@@ -246,36 +346,32 @@ const SettingsScreen = () => {
           style: "destructive",
           onPress: async () => {
             try {
-              // Reset theme to default (light theme, default color scheme)
               resetThemeToDefault();
 
-              // Reset font family to system default
               setFontFamily("system");
 
-              // Reset font size to 16
               setFontSize(16);
               setTempFontInput("16");
 
-              // Reset background to none (index 0)
               setBgImageIndex(0);
 
-              // Reset to single view
+              setCustomTextureUri(null);
+
               setShowMultiVersion(false);
               setSecondaryVersion(null);
 
-              // Reset Bible version to default (KJ2)
               if (availableBibleVersions.length > 0) {
                 const defaultVersion = availableBibleVersions[7];
                 await switchVersion(defaultVersion);
                 setSelectedVersion(defaultVersion);
               }
 
-              // Clear all AsyncStorage settings
               await AsyncStorage.multiRemove([
                 "fontSize",
                 "showMultiVersion",
                 "secondaryVersion",
                 "bgImageIndex",
+                "customTextureUri",
               ]);
 
               Alert.alert(
@@ -298,9 +394,15 @@ const SettingsScreen = () => {
     resetThemeToDefault,
     setFontFamily,
     switchVersion,
+    setCustomTextureUri,
   ]);
 
   const memoizedBgTextures = useMemo(() => bgTextures, []);
+
+  const bgOptionsData = useMemo(() => {
+    const baseOptions = [0, ...Array.from({ length: 33 }, (_, i) => i + 1)];
+    return [...baseOptions, 34];
+  }, []);
 
   const BgOption = useMemo(
     () =>
@@ -309,16 +411,34 @@ const SettingsScreen = () => {
           item,
           isSelected,
           onPress,
+          onRemove,
           themeColors,
           bgTextures,
+          customTextureUri,
         }: {
           item: number;
           isSelected: boolean;
           onPress: () => void;
+          onRemove?: () => void;
           themeColors: any;
           bgTextures: any;
+          customTextureUri: string | null;
         }) => {
-          const imageSource = item > 0 ? bgTextures[item] : null;
+          let imageSource = null;
+          let title = "";
+
+          if (item === 0) {
+            title = "None";
+          } else if (item === 34) {
+            title = "Custom Texture";
+            if (customTextureUri) {
+              imageSource = { uri: customTextureUri };
+            }
+          } else {
+            title = `Texture ${item}`;
+            imageSource = bgTextures[item];
+          }
+
           return (
             <TouchableOpacity
               className={`p-4 border-b ${isSelected ? "bg-gray-100" : ""}`}
@@ -344,15 +464,29 @@ const SettingsScreen = () => {
                       />
                     </View>
                   ) : (
-                    <Image
-                      source={imageSource}
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 8,
-                        marginRight: 12,
-                      }}
-                    />
+                    <View style={{ marginRight: 12 }}>
+                      {imageSource ? (
+                        <Image
+                          source={imageSource}
+                          style={{
+                            width: 48,
+                            height: 48,
+                            borderRadius: 8,
+                          }}
+                        />
+                      ) : (
+                        <View
+                          className="w-12 h-12 rounded-lg items-center justify-center"
+                          style={{ backgroundColor: themeColors.card }}
+                        >
+                          <Ionicons
+                            name="add-outline"
+                            size={24}
+                            color={themeColors.textMuted}
+                          />
+                        </View>
+                      )}
+                    </View>
                   )}
                   <Text
                     className="text-base"
@@ -361,16 +495,37 @@ const SettingsScreen = () => {
                       fontWeight: isSelected ? "bold" : "normal",
                     }}
                   >
-                    {item === 0 ? "None" : `Texture ${item}`}
+                    {title}
                   </Text>
                 </View>
-                {isSelected && (
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={24}
-                    color={themeColors.primary}
-                  />
-                )}
+                <View className="flex-row items-center">
+                  {isSelected && (
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={24}
+                      color={themeColors.primary}
+                      style={{ marginRight: 8 }}
+                    />
+                  )}
+                  {item === 34 &&
+                    customTextureUri &&
+                    !isSelected &&
+                    onRemove && (
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          onRemove();
+                        }}
+                        style={{ padding: 4 }}
+                      >
+                        <Ionicons
+                          name="close-circle"
+                          size={20}
+                          color={themeColors.textMuted}
+                        />
+                      </TouchableOpacity>
+                    )}
+                </View>
               </View>
             </TouchableOpacity>
           );
@@ -384,12 +539,29 @@ const SettingsScreen = () => {
       <BgOption
         item={item}
         isSelected={item === bgImageIndex}
-        onPress={() => selectBgImage(item)}
+        onPress={() => {
+          if (item === 34) {
+            handleCustomTextureSelect();
+          } else {
+            selectBgImage(item);
+          }
+        }}
+        onRemove={
+          item === 34 && customTextureUri ? removeCustomTexture : undefined
+        }
         themeColors={themeColors}
         bgTextures={memoizedBgTextures}
+        customTextureUri={customTextureUri}
       />
     ),
-    [bgImageIndex, selectBgImage, themeColors, memoizedBgTextures, BgOption]
+    [
+      bgImageIndex,
+      selectBgImage,
+      themeColors,
+      memoizedBgTextures,
+      customTextureUri,
+      handleCustomTextureSelect,
+    ]
   );
 
   const isLoading = isInitializing || isSwitching;
@@ -566,25 +738,21 @@ const SettingsScreen = () => {
     const previewText = previewThemeColors.textPrimary;
     const contrastColor = getContrastColor(previewPrimary, previewThemeColors);
 
-    // Custom handler for custom color scheme
     const handlePress = () => {
       if (scheme.name === "custom") {
-        // Open color picker for custom color
         if (setShowColorPicker) {
           setShowColorPicker(true);
         } else {
-          // Fallback if setShowColorPicker is not available
-          // You might need to add state management here
           console.log("Custom color scheme clicked - color picker should open");
         }
       } else {
-        onPress(); // Call original onPress for other schemes
+        onPress(); 
       }
     };
 
     return (
       <TouchableOpacity
-        onPress={handlePress} // Use custom handler
+        onPress={handlePress}
         className={`mr-3 p-3 rounded-xl border-2 items-center`}
         style={{
           minWidth: 90,
@@ -592,7 +760,6 @@ const SettingsScreen = () => {
           backgroundColor: previewBg,
         }}
       >
-        {/* Rest of your ColorButton JSX remains the same */}
         <View
           className="w-full h-8 rounded mb-2"
           style={{ backgroundColor: previewPrimary }}
@@ -784,8 +951,50 @@ const SettingsScreen = () => {
           />
 
           <SettingItem
+            title="Custom Background"
+            subtitle="Add your own photo as background"
+            icon="add-circle-outline"
+            onPress={pickCustomTexture}
+          >
+            <View className="flex-row items-center">
+              {customTextureUri ? (
+                <>
+                  <Image
+                    source={{ uri: customTextureUri }}
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 6,
+                      marginRight: 8,
+                    }}
+                  />
+                  <TouchableOpacity
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      removeCustomTexture();
+                    }}
+                    style={{ padding: 4 }}
+                  >
+                    <Ionicons
+                      name="close-circle"
+                      size={20}
+                      color={themeColors.textMuted}
+                    />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Ionicons
+                  name="add-circle-outline"
+                  size={24}
+                  color={themeColors.primary}
+                />
+              )}
+            </View>
+          </SettingItem>
+
+          <SettingItem
             title="Background Texture"
-            subtitle="Choose a subtle background for reading"
+            subtitle="Choose from built-in textures or your custom one"
             icon="image-outline"
             onPress={() => setShowBgModal(true)}
           >
@@ -793,7 +1002,11 @@ const SettingsScreen = () => {
               className="text-sm"
               style={{ color: themeColors.textPrimary }}
             >
-              {bgImageIndex === 0 ? "None" : `Texture ${bgImageIndex}`}
+              {bgImageIndex === 0
+                ? "None"
+                : bgImageIndex === 34
+                  ? "Custom"
+                  : `Texture ${bgImageIndex}`}
             </Text>
             <Ionicons
               name="chevron-forward"
@@ -1108,12 +1321,12 @@ const SettingsScreen = () => {
                 fontFamily: Fonts.OswaldVariable,
               }}
             >
-              Select Background Texture
+              Select Background
             </Text>
             <View style={{ width: 24 }} />
           </View>
           <FlatList
-            data={[0, ...Array.from({ length: 33 }, (_, i) => i + 1)]}
+            data={bgOptionsData}
             keyExtractor={(item) => item.toString()}
             renderItem={renderBgOption}
             style={{ flex: 1 }}
@@ -1121,6 +1334,21 @@ const SettingsScreen = () => {
             initialNumToRender={10}
             maxToRenderPerBatch={5}
             windowSize={10}
+            ListHeaderComponent={
+              <View style={{ padding: 16 }}>
+                <Text
+                  style={{
+                    color: themeColors.textMuted,
+                    fontSize: 14,
+                    marginBottom: 8,
+                  }}
+                >
+                  {customTextureUri
+                    ? "Custom texture is available as option 34"
+                    : "Tap option 34 to add a custom texture from your photo library"}
+                </Text>
+              </View>
+            }
           />
         </View>
       </Modal>
