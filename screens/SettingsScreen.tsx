@@ -33,6 +33,7 @@ import { getThemeColors, getContrastColor } from "../utils/themeUtils";
 import Footer from "../components/Footer";
 import { bgTextures } from "../assets/textures/bgTextures";
 import ColorWheelPicker from "../components/ColorWheelPicker";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
 
@@ -1290,7 +1291,7 @@ const SettingsScreen = () => {
       {showColorPicker && <ColorWheelPicker />}
 
       <Modal visible={showBgModal} transparent animationType="slide">
-        <View
+        <SafeAreaView
           style={{
             flex: 1,
             backgroundColor: themeColors.background,
@@ -1350,7 +1351,7 @@ const SettingsScreen = () => {
               </View>
             }
           />
-        </View>
+        </SafeAreaView>
       </Modal>
 
       <Modal visible={showFontModal} transparent animationType="slide">
